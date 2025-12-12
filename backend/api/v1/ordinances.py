@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_db
+from backend.api.deps import get_db, verify_admin_password
 from backend.schemas.ordinance import (
     OrdinanceResponse,
     OrdinanceListResponse,
@@ -14,6 +14,7 @@ from backend.schemas.ordinance import (
     OrdinanceUploadResponse,
     OrdinanceLawMappingCreate,
     OrdinanceLawMappingUpdate,
+    ParentLawCreate,
 )
 from backend.services.ordinance_service import OrdinanceService
 from backend.core.exceptions import NotFoundError
@@ -54,8 +55,9 @@ async def get_departments(
 async def sync_ordinances(
     request: OrdinanceSyncRequest = OrdinanceSyncRequest(),
     db: AsyncSession = Depends(get_db),
+    _: bool = Depends(verify_admin_password),
 ):
-    """법제처 API에서 자치법규 목록을 가져와 DB에 저장"""
+    """법제처 API에서 자치법규 목록을 가져와 DB에 저장 (관리자 전용)"""
     service = OrdinanceService(db)
     return await service.sync_from_moleg(org=request.org, sborg=request.sborg)
 
@@ -64,8 +66,9 @@ async def sync_ordinances(
 async def upload_ordinances(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    _: bool = Depends(verify_admin_password),
 ):
-    """엑셀 파일로 소관부서 정보 일괄 업데이트"""
+    """엑셀 파일로 소관부서 정보 일괄 업데이트 (관리자 전용)"""
     service = OrdinanceService(db)
     return await service.upload_from_excel(file)
 
@@ -103,6 +106,68 @@ async def get_parent_laws(
     """
     service = OrdinanceService(db)
     return await service.get_parent_laws(ordinance_id)
+
+
+@router.post("/{ordinance_id}/parent-laws")
+async def create_parent_law(
+    ordinance_id: int,
+    data: ParentLawCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    상위법령 추가 (프론트엔드 호환)
+
+    Args:
+        ordinance_id: 조례 ID
+        data: 상위법령 정보
+    """
+    service = OrdinanceService(db)
+    try:
+        result = await service.create_parent_law(
+            ordinance_id=ordinance_id,
+            law_name=data.law_name,
+            law_type=data.law_type,
+            proclaimed_date=data.proclaimed_date,
+            enforced_date=data.enforced_date,
+            related_articles=data.related_articles,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/parent-laws/{parent_law_id}")
+async def update_parent_law(
+    parent_law_id: int,
+    data: OrdinanceLawMappingUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """상위법령 매핑 수정 (프론트엔드 호환)"""
+    service = OrdinanceService(db)
+    try:
+        mapping = await service.update_law_mapping(
+            mapping_id=parent_law_id,
+            related_articles=data.related_articles,
+        )
+        return {"success": True, "id": mapping.id, "message": "수정되었습니다."}
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/parent-laws/{parent_law_id}")
+async def delete_parent_law(
+    parent_law_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """상위법령 매핑 삭제 (프론트엔드 호환)"""
+    service = OrdinanceService(db)
+    try:
+        await service.delete_law_mapping(parent_law_id)
+        return {"success": True, "message": "삭제되었습니다."}
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/{ordinance_id}/law-mappings")

@@ -133,6 +133,16 @@ class OrdinanceLawMappingUpdate(BaseModel):
     related_articles: Optional[str] = None
 
 
+class ParentLawCreate(BaseModel):
+    """상위법령 추가 (프론트엔드용)"""
+    law_id: Optional[str] = None
+    law_name: str
+    law_type: str
+    proclaimed_date: Optional[str] = None
+    enforced_date: Optional[str] = None
+    related_articles: Optional[str] = None
+
+
 class LawSyncRequest(BaseModel):
     """법령 동기화 요청"""
     law_names: Optional[List[str]] = None  # 특정 법령명 목록 (없으면 전체)

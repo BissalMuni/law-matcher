@@ -247,9 +247,8 @@ export default function OrdinanceDetail() {
           <Form.Item
             name="law_id"
             label="법령 ID"
-            rules={[{ required: true, message: '법령 ID를 입력하세요' }]}
           >
-            <Input disabled={!!editingParentLaw} placeholder="예: 001656" />
+            <Input disabled placeholder="예: 001656" />
           </Form.Item>
           <Form.Item
             name="law_name"
@@ -273,10 +272,10 @@ export default function OrdinanceDetail() {
             />
           </Form.Item>
           <Form.Item name="proclaimed_date" label="공포일자">
-            <DatePicker style={{ width: '100%' }} placeholder="공포일자 선택" />
+            <DatePicker disabled style={{ width: '100%' }} placeholder="공포일자 선택" />
           </Form.Item>
           <Form.Item name="enforced_date" label="시행일자">
-            <DatePicker style={{ width: '100%' }} placeholder="시행일자 선택" />
+            <DatePicker disabled style={{ width: '100%' }} placeholder="시행일자 선택" />
           </Form.Item>
           <Form.Item name="related_articles" label="관련 조문">
             <Input placeholder="예: 제1조, 제2조" />

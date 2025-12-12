@@ -19,6 +19,7 @@ export default defineConfig({
       '/api': {
         target: 'http://backend:8000',
         changeOrigin: true,
+        secure: false,
       },
     },
   },

@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     MOLEG_API_KEY: str = ""
     MOLEG_API_BASE_URL: str = "https://www.law.go.kr/DRF"
 
+    # Admin
+    ADMIN_PASSWORD: str = "admin123"  # 기본 비밀번호 (반드시 .env에서 변경하세요)
+
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 

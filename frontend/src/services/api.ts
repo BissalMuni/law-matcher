@@ -63,8 +63,9 @@ export const ordinanceApi = {
     return data
   },
 
-  syncFromMoleg: async (params?: { org?: string; sborg?: string }) => {
-    const { data } = await api.post('/ordinances/sync', params || {})
+  syncFromMoleg: async (params?: { org?: string; sborg?: string; password?: string }) => {
+    const headers = params?.password ? { 'X-Admin-Password': params.password } : {}
+    const { data } = await api.post('/ordinances/sync', params || {}, { headers })
     return data
   },
 

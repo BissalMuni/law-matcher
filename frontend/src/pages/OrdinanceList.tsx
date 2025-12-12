@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Table, Input, Select, Space, Typography, Button, message, Upload, Tree, Row, Col, Card } from 'antd'
+import { Table, Input, Select, Space, Typography, Button, message, Upload, Tree, Row, Col, Card, Modal, Form } from 'antd'
 import { SyncOutlined, SearchOutlined, UploadOutlined, ApartmentOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ordinanceApi } from '../services/api'
 import type { UploadProps, TreeDataNode } from 'antd'
 
 const { Title } = Typography
-const { Search } = Input
 
 interface DepartmentItem {
   name: string
@@ -30,6 +29,10 @@ export default function OrdinanceList() {
   const [initialLoaded, setInitialLoaded] = useState(false)
   const [treeCollapsed, setTreeCollapsed] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>(['all'])
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false)
+  const [passwordAction, setPasswordAction] = useState<'sync' | 'upload' | null>(null)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [form] = Form.useForm()
 
   // 소관부서 목록 조회
   const { data: departments } = useQuery({
@@ -67,31 +70,72 @@ export default function OrdinanceList() {
 
   // 법제처 API 동기화
   const syncMutation = useMutation({
-    mutationFn: () => ordinanceApi.syncFromMoleg(),
+    mutationFn: (password: string) => ordinanceApi.syncFromMoleg({ password }),
     onSuccess: (result) => {
       message.success(result.message)
       queryClient.invalidateQueries({ queryKey: ['ordinances'] })
       queryClient.invalidateQueries({ queryKey: ['ordinance-departments'] })
+      setPasswordModalOpen(false)
+      form.resetFields()
     },
-    onError: () => {
-      message.error('법제처 동기화 실패')
+    onError: (error: any) => {
+      if (error.response?.status === 403) {
+        message.error('관리자 비밀번호가 올바르지 않습니다.')
+      } else {
+        message.error('법제처 동기화 실패')
+      }
     },
   })
+
+  const handlePasswordSubmit = (values: { password: string }) => {
+    if (passwordAction === 'sync') {
+      syncMutation.mutate(values.password)
+    } else if (passwordAction === 'upload' && uploadFile) {
+      handleUploadWithPassword(uploadFile, values.password)
+    }
+  }
+
+  const handleUploadWithPassword = async (file: File, password: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const response = await fetch('/api/v1/ordinances/upload', {
+        method: 'POST',
+        headers: {
+          'X-Admin-Password': password,
+        },
+        body: formData,
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        message.success(`${result.updated}건 소관부서 정보 업데이트 완료`)
+        queryClient.invalidateQueries({ queryKey: ['ordinances'] })
+        queryClient.invalidateQueries({ queryKey: ['ordinance-departments'] })
+        setPasswordModalOpen(false)
+        form.resetFields()
+        setUploadFile(null)
+      } else if (response.status === 403) {
+        message.error('관리자 비밀번호가 올바르지 않습니다.')
+      } else {
+        message.error('엑셀 업로드 실패')
+      }
+    } catch (error) {
+      message.error('엑셀 업로드 실패')
+    }
+  }
 
   // 엑셀 업로드
   const uploadProps: UploadProps = {
     name: 'file',
-    action: '/api/v1/ordinances/upload',
     accept: '.xlsx,.xls',
     showUploadList: false,
-    onChange(info) {
-      if (info.file.status === 'done') {
-        message.success(`${info.file.response.updated}건 소관부서 정보 업데이트 완료`)
-        queryClient.invalidateQueries({ queryKey: ['ordinances'] })
-        queryClient.invalidateQueries({ queryKey: ['ordinance-departments'] })
-      } else if (info.file.status === 'error') {
-        message.error('엑셀 업로드 실패')
-      }
+    beforeUpload: (file) => {
+      setUploadFile(file)
+      setPasswordAction('upload')
+      setPasswordModalOpen(true)
+      return false // 자동 업로드 방지
     },
   }
 
@@ -203,12 +247,22 @@ export default function OrdinanceList() {
         </Col>
         <Col style={{ flex: 1, transition: 'all 0.3s ease' }}>
           <Space style={{ marginBottom: 16 }} wrap>
-            <Search
+            <Input
               placeholder="자치법규명 검색"
               defaultValue={search}
-              onSearch={setSearch}
+              onPressEnter={(e) => setSearch((e.target as HTMLInputElement).value)}
+              onChange={(e) => !e.target.value && setSearch('')}
               style={{ width: 300 }}
               allowClear
+              suffix={
+                <SearchOutlined
+                  style={{ cursor: 'pointer', color: '#1890ff' }}
+                  onClick={() => {
+                    const input = document.querySelector('input[placeholder="자치법규명 검색"]') as HTMLInputElement
+                    if (input) setSearch(input.value)
+                  }}
+                />
+              }
             />
             <Select
               placeholder="분류"
@@ -231,7 +285,10 @@ export default function OrdinanceList() {
             <Button
               type="primary"
               icon={<SyncOutlined />}
-              onClick={() => syncMutation.mutate()}
+              onClick={() => {
+                setPasswordAction('sync')
+                setPasswordModalOpen(true)
+              }}
               loading={syncMutation.isPending}
             >
               법제처 동기화
@@ -264,6 +321,28 @@ export default function OrdinanceList() {
           />
         </Col>
       </Row>
+
+      <Modal
+        title="관리자 비밀번호 입력"
+        open={passwordModalOpen}
+        onCancel={() => {
+          setPasswordModalOpen(false)
+          form.resetFields()
+          setUploadFile(null)
+        }}
+        onOk={() => form.submit()}
+        confirmLoading={syncMutation.isPending}
+      >
+        <Form form={form} layout="vertical" onFinish={handlePasswordSubmit}>
+          <Form.Item
+            name="password"
+            label="비밀번호"
+            rules={[{ required: true, message: '비밀번호를 입력하세요' }]}
+          >
+            <Input.Password placeholder="관리자 비밀번호" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }
