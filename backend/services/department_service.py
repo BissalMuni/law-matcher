@@ -2,13 +2,16 @@
 Department Service
 """
 from typing import Optional, List
-from sqlalchemy import select, func
+from sqlalchemy import select, func, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+import pandas as pd
+from io import BytesIO
 
 from backend.models.department import Department
 from backend.models.ordinance import Ordinance
 from backend.models.review import AmendmentReview
+from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.core.exceptions import NotFoundError
 
 
@@ -168,3 +171,137 @@ class DepartmentService:
             })
 
         return summaries
+
+    async def get_input_statistics(self) -> dict:
+        """Get department-wise parent law input statistics"""
+        # Get distinct department names from ordinances
+        result = await self.db.execute(
+            select(Ordinance.department)
+            .where(
+                Ordinance.department.isnot(None),
+                Ordinance.status == "ACTIVE"
+            )
+            .distinct()
+            .order_by(Ordinance.department)
+        )
+        department_names = result.scalars().all()
+
+        department_stats = []
+        total_ordinances = 0
+        total_with_laws = 0
+
+        for idx, dept_name in enumerate(department_names, start=1):
+            # Count total ordinances for this department
+            total_count = await self.db.scalar(
+                select(func.count())
+                .select_from(Ordinance)
+                .where(
+                    Ordinance.department == dept_name,
+                    Ordinance.status == "ACTIVE"
+                )
+            ) or 0
+
+            # Count ordinances with at least one parent law mapping
+            with_laws_count = await self.db.scalar(
+                select(func.count(func.distinct(OrdinanceLawMapping.ordinance_id)))
+                .select_from(OrdinanceLawMapping)
+                .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
+                .where(
+                    Ordinance.department == dept_name,
+                    Ordinance.status == "ACTIVE"
+                )
+            ) or 0
+
+            without_laws_count = total_count - with_laws_count
+            progress_rate = (with_laws_count / total_count * 100) if total_count > 0 else 0.0
+
+            department_stats.append({
+                "id": idx,
+                "name": dept_name,
+                "total_ordinances": total_count,
+                "ordinances_with_laws": with_laws_count,
+                "ordinances_without_laws": without_laws_count,
+                "progress_rate": round(progress_rate, 1)
+            })
+
+            total_ordinances += total_count
+            total_with_laws += with_laws_count
+
+        total_without_laws = total_ordinances - total_with_laws
+        overall_progress = (total_with_laws / total_ordinances * 100) if total_ordinances > 0 else 0.0
+
+        return {
+            "total_ordinances": total_ordinances,
+            "total_with_laws": total_with_laws,
+            "total_without_laws": total_without_laws,
+            "overall_progress_rate": round(overall_progress, 1),
+            "departments": department_stats
+        }
+
+    async def export_uninput_ordinances(self) -> bytes:
+        """Export ordinances without parent laws to Excel"""
+        # Get distinct department names
+        result = await self.db.execute(
+            select(Ordinance.department)
+            .where(
+                Ordinance.department.isnot(None),
+                Ordinance.status == "ACTIVE"
+            )
+            .distinct()
+            .order_by(Ordinance.department)
+        )
+        department_names = result.scalars().all()
+
+        # Prepare data for Excel
+        excel_data = []
+
+        for dept_name in department_names:
+            # Get all ordinances for this department
+            ordinances_result = await self.db.execute(
+                select(Ordinance)
+                .where(
+                    Ordinance.department == dept_name,
+                    Ordinance.status == "ACTIVE"
+                )
+                .order_by(Ordinance.name)
+            )
+            ordinances = ordinances_result.scalars().all()
+
+            for ordinance in ordinances:
+                # Check if has parent laws
+                parent_law_count = await self.db.scalar(
+                    select(func.count())
+                    .select_from(OrdinanceLawMapping)
+                    .where(OrdinanceLawMapping.ordinance_id == ordinance.id)
+                ) or 0
+
+                # Only include ordinances without parent laws
+                if parent_law_count == 0:
+                    excel_data.append({
+                        "부서명": dept_name,
+                        "자치법규명": ordinance.name,
+                        "종류": ordinance.category or "",
+                        "공포일": ordinance.enacted_date.strftime("%Y-%m-%d") if ordinance.enacted_date else "",
+                        "시행일": ordinance.enforced_date.strftime("%Y-%m-%d") if ordinance.enforced_date else "",
+                        "제개정": ordinance.revision_type or "",
+                    })
+
+        # Create Excel file
+        df = pd.DataFrame(excel_data)
+
+        # Write to BytesIO
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='미입력 자치법규')
+
+            # Auto-adjust column width
+            worksheet = writer.sheets['미입력 자치법규']
+            for idx, col in enumerate(df.columns):
+                max_length = max(
+                    df[col].astype(str).map(len).max(),
+                    len(str(col))
+                ) + 2
+                worksheet.column_dimensions[chr(65 + idx)].width = max_length
+
+        output.seek(0)
+        return output.getvalue()

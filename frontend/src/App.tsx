@@ -10,6 +10,7 @@ import OrdinanceDetail from './pages/OrdinanceDetail'
 import AmendmentList from './pages/AmendmentList'
 import ReviewList from './pages/ReviewList'
 import ReviewDetail from './pages/ReviewDetail'
+import Statistics from './pages/Statistics'
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
             <Route path="amendments" element={<AmendmentList />} />
             <Route path="reviews" element={<ReviewList />} />
             <Route path="reviews/:id" element={<ReviewDetail />} />
+            <Route path="statistics" element={<Statistics />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -51,7 +51,40 @@ class OrdinanceService:
         # Paginate
         query = query.offset((page - 1) * size).limit(size)
         result = await self.db.execute(query)
-        items = result.scalars().all()
+        ordinances = result.scalars().all()
+
+        # Add parent law count for each ordinance
+        items = []
+        for ordinance in ordinances:
+            # Count parent laws
+            parent_law_count = await self.db.scalar(
+                select(func.count())
+                .select_from(OrdinanceLawMapping)
+                .where(OrdinanceLawMapping.ordinance_id == ordinance.id)
+            ) or 0
+
+            # Convert to dict and add count
+            ordinance_dict = {
+                "id": ordinance.id,
+                "code": ordinance.code,
+                "name": ordinance.name,
+                "category": ordinance.category,
+                "department": ordinance.department,
+                "enacted_date": ordinance.enacted_date,
+                "enforced_date": ordinance.enforced_date,
+                "revision_date": ordinance.revision_date,
+                "status": ordinance.status,
+                "serial_no": ordinance.serial_no,
+                "field_name": ordinance.field_name,
+                "org_name": ordinance.org_name,
+                "promulgation_no": ordinance.promulgation_no,
+                "revision_type": ordinance.revision_type,
+                "detail_link": ordinance.detail_link,
+                "created_at": ordinance.created_at,
+                "updated_at": ordinance.updated_at,
+                "parent_law_count": parent_law_count,
+            }
+            items.append(ordinance_dict)
 
         return {
             "total": total,
@@ -121,25 +154,22 @@ class OrdinanceService:
             for m in mappings
         ]
 
-    async def create_parent_law(
+    async def _find_or_create_law(
         self,
-        ordinance_id: int,
         law_name: str,
         law_type: str,
         proclaimed_date: Optional[str] = None,
         enforced_date: Optional[str] = None,
-        related_articles: Optional[str] = None,
-    ) -> dict:
-        """
-        상위법령 추가 (프론트엔드 호환)
-
-        법령이 없으면 자동으로 생성하고 매핑 생성
-        """
-        await self.get_by_id(ordinance_id)  # Check ordinance exists
-
-        # 법령명으로 법령 검색
+    ) -> Law:
+        """법령명과 법령유형으로 법령을 찾거나 생성"""
+        # 법령명과 법령유형으로 법령 검색
         result = await self.db.execute(
-            select(Law).where(Law.law_name == law_name)
+            select(Law).where(
+                and_(
+                    Law.law_name == law_name,
+                    Law.law_type == law_type
+                )
+            )
         )
         law = result.scalar_one_or_none()
 
@@ -178,6 +208,32 @@ class OrdinanceService:
             )
             self.db.add(law)
             await self.db.flush()  # law.id를 얻기 위해 flush
+
+        return law
+
+    async def create_parent_law(
+        self,
+        ordinance_id: int,
+        law_name: str,
+        law_type: str,
+        proclaimed_date: Optional[str] = None,
+        enforced_date: Optional[str] = None,
+        related_articles: Optional[str] = None,
+    ) -> dict:
+        """
+        상위법령 추가 (프론트엔드 호환)
+
+        법령이 없으면 자동으로 생성하고 매핑 생성
+        """
+        await self.get_by_id(ordinance_id)  # Check ordinance exists
+
+        # 법령 찾기 또는 생성
+        law = await self._find_or_create_law(
+            law_name=law_name,
+            law_type=law_type,
+            proclaimed_date=proclaimed_date,
+            enforced_date=enforced_date,
+        )
 
         # 이미 매핑이 있는지 확인
         existing = await self.db.execute(
@@ -482,6 +538,10 @@ class OrdinanceService:
     async def update_law_mapping(
         self,
         mapping_id: int,
+        law_name: Optional[str] = None,
+        law_type: Optional[str] = None,
+        proclaimed_date: Optional[str] = None,
+        enforced_date: Optional[str] = None,
         related_articles: Optional[str] = None,
     ) -> OrdinanceLawMapping:
         """조례-법령 매핑 수정"""
@@ -492,6 +552,19 @@ class OrdinanceService:
         if not mapping:
             raise NotFoundError(f"Mapping {mapping_id} not found")
 
+        # If law information is being changed, find or create new Law
+        if law_name is not None or law_type is not None:
+            # Find or create the law
+            law = await self._find_or_create_law(
+                law_name=law_name or "",
+                law_type=law_type or "법률",
+                proclaimed_date=proclaimed_date,
+                enforced_date=enforced_date,
+            )
+            # Update mapping to point to new law
+            mapping.law_id = law.id
+
+        # Update related articles
         if related_articles is not None:
             mapping.related_articles = related_articles
 

@@ -29,6 +29,7 @@ class OrdinanceResponse(OrdinanceBase):
     detail_link: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    parent_law_count: Optional[int] = None  # 상위법령 연결 개수
 
     class Config:
         from_attributes = True
@@ -130,6 +131,10 @@ class OrdinanceLawMappingCreate(BaseModel):
 
 class OrdinanceLawMappingUpdate(BaseModel):
     """조례-법령 연계 수정"""
+    law_name: Optional[str] = None
+    law_type: Optional[str] = None
+    proclaimed_date: Optional[str] = None
+    enforced_date: Optional[str] = None
     related_articles: Optional[str] = None
 
 

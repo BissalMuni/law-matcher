@@ -8,6 +8,7 @@ import {
   CheckSquareOutlined,
   SyncOutlined,
   TeamOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons'
 
 const { Header, Sider, Content } = Layout
@@ -38,6 +39,11 @@ const menuItems = [
     key: '/reviews',
     icon: <CheckSquareOutlined />,
     label: '개정 검토',
+  },
+  {
+    key: '/statistics',
+    icon: <BarChartOutlined />,
+    label: '통계정보',
   },
 ]
 

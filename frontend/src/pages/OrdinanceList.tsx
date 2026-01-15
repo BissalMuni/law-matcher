@@ -213,6 +213,14 @@ export default function OrdinanceList() {
       key: 'department',
       width: 150,
     },
+    {
+      title: '상위법령',
+      dataIndex: 'parent_law_count',
+      key: 'parent_law_count',
+      width: 100,
+      align: 'center' as const,
+      render: (count: number) => count || 0,
+    },
   ]
 
   return (

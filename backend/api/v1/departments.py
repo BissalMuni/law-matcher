@@ -3,7 +3,10 @@ Department API endpoints
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+import io
+from urllib.parse import quote
 
 from backend.api.deps import get_db
 from backend.schemas.department import (
@@ -12,6 +15,7 @@ from backend.schemas.department import (
     DepartmentCreate,
     DepartmentUpdate,
     DepartmentSummary,
+    DepartmentInputStatsResponse,
 )
 from backend.schemas.ordinance import OrdinanceListResponse
 from backend.services.department_service import DepartmentService
@@ -47,6 +51,15 @@ async def get_department_summary(
     """Get department summary with ordinance and review counts"""
     service = DepartmentService(db)
     return await service.get_summary()
+
+
+@router.get("/input-statistics", response_model=DepartmentInputStatsResponse)
+async def get_input_statistics(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get department-wise parent law input statistics"""
+    service = DepartmentService(db)
+    return await service.get_input_statistics()
 
 
 @router.get("/{department_id}", response_model=DepartmentResponse)
@@ -101,3 +114,23 @@ async def get_department_ordinances(
     """Get ordinances by department"""
     service = DepartmentService(db)
     return await service.get_ordinances(department_id, page=page, size=size)
+
+
+@router.get("/export/uninput-ordinances")
+async def export_uninput_ordinances(
+    db: AsyncSession = Depends(get_db),
+):
+    """Export department-wise uninput ordinances to Excel"""
+    service = DepartmentService(db)
+    excel_file = await service.export_uninput_ordinances()
+
+    filename = "미입력_자치법규_목록.xlsx"
+    encoded_filename = quote(filename)
+
+    return StreamingResponse(
+        io.BytesIO(excel_file),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        }
+    )

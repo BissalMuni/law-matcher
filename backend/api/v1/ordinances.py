@@ -149,6 +149,10 @@ async def update_parent_law(
     try:
         mapping = await service.update_law_mapping(
             mapping_id=parent_law_id,
+            law_name=data.law_name,
+            law_type=data.law_type,
+            proclaimed_date=data.proclaimed_date,
+            enforced_date=data.enforced_date,
             related_articles=data.related_articles,
         )
         return {"success": True, "id": mapping.id, "message": "수정되었습니다."}

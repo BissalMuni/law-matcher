@@ -55,3 +55,25 @@ class DepartmentSummary(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class DepartmentInputStats(BaseModel):
+    """Department statistics for parent law input progress"""
+    id: int
+    name: str
+    total_ordinances: int  # 총 자치법규 수
+    ordinances_with_laws: int  # 상위법령 입력 완료 수
+    ordinances_without_laws: int  # 상위법령 미입력 수
+    progress_rate: float  # 진행률 (%)
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentInputStatsResponse(BaseModel):
+    """Overall statistics response with department breakdown"""
+    total_ordinances: int
+    total_with_laws: int
+    total_without_laws: int
+    overall_progress_rate: float
+    departments: List[DepartmentInputStats]

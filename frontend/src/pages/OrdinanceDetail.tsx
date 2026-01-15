@@ -126,9 +126,11 @@ export default function OrdinanceDetail() {
 
   const handleSubmit = (values: any) => {
     const data = {
-      ...values,
+      law_name: values.law_name,
+      law_type: values.law_type,
       proclaimed_date: values.proclaimed_date?.format('YYYY-MM-DD'),
       enforced_date: values.enforced_date?.format('YYYY-MM-DD'),
+      related_articles: values.related_articles,
     }
     if (editingParentLaw) {
       updateMutation.mutate({ parentLawId: editingParentLaw.id, data })
@@ -245,12 +247,6 @@ export default function OrdinanceDetail() {
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item
-            name="law_id"
-            label="법령 ID"
-          >
-            <Input disabled placeholder="예: 001656" />
-          </Form.Item>
-          <Form.Item
             name="law_name"
             label="법령명"
             rules={[{ required: true, message: '법령명을 입력하세요' }]}
@@ -270,12 +266,6 @@ export default function OrdinanceDetail() {
                 { value: '시행규칙', label: '시행규칙' },
               ]}
             />
-          </Form.Item>
-          <Form.Item name="proclaimed_date" label="공포일자">
-            <DatePicker disabled style={{ width: '100%' }} placeholder="공포일자 선택" />
-          </Form.Item>
-          <Form.Item name="enforced_date" label="시행일자">
-            <DatePicker disabled style={{ width: '100%' }} placeholder="시행일자 선택" />
           </Form.Item>
           <Form.Item name="related_articles" label="관련 조문">
             <Input placeholder="예: 제1조, 제2조" />

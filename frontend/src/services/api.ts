@@ -196,6 +196,11 @@ export const departmentApi = {
     const { data } = await api.delete(`/departments/${id}`)
     return data
   },
+
+  getInputStatistics: async () => {
+    const { data } = await api.get('/departments/input-statistics')
+    return data
+  },
 }
 
 // Dashboard API
