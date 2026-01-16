@@ -20,6 +20,8 @@ from backend.schemas.ordinance import (
     LawSyncResponse,
     AmendmentCheckRequest,
     AmendmentCheckResponse,
+    LawSearchRequest,
+    LawSearchResponse,
 )
 from backend.services.law_sync_service import LawSyncService
 
@@ -206,3 +208,70 @@ async def create_amendment_targets(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/search", response_model=LawSearchResponse)
+async def search_law_by_name(
+    request: LawSearchRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    법령명으로 법제처 API에서 검색하여 법령ID 반환
+    - 정확히 일치하는 법령명만 성공
+    - 검색 결과가 없거나 정확히 일치하지 않으면 실패
+    """
+    import httpx
+    from backend.core.config import settings
+    
+    api_key = settings.MOLEG_API_KEY or "test"
+    url = "http://www.law.go.kr/DRF/lawSearch.do"
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                url,
+                params={
+                    "OC": api_key,
+                    "target": "law",
+                    "type": "JSON",
+                    "query": request.law_name,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            laws = data.get("LawSearch", {}).get("law", [])
+            
+            if not laws:
+                return LawSearchResponse(
+                    success=False,
+                    message=f"'{request.law_name}' 법령을 찾을 수 없습니다.",
+                )
+            
+            # 정확히 일치하는 법령명 찾기
+            exact_match = None
+            for law in laws:
+                if law.get("법령명한글") == request.law_name:
+                    exact_match = law
+                    break
+            
+            if not exact_match:
+                return LawSearchResponse(
+                    success=False,
+                    message=f"'{request.law_name}'와 정확히 일치하는 법령명이 없습니다. 입력한 법령명을 확인해주세요.",
+                )
+            
+            return LawSearchResponse(
+                success=True,
+                law_id=exact_match.get("법령ID"),
+                law_serial_no=exact_match.get("법령일련번호"),
+                law_name=exact_match.get("법령명한글"),
+                law_type=exact_match.get("법령구분명"),
+                message="법령 검색 성공",
+            )
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"법령 검색 중 오류 발생: {str(e)}",
+        )

@@ -226,3 +226,12 @@ export const dashboardApi = {
 }
 
 export default api
+
+
+// Law Search API
+export const lawSearchApi = {
+  searchByName: async (lawName: string) => {
+    const { data } = await api.post('/laws/search', { law_name: lawName })
+    return data
+  },
+}

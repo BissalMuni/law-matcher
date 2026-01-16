@@ -176,3 +176,19 @@ class AmendmentCheckResponse(BaseModel):
     revision_type: Optional[str] = None
     affected_ordinance_count: int
     affected_ordinances: List[str]  # 조례명 목록
+
+
+
+class LawSearchRequest(BaseModel):
+    """법령명 검색 요청"""
+    law_name: str
+
+
+class LawSearchResponse(BaseModel):
+    """법령명 검색 결과"""
+    success: bool
+    law_id: Optional[str] = None  # 법령ID (문자열)
+    law_serial_no: Optional[str] = None  # 법령일련번호
+    law_name: Optional[str] = None  # 정확한 법령명
+    law_type: Optional[str] = None  # 법령구분명
+    message: str

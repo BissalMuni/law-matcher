@@ -142,12 +142,6 @@ export default function OrdinanceDetail() {
   const parentLawColumns = [
     { title: '법령명', dataIndex: 'law_name', key: 'law_name' },
     {
-      title: '법령ID',
-      dataIndex: 'law_id',
-      key: 'law_id',
-      width: 100,
-    },
-    {
       title: '법령유형',
       dataIndex: 'law_type',
       key: 'law_type',
