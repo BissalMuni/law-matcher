@@ -8,6 +8,7 @@ from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.models.law_snapshot import LawSnapshot
 from backend.models.amendment import LawAmendment
 from backend.models.review import AmendmentReview
+from backend.models.law_change import LawChange, ChangeStatus, ApiStatus
 
 __all__ = [
     "Department",
@@ -18,4 +19,7 @@ __all__ = [
     "LawSnapshot",
     "LawAmendment",
     "AmendmentReview",
+    "LawChange",
+    "ChangeStatus",
+    "ApiStatus",
 ]

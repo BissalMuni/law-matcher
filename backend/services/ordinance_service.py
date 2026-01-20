@@ -144,7 +144,7 @@ class OrdinanceService:
         return [
             {
                 "id": m.id,
-                "law_id": m.law.id if m.law else None,
+                "law_id": m.law.law_id if m.law else None,
                 "law_type": m.law.law_type if m.law else "",
                 "law_name": m.law.law_name if m.law else "",
                 "proclaimed_date": m.law.proclaimed_date if m.law else None,
@@ -584,3 +584,269 @@ class OrdinanceService:
         await self.db.delete(mapping)
         await self.db.commit()
         return True
+
+    async def create_ordinance(
+        self,
+        name: str,
+        category: str = "조례",
+        department: Optional[str] = None,
+        enacted_date: Optional[str] = None,
+        enforced_date: Optional[str] = None,
+    ) -> dict:
+        """
+        자치법규 수동 등록
+
+        Args:
+            name: 자치법규명
+            category: 자치법규종류 (조례/규칙)
+            department: 소관부서
+            enacted_date: 공포일자 (YYYY-MM-DD)
+            enforced_date: 시행일자 (YYYY-MM-DD)
+
+        Returns:
+            등록 결과 정보
+        """
+        import uuid
+
+        # 동일한 이름의 자치법규가 있는지 확인
+        existing = await self.db.execute(
+            select(Ordinance).where(Ordinance.name == name)
+        )
+        if existing.scalar_one_or_none():
+            raise ValueError(f"'{name}' 자치법규가 이미 존재합니다.")
+
+        # 날짜 변환
+        enacted_date_obj = None
+        enforced_date_obj = None
+        if enacted_date:
+            try:
+                enacted_date_obj = datetime.strptime(enacted_date, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if enforced_date:
+            try:
+                enforced_date_obj = datetime.strptime(enforced_date, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        # 수동 등록용 고유 코드 생성 (UUID 사용)
+        manual_code = f"MANUAL-{uuid.uuid4().hex[:12].upper()}"
+
+        # 자치법규 생성
+        ordinance = Ordinance(
+            code=manual_code,
+            name=name,
+            category=category,
+            department=department,
+            enacted_date=enacted_date_obj,
+            enforced_date=enforced_date_obj,
+            revision_type="수동등록",
+            status="ACTIVE",
+        )
+        self.db.add(ordinance)
+        await self.db.commit()
+        await self.db.refresh(ordinance)
+
+        return {
+            "success": True,
+            "id": ordinance.id,
+            "message": f"'{name}' 자치법규가 등록되었습니다.",
+        }
+
+    async def register_from_api(
+        self,
+        serial_no: str,
+        name: str,
+        ordinance_id: str,
+        enacted_date: Optional[str] = None,
+        promulgation_no: Optional[str] = None,
+        revision_type: Optional[str] = None,
+        org_name: Optional[str] = None,
+        category: Optional[str] = None,
+        enforced_date: Optional[str] = None,
+        detail_link: Optional[str] = None,
+        field_name: Optional[str] = None,
+        department: Optional[str] = None,
+    ) -> dict:
+        """
+        법제처 API 검색 결과로 자치법규 등록
+
+        Args:
+            serial_no: 자치법규일련번호
+            name: 자치법규명
+            ordinance_id: 자치법규ID (code로 사용)
+            enacted_date: 공포일자 (YYYYMMDD)
+            promulgation_no: 공포번호
+            revision_type: 제개정구분명
+            org_name: 지자체기관명
+            category: 자치법규종류
+            enforced_date: 시행일자 (YYYYMMDD)
+            detail_link: 자치법규상세링크
+            field_name: 자치법규분야명
+            department: 소관부서 (수동 입력)
+
+        Returns:
+            등록 결과 정보
+        """
+        # 이미 등록된 자치법규인지 확인 (code로 확인)
+        existing = await self.db.execute(
+            select(Ordinance).where(Ordinance.code == ordinance_id)
+        )
+        if existing.scalar_one_or_none():
+            raise ValueError(f"'{name}' 자치법규가 이미 등록되어 있습니다. (ID: {ordinance_id})")
+
+        # 날짜 변환 (YYYYMMDD -> date)
+        enacted_date_obj = None
+        enforced_date_obj = None
+        if enacted_date:
+            try:
+                enacted_date_obj = datetime.strptime(enacted_date, '%Y%m%d').date()
+            except ValueError:
+                pass
+        if enforced_date:
+            try:
+                enforced_date_obj = datetime.strptime(enforced_date, '%Y%m%d').date()
+            except ValueError:
+                pass
+
+        # 자치법규 생성
+        ordinance = Ordinance(
+            code=ordinance_id,
+            name=name,
+            category=category,
+            department=department,
+            enacted_date=enacted_date_obj,
+            enforced_date=enforced_date_obj,
+            serial_no=serial_no,
+            field_name=field_name,
+            org_name=org_name,
+            promulgation_no=promulgation_no,
+            revision_type=revision_type,
+            detail_link=detail_link,
+            status="ACTIVE",
+        )
+        self.db.add(ordinance)
+        await self.db.commit()
+        await self.db.refresh(ordinance)
+
+        return {
+            "success": True,
+            "id": ordinance.id,
+            "message": f"'{name}' 자치법규가 등록되었습니다.",
+        }
+
+    async def update_all_ordinance_info(
+        self,
+        org: str = "6110000",
+        sborg: str = "3220000",
+    ) -> dict:
+        """
+        모든 자치법규 정보를 법제처 API로 업데이트
+
+        Args:
+            org: 도/특별시/광역시 코드
+            sborg: 시/군/구 코드
+
+        Returns:
+            {"total_ordinances": 전체 수, "updated": 업데이트 수, "failed": 실패 수}
+        """
+        import httpx
+        from backend.core.config import settings
+
+        api_key = settings.MOLEG_API_KEY or "test"
+        url = "http://www.law.go.kr/DRF/lawSearch.do"
+
+        # 모든 자치법규 조회
+        stmt = select(Ordinance).where(Ordinance.status == "ACTIVE")
+        result = await self.db.execute(stmt)
+        all_ordinances = list(result.scalars().all())
+
+        total_ordinances = len(all_ordinances)
+        updated = 0
+        failed = 0
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for ordinance in all_ordinances:
+                try:
+                    # 자치법규명으로 API 검색
+                    response = await client.get(
+                        url,
+                        params={
+                            "OC": api_key,
+                            "target": "ordin",
+                            "type": "JSON",
+                            "query": f'"{ordinance.name}"',  # 정확한 검색
+                            "org": org,
+                            "sborg": sborg,
+                            "display": 10,
+                            "nw": 1,
+                        },
+                    )
+
+                    if response.text.strip().startswith("<!DOCTYPE"):
+                        failed += 1
+                        continue
+
+                    data = response.json()
+                    ordin_search = data.get("OrdinSearch", {})
+
+                    if not ordin_search:
+                        failed += 1
+                        continue
+
+                    items = ordin_search.get("law", [])
+                    if isinstance(items, dict):
+                        items = [items]
+
+                    # 정확히 일치하는 자치법규명 찾기
+                    exact_match = None
+                    for item in items:
+                        if item.get("자치법규명") == ordinance.name:
+                            exact_match = item
+                            break
+
+                    if exact_match:
+                        # 정보 업데이트
+                        ordinance.code = exact_match.get("자치법규ID", ordinance.code)
+                        ordinance.serial_no = exact_match.get("자치법규일련번호")
+                        ordinance.promulgation_no = exact_match.get("공포번호")
+                        ordinance.revision_type = exact_match.get("제개정구분명")
+                        ordinance.org_name = exact_match.get("지자체기관명")
+                        ordinance.category = exact_match.get("자치법규종류", ordinance.category)
+                        ordinance.detail_link = exact_match.get("자치법규상세링크")
+                        ordinance.field_name = exact_match.get("자치법규분야명")
+
+                        # 날짜 업데이트
+                        if exact_match.get("공포일자"):
+                            try:
+                                ordinance.enacted_date = datetime.strptime(
+                                    exact_match["공포일자"], '%Y%m%d'
+                                ).date()
+                            except ValueError:
+                                pass
+                        if exact_match.get("시행일자"):
+                            try:
+                                ordinance.enforced_date = datetime.strptime(
+                                    exact_match["시행일자"], '%Y%m%d'
+                                ).date()
+                            except ValueError:
+                                pass
+
+                        updated += 1
+                    else:
+                        failed += 1
+
+                    # Rate limiting
+                    await asyncio.sleep(0.3)
+
+                except Exception as e:
+                    print(f"Failed to update ordinance '{ordinance.name}': {e}")
+                    failed += 1
+
+        await self.db.commit()
+
+        return {
+            "total_ordinances": total_ordinances,
+            "updated": updated,
+            "failed": failed,
+        }

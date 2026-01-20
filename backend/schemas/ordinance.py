@@ -192,3 +192,171 @@ class LawSearchResponse(BaseModel):
     law_name: Optional[str] = None  # 정확한 법령명
     law_type: Optional[str] = None  # 법령구분명
     message: str
+
+
+class OrdinanceCreate(BaseModel):
+    """자치법규 수동 등록 요청"""
+    name: str  # 자치법규명 (필수)
+    category: str = "조례"  # 자치법규종류 (조례/규칙)
+    department: Optional[str] = None  # 소관부서
+    enacted_date: Optional[str] = None  # 공포일자 (YYYY-MM-DD)
+    enforced_date: Optional[str] = None  # 시행일자 (YYYY-MM-DD)
+
+
+class OrdinanceCreateResponse(BaseModel):
+    """자치법규 등록 응답"""
+    success: bool
+    id: Optional[int] = None
+    message: str
+
+
+class LawInfoUpdateRequest(BaseModel):
+    """상위법령 정보 일괄 업데이트 요청"""
+    pass  # 파라미터 없음 - 모든 법령 업데이트
+
+
+class LawInfoUpdateResponse(BaseModel):
+    """상위법령 정보 업데이트 응답"""
+    success: bool
+    total_laws: int
+    updated: int
+    failed: int
+    message: str
+
+
+class OrdinanceSearchRequest(BaseModel):
+    """자치법규 검색 요청 (법제처 API)"""
+    query: str  # 검색어
+    org: str = "6110000"  # 도/특별시/광역시 코드
+    sborg: str = "3220000"  # 시/군/구 코드
+
+
+class OrdinanceSearchResult(BaseModel):
+    """자치법규 검색 결과 항목"""
+    serial_no: str  # 자치법규일련번호
+    name: str  # 자치법규명
+    ordinance_id: str  # 자치법규ID
+    enacted_date: Optional[str] = None  # 공포일자
+    promulgation_no: Optional[str] = None  # 공포번호
+    revision_type: Optional[str] = None  # 제개정구분명
+    org_name: Optional[str] = None  # 지자체기관명
+    category: Optional[str] = None  # 자치법규종류
+    enforced_date: Optional[str] = None  # 시행일자
+    detail_link: Optional[str] = None  # 자치법규상세링크
+    field_name: Optional[str] = None  # 자치법규분야명
+
+
+class OrdinanceSearchResponse(BaseModel):
+    """자치법규 검색 응답"""
+    success: bool
+    total: int
+    items: List[OrdinanceSearchResult]
+    message: str
+
+
+class OrdinanceRegisterFromApiRequest(BaseModel):
+    """법제처 API 검색 결과로 자치법규 등록"""
+    serial_no: str  # 자치법규일련번호
+    name: str  # 자치법규명
+    ordinance_id: str  # 자치법규ID
+    enacted_date: Optional[str] = None
+    promulgation_no: Optional[str] = None
+    revision_type: Optional[str] = None
+    org_name: Optional[str] = None
+    category: Optional[str] = None
+    enforced_date: Optional[str] = None
+    detail_link: Optional[str] = None
+    field_name: Optional[str] = None
+    department: Optional[str] = None  # 소관부서 (수동 입력)
+
+
+class OrdinanceInfoUpdateResponse(BaseModel):
+    """자치법규 정보 일괄 업데이트 응답"""
+    success: bool
+    total_ordinances: int
+    updated: int
+    failed: int
+    message: str
+
+
+# ==================== LawChange 스키마 ====================
+
+class LawChangeResponse(BaseModel):
+    """법령 변경 이력 응답"""
+    id: int
+    law_id: int
+    law_name: str  # law 테이블에서 조인
+    law_type: Optional[str] = None
+    sync_date: datetime
+    sync_batch_id: Optional[str] = None
+    api_status: str  # success, no_response, not_found
+    api_message: Optional[str] = None
+    old_values: Optional[dict] = None
+    new_values: Optional[dict] = None
+    dept_name: Optional[str] = None
+    dept_code: Optional[int] = None
+    status: str  # pending, reviewing, approved, rejected
+    processed_at: Optional[datetime] = None
+    processed_by: Optional[str] = None
+    process_note: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LawChangeListResponse(BaseModel):
+    """법령 변경 이력 목록 응답"""
+    total: int
+    page: int
+    size: int
+    items: List[LawChangeResponse]
+
+
+class LawChangeApproveRequest(BaseModel):
+    """법령 변경 승인 요청"""
+    process_note: Optional[str] = None  # 처리 메모
+    processed_by: Optional[str] = None  # 처리자
+
+
+class LawChangeRejectRequest(BaseModel):
+    """법령 변경 반려 요청"""
+    process_note: str  # 반려 사유 (필수)
+    processed_by: Optional[str] = None  # 처리자
+
+
+class LawChangeBulkApproveRequest(BaseModel):
+    """법령 변경 일괄 승인 요청"""
+    ids: List[int]  # 승인할 변경 ID 목록
+    process_note: Optional[str] = None
+    processed_by: Optional[str] = None
+
+
+class LawChangeBulkRejectRequest(BaseModel):
+    """법령 변경 일괄 반려 요청"""
+    ids: List[int]  # 반려할 변경 ID 목록
+    process_note: str  # 반려 사유 (필수)
+    processed_by: Optional[str] = None
+
+
+class LawChangeStatsResponse(BaseModel):
+    """법령 변경 통계 응답"""
+    total: int
+    pending: int
+    reviewing: int
+    approved: int
+    rejected: int
+    by_dept: List[dict]  # 부서별 통계
+
+
+class LawChangeSyncStatsResponse(BaseModel):
+    """동기화별 통계 응답"""
+    sync_batch_id: str
+    sync_date: datetime
+    total: int
+    success: int
+    no_response: int
+    not_found: int
+    pending: int
+    approved: int

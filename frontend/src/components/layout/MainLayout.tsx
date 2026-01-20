@@ -25,20 +25,19 @@ const menuItems = [
     label: '자치법규',
   },
   {
-    key: '/departments',
-    icon: <TeamOutlined />,
-    label: '부서별관리',
-  },
-
-  {
     key: '/amendments',
     icon: <AlertOutlined />,
-    label: '법령 개정',
+    label: '개정법령',
   },
   {
     key: '/reviews',
     icon: <CheckSquareOutlined />,
     label: '개정 검토',
+  },
+  {
+    key: '/departments',
+    icon: <TeamOutlined />,
+    label: '부서별관리',
   },
   {
     key: '/statistics',
@@ -98,7 +97,7 @@ export default function MainLayout() {
             borderBottom: '1px solid #f0f0f0',
           }}
         >
-          <h2 style={{ margin: 0 }}>자치법규 개정 검토 시스템</h2>
+          <h2 style={{ margin: 0 }}>OLM 자치법규 개정 검토 시스템</h2>
           <SyncOutlined style={{ fontSize: 20, cursor: 'pointer' }} />
         </Header>
         <Content

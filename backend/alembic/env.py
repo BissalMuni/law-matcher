@@ -20,6 +20,7 @@ from backend.models import (
     LawSnapshot,
     LawAmendment,
     AmendmentReview,
+    LawChange,
 )
 
 # this is the Alembic Config object, which provides

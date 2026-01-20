@@ -234,4 +234,163 @@ export const lawSearchApi = {
     const { data } = await api.post('/laws/search', { law_name: lawName })
     return data
   },
+
+  updateAllLawInfo: async () => {
+    const { data } = await api.post('/laws/update-all-info')
+    return data
+  },
+
+  // SSE 스트리밍으로 법령 동기화
+  syncLawsStream: () => {
+    return new EventSource('/api/v1/laws/sync-stream')
+  },
+}
+
+// Laws API (법령 목록 관리)
+export const lawsApi = {
+  getList: async (params: {
+    page?: number
+    size?: number
+    search?: string
+    law_type?: string
+  }) => {
+    const { data } = await api.get('/laws', { params })
+    return data
+  },
+
+  getCount: async (params?: { search?: string; law_type?: string }) => {
+    const { data } = await api.get('/laws/count', { params })
+    return data
+  },
+
+  getTypes: async () => {
+    const { data } = await api.get('/laws/types')
+    return data
+  },
+
+  getById: async (id: number) => {
+    const { data } = await api.get(`/laws/${id}`)
+    return data
+  },
+}
+
+// Ordinance Management API (추가 기능)
+export const ordinanceManagementApi = {
+  create: async (ordinanceData: {
+    name: string
+    category: string
+    department?: string
+    enacted_date?: string
+    enforced_date?: string
+  }) => {
+    const { data } = await api.post('/ordinances/create', ordinanceData)
+    return data
+  },
+
+  searchFromApi: async (query: string, org?: string, sborg?: string) => {
+    const { data } = await api.post('/ordinances/search-api', {
+      query,
+      org: org || '6110000',
+      sborg: sborg || '3220000',
+    })
+    return data
+  },
+
+  registerFromApi: async (ordinanceData: {
+    serial_no: string
+    name: string
+    ordinance_id: string
+    enacted_date?: string
+    promulgation_no?: string
+    revision_type?: string
+    org_name?: string
+    category?: string
+    enforced_date?: string
+    detail_link?: string
+    field_name?: string
+    department?: string
+  }) => {
+    const { data } = await api.post('/ordinances/register-from-api', ordinanceData)
+    return data
+  },
+
+  updateAllInfo: async () => {
+    const { data } = await api.post('/ordinances/update-all-info')
+    return data
+  },
+}
+
+// Law Changes API (법령 변경 이력 관리)
+export const lawChangesApi = {
+  getList: async (params: {
+    page?: number
+    size?: number
+    status?: string  // pending, reviewing, approved, rejected
+    api_status?: string  // success, no_response, not_found
+    dept_name?: string
+    sync_batch_id?: string
+    sync_date?: string  // YYYY-MM-DD 형식
+    search?: string
+  }) => {
+    const { data } = await api.get('/law-changes', { params })
+    return data
+  },
+
+  // 동기화 날짜 목록 조회 (드롭다운용)
+  getSyncDates: async () => {
+    const { data } = await api.get('/law-changes/sync-dates')
+    return data
+  },
+
+  getStats: async () => {
+    const { data } = await api.get('/law-changes/stats')
+    return data
+  },
+
+  getDepartments: async () => {
+    const { data } = await api.get('/law-changes/departments')
+    return data
+  },
+
+  getSyncBatches: async () => {
+    const { data } = await api.get('/law-changes/sync-batches')
+    return data
+  },
+
+  getById: async (id: number) => {
+    const { data } = await api.get(`/law-changes/${id}`)
+    return data
+  },
+
+  approve: async (id: number, request?: { process_note?: string; processed_by?: string }) => {
+    const { data } = await api.post(`/law-changes/${id}/approve`, request || {})
+    return data
+  },
+
+  reject: async (id: number, request: { process_note: string; processed_by?: string }) => {
+    const { data } = await api.post(`/law-changes/${id}/reject`, request)
+    return data
+  },
+
+  bulkApprove: async (ids: number[], request?: { process_note?: string; processed_by?: string }) => {
+    const { data } = await api.post('/law-changes/bulk-approve', { ids, ...request })
+    return data
+  },
+
+  bulkReject: async (ids: number[], request: { process_note: string; processed_by?: string }) => {
+    const { data } = await api.post('/law-changes/bulk-reject', { ids, ...request })
+    return data
+  },
+
+  // 특정 법령의 변경 연혁 조회
+  getHistory: async (lawId: number, params?: { page?: number; size?: number }) => {
+    const { data } = await api.get(`/law-changes/history/${lawId}`, { params })
+    return data
+  },
+
+  // 법령별 변경 연혁 요약 조회
+  getHistorySummary: async () => {
+    const { data } = await api.get('/law-changes/history-summary')
+    return data
+  },
 }

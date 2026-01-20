@@ -1,10 +1,24 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Table, Input, Select, Space, Typography, Button, message, Upload, Tree, Row, Col, Card, Modal, Form } from 'antd'
-import { SyncOutlined, SearchOutlined, UploadOutlined, ApartmentOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
+import { Table, Input, Select, Space, Typography, Button, message, Upload, Tree, Row, Col, Card, Modal, Form, Spin, List, Tabs, DatePicker } from 'antd'
+import { SyncOutlined, SearchOutlined, UploadOutlined, ApartmentOutlined, LeftOutlined, RightOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ordinanceApi } from '../services/api'
+import { ordinanceApi, ordinanceManagementApi } from '../services/api'
 import type { UploadProps, TreeDataNode } from 'antd'
+
+interface OrdinanceSearchResultItem {
+  serial_no: string
+  name: string
+  ordinance_id: string
+  enacted_date?: string
+  promulgation_no?: string
+  revision_type?: string
+  org_name?: string
+  category?: string
+  enforced_date?: string
+  detail_link?: string
+  field_name?: string
+}
 
 const { Title } = Typography
 
@@ -33,6 +47,14 @@ export default function OrdinanceList() {
   const [passwordAction, setPasswordAction] = useState<'sync' | 'upload' | null>(null)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [form] = Form.useForm()
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createModalTab, setCreateModalTab] = useState('api')
+  const [apiSearchQuery, setApiSearchQuery] = useState('')
+  const [apiSearchResults, setApiSearchResults] = useState<OrdinanceSearchResultItem[]>([])
+  const [apiSearchLoading, setApiSearchLoading] = useState(false)
+  const [selectedOrdinance, setSelectedOrdinance] = useState<OrdinanceSearchResultItem | null>(null)
+  const [departmentInput, setDepartmentInput] = useState('')
+  const [manualForm] = Form.useForm()
 
   // 소관부서 목록 조회
   const { data: departments } = useQuery({
@@ -137,6 +159,110 @@ export default function OrdinanceList() {
       setPasswordModalOpen(true)
       return false // 자동 업로드 방지
     },
+  }
+
+  // 자치법규 등록 (API 검색 결과로)
+  const registerMutation = useMutation({
+    mutationFn: ordinanceManagementApi.registerFromApi,
+    onSuccess: (result) => {
+      message.success(result.message)
+      queryClient.invalidateQueries({ queryKey: ['ordinances'] })
+      queryClient.invalidateQueries({ queryKey: ['ordinance-departments'] })
+      handleCloseCreateModal()
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '자치법규 등록 실패')
+    },
+  })
+
+  // 자치법규 수기 등록
+  const createMutation = useMutation({
+    mutationFn: ordinanceManagementApi.create,
+    onSuccess: (result) => {
+      message.success(result.message)
+      queryClient.invalidateQueries({ queryKey: ['ordinances'] })
+      queryClient.invalidateQueries({ queryKey: ['ordinance-departments'] })
+      handleCloseCreateModal()
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '자치법규 등록 실패')
+    },
+  })
+
+  // 자치법규 정보 일괄 업데이트
+  const updateOrdinanceInfoMutation = useMutation({
+    mutationFn: ordinanceManagementApi.updateAllInfo,
+    onSuccess: (result) => {
+      message.success(result.message)
+      queryClient.invalidateQueries({ queryKey: ['ordinances'] })
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '자치법규 정보 업데이트 실패')
+    },
+  })
+
+  // 법제처 API에서 자치법규 검색
+  const handleApiSearch = async () => {
+    if (!apiSearchQuery.trim()) {
+      message.warning('검색어를 입력하세요')
+      return
+    }
+    setApiSearchLoading(true)
+    setSelectedOrdinance(null)
+    try {
+      const result = await ordinanceManagementApi.searchFromApi(apiSearchQuery)
+      if (result.success) {
+        setApiSearchResults(result.items)
+        if (result.items.length === 0) {
+          message.info('검색 결과가 없습니다')
+        }
+      } else {
+        message.error(result.message)
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.detail || '검색 실패')
+    } finally {
+      setApiSearchLoading(false)
+    }
+  }
+
+  // 검색 결과에서 선택
+  const handleSelectOrdinance = (item: OrdinanceSearchResultItem) => {
+    setSelectedOrdinance(item)
+  }
+
+  // 선택한 자치법규 등록
+  const handleRegisterOrdinance = () => {
+    if (!selectedOrdinance) {
+      message.warning('등록할 자치법규를 선택하세요')
+      return
+    }
+    registerMutation.mutate({
+      ...selectedOrdinance,
+      department: departmentInput || undefined,
+    })
+  }
+
+  // 모달 닫기
+  const handleCloseCreateModal = () => {
+    setCreateModalOpen(false)
+    setCreateModalTab('api')
+    setApiSearchQuery('')
+    setApiSearchResults([])
+    setSelectedOrdinance(null)
+    setDepartmentInput('')
+    manualForm.resetFields()
+  }
+
+  // 수기 등록 제출
+  const handleManualSubmit = (values: any) => {
+    createMutation.mutate({
+      name: values.name,
+      category: values.category || '조례',
+      department: values.department,
+      enacted_date: values.enacted_date?.format('YYYY-MM-DD'),
+      enforced_date: values.enforced_date?.format('YYYY-MM-DD'),
+    })
   }
 
   // 트리 데이터 생성
@@ -311,6 +437,19 @@ export default function OrdinanceList() {
             >
               소관부서별 자치법규 목록
             </a>
+            <Button
+              icon={<PlusOutlined />}
+              onClick={() => setCreateModalOpen(true)}
+            >
+              신규
+            </Button>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => updateOrdinanceInfoMutation.mutate()}
+              loading={updateOrdinanceInfoMutation.isPending}
+            >
+              업데이트
+            </Button>
           </Space>
 
           <Table
@@ -350,6 +489,171 @@ export default function OrdinanceList() {
             <Input.Password placeholder="관리자 비밀번호" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="자치법규 신규 등록"
+        open={createModalOpen}
+        onCancel={handleCloseCreateModal}
+        onOk={createModalTab === 'api' ? handleRegisterOrdinance : () => manualForm.submit()}
+        okText="등록"
+        okButtonProps={{
+          disabled: createModalTab === 'api' ? !selectedOrdinance : false
+        }}
+        confirmLoading={registerMutation.isPending || createMutation.isPending}
+        width={700}
+      >
+        <Tabs
+          activeKey={createModalTab}
+          onChange={setCreateModalTab}
+          items={[
+            {
+              key: 'api',
+              label: 'API 검색',
+              children: (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Space.Compact style={{ width: '100%' }}>
+                    <Input
+                      placeholder="자치법규명 검색 (예: 청소년)"
+                      value={apiSearchQuery}
+                      onChange={(e) => setApiSearchQuery(e.target.value)}
+                      onPressEnter={handleApiSearch}
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      type="primary"
+                      icon={<SearchOutlined />}
+                      onClick={handleApiSearch}
+                      loading={apiSearchLoading}
+                    >
+                      검색
+                    </Button>
+                  </Space.Compact>
+
+                  {apiSearchLoading ? (
+                    <div style={{ textAlign: 'center', padding: 20 }}>
+                      <Spin />
+                    </div>
+                  ) : apiSearchResults.length > 0 ? (
+                    <List
+                      size="small"
+                      bordered
+                      dataSource={apiSearchResults}
+                      style={{ maxHeight: 300, overflow: 'auto' }}
+                      renderItem={(item) => (
+                        <List.Item
+                          onClick={() => handleSelectOrdinance(item)}
+                          style={{
+                            cursor: 'pointer',
+                            background: selectedOrdinance?.ordinance_id === item.ordinance_id ? '#e6f7ff' : undefined,
+                          }}
+                        >
+                          <List.Item.Meta
+                            title={item.name}
+                            description={
+                              <Space size="small" wrap>
+                                <span>{item.category}</span>
+                                {item.revision_type && <span>| {item.revision_type}</span>}
+                                {item.enacted_date && <span>| 공포: {item.enacted_date}</span>}
+                                {item.enforced_date && <span>| 시행: {item.enforced_date}</span>}
+                              </Space>
+                            }
+                          />
+                        </List.Item>
+                      )}
+                    />
+                  ) : apiSearchQuery && !apiSearchLoading ? (
+                    <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>
+                      검색 결과가 없습니다
+                    </div>
+                  ) : null}
+
+                  {selectedOrdinance && (
+                    <Card size="small" title="선택된 자치법규">
+                      <p><strong>자치법규명:</strong> {selectedOrdinance.name}</p>
+                      <p><strong>종류:</strong> {selectedOrdinance.category}</p>
+                      <p><strong>공포일:</strong> {selectedOrdinance.enacted_date || '-'}</p>
+                      <p><strong>시행일:</strong> {selectedOrdinance.enforced_date || '-'}</p>
+                      <p><strong>제개정:</strong> {selectedOrdinance.revision_type || '-'}</p>
+                      <Select
+                        placeholder="소관부서 선택"
+                        value={departmentInput || undefined}
+                        onChange={(value) => setDepartmentInput(value || '')}
+                        style={{ marginTop: 8, width: '100%' }}
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        options={departments?.map((dept: DepartmentItem) => ({
+                          value: dept.name,
+                          label: dept.name,
+                        })) || []}
+                      />
+                    </Card>
+                  )}
+                </Space>
+              ),
+            },
+            {
+              key: 'manual',
+              label: '수기 등록',
+              children: (
+                <Form
+                  form={manualForm}
+                  layout="vertical"
+                  onFinish={handleManualSubmit}
+                  initialValues={{ category: '조례' }}
+                >
+                  <Form.Item
+                    name="name"
+                    label="자치법규명"
+                    rules={[{ required: true, message: '자치법규명을 입력하세요' }]}
+                  >
+                    <Input placeholder="예: 서울특별시 관악구 청소년 조례" />
+                  </Form.Item>
+                  <Form.Item
+                    name="category"
+                    label="종류"
+                    rules={[{ required: true, message: '종류를 선택하세요' }]}
+                  >
+                    <Select
+                      options={[
+                        { value: '조례', label: '조례' },
+                        { value: '규칙', label: '규칙' },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name="department"
+                    label="소관부서"
+                  >
+                    <Select
+                      placeholder="소관부서 선택"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      options={departments?.map((dept: DepartmentItem) => ({
+                        value: dept.name,
+                        label: dept.name,
+                      })) || []}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name="enacted_date"
+                    label="공포일"
+                  >
+                    <DatePicker style={{ width: '100%' }} placeholder="공포일 선택" />
+                  </Form.Item>
+                  <Form.Item
+                    name="enforced_date"
+                    label="시행일"
+                  >
+                    <DatePicker style={{ width: '100%' }} placeholder="시행일 선택" />
+                  </Form.Item>
+                </Form>
+              ),
+            },
+          ]}
+        />
       </Modal>
     </div>
   )

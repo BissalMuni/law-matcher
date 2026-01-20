@@ -1,8 +1,10 @@
 """
 Laws API endpoints - 상위법령 관리
 """
+import json
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -22,6 +24,7 @@ from backend.schemas.ordinance import (
     AmendmentCheckResponse,
     LawSearchRequest,
     LawSearchResponse,
+    LawInfoUpdateResponse,
 )
 from backend.services.law_sync_service import LawSyncService
 
@@ -79,6 +82,43 @@ async def get_law_types(
     )
     rows = result.all()
     return [{"type": row[0], "count": row[1]} for row in rows]
+
+
+@router.get("/sync-stream")
+async def sync_laws_stream():
+    """
+    법령 동기화 (SSE 스트리밍)
+
+    모든 상위법령을 법제처 API와 비교하여 변경사항을 실시간으로 스트리밍합니다.
+    - 진행 상황 (요청/수신/비교)
+    - 변경된 법령 정보
+    - 최종 결과
+    """
+    from backend.core.database import async_session
+
+    async def event_generator():
+        async with async_session() as db:
+            try:
+                service = LawSyncService(db)
+                async for event in service.sync_all_laws_with_progress():
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                error_event = {
+                    "type": "error",
+                    "message": f"동기화 중 오류 발생: {str(e)}",
+                    "error": str(e),
+                }
+                yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{law_id}", response_model=LawResponse)
@@ -274,4 +314,32 @@ async def search_law_by_name(
         raise HTTPException(
             status_code=500,
             detail=f"법령 검색 중 오류 발생: {str(e)}",
+        )
+
+
+@router.post("/update-all-info", response_model=LawInfoUpdateResponse)
+async def update_all_law_info(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    모든 상위법령의 정보를 법제처 API로 업데이트
+
+    - laws 테이블의 모든 법령명에 대해 법제처 API 호출
+    - 공포일, 시행일, 법령ID 등 정보 업데이트
+    """
+    service = LawSyncService(db)
+
+    try:
+        result = await service.update_all_law_info()
+        return LawInfoUpdateResponse(
+            success=True,
+            total_laws=result["total_laws"],
+            updated=result["updated"],
+            failed=result["failed"],
+            message=f"법령 정보 업데이트 완료: {result['updated']}건 성공, {result['failed']}건 실패",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"법령 정보 업데이트 중 오류 발생: {str(e)}",
         )

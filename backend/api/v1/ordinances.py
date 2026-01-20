@@ -15,6 +15,13 @@ from backend.schemas.ordinance import (
     OrdinanceLawMappingCreate,
     OrdinanceLawMappingUpdate,
     ParentLawCreate,
+    OrdinanceCreate,
+    OrdinanceCreateResponse,
+    OrdinanceSearchRequest,
+    OrdinanceSearchResponse,
+    OrdinanceSearchResult,
+    OrdinanceRegisterFromApiRequest,
+    OrdinanceInfoUpdateResponse,
 )
 from backend.services.ordinance_service import OrdinanceService
 from backend.core.exceptions import NotFoundError
@@ -71,6 +78,174 @@ async def upload_ordinances(
     """엑셀 파일로 소관부서 정보 일괄 업데이트 (관리자 전용)"""
     service = OrdinanceService(db)
     return await service.upload_from_excel(file)
+
+
+@router.post("/create", response_model=OrdinanceCreateResponse)
+async def create_ordinance(
+    data: OrdinanceCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """자치법규 수동 등록"""
+    service = OrdinanceService(db)
+    try:
+        result = await service.create_ordinance(
+            name=data.name,
+            category=data.category,
+            department=data.department,
+            enacted_date=data.enacted_date,
+            enforced_date=data.enforced_date,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/search-api", response_model=OrdinanceSearchResponse)
+async def search_ordinance_from_api(
+    request: OrdinanceSearchRequest,
+):
+    """
+    법제처 API에서 자치법규 검색
+
+    - 자치법규명으로 검색하여 결과 반환
+    - 신규 등록 시 검색 결과에서 선택하여 등록
+    """
+    import httpx
+    from backend.core.config import settings
+
+    api_key = settings.MOLEG_API_KEY or "test"
+    url = "http://www.law.go.kr/DRF/lawSearch.do"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                url,
+                params={
+                    "OC": api_key,
+                    "target": "ordin",
+                    "type": "JSON",
+                    "query": request.query,
+                    "org": request.org,
+                    "sborg": request.sborg,
+                    "display": 20,
+                    "nw": 1,  # 현행
+                },
+            )
+
+            if response.text.strip().startswith("<!DOCTYPE"):
+                return OrdinanceSearchResponse(
+                    success=False,
+                    total=0,
+                    items=[],
+                    message="API 응답 오류",
+                )
+
+            response.raise_for_status()
+            data = response.json()
+
+            ordin_search = data.get("OrdinSearch", {})
+            if not ordin_search:
+                return OrdinanceSearchResponse(
+                    success=True,
+                    total=0,
+                    items=[],
+                    message="검색 결과가 없습니다.",
+                )
+
+            total = int(ordin_search.get("totalCnt", 0))
+            items = ordin_search.get("law", [])
+
+            if isinstance(items, dict):
+                items = [items]
+
+            results = []
+            for item in items:
+                results.append(OrdinanceSearchResult(
+                    serial_no=item.get("자치법규일련번호", ""),
+                    name=item.get("자치법규명", ""),
+                    ordinance_id=item.get("자치법규ID", ""),
+                    enacted_date=item.get("공포일자"),
+                    promulgation_no=item.get("공포번호"),
+                    revision_type=item.get("제개정구분명"),
+                    org_name=item.get("지자체기관명"),
+                    category=item.get("자치법규종류"),
+                    enforced_date=item.get("시행일자"),
+                    detail_link=item.get("자치법규상세링크"),
+                    field_name=item.get("자치법규분야명"),
+                ))
+
+            return OrdinanceSearchResponse(
+                success=True,
+                total=total,
+                items=results,
+                message=f"{total}건 검색됨",
+            )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"자치법규 검색 중 오류 발생: {str(e)}",
+        )
+
+
+@router.post("/register-from-api", response_model=OrdinanceCreateResponse)
+async def register_ordinance_from_api(
+    data: OrdinanceRegisterFromApiRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    법제처 API 검색 결과로 자치법규 등록
+
+    - 검색된 자치법규 정보를 기반으로 DB에 등록
+    - 이미 등록된 경우 오류 반환
+    """
+    service = OrdinanceService(db)
+    try:
+        result = await service.register_from_api(
+            serial_no=data.serial_no,
+            name=data.name,
+            ordinance_id=data.ordinance_id,
+            enacted_date=data.enacted_date,
+            promulgation_no=data.promulgation_no,
+            revision_type=data.revision_type,
+            org_name=data.org_name,
+            category=data.category,
+            enforced_date=data.enforced_date,
+            detail_link=data.detail_link,
+            field_name=data.field_name,
+            department=data.department,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/update-all-info", response_model=OrdinanceInfoUpdateResponse)
+async def update_all_ordinance_info(
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    모든 자치법규 정보를 법제처 API로 업데이트
+
+    - ordinances 테이블의 모든 자치법규명에 대해 법제처 API 호출
+    - 공포일, 시행일, 자치법규ID 등 정보 업데이트
+    """
+    service = OrdinanceService(db)
+
+    try:
+        result = await service.update_all_ordinance_info()
+        return OrdinanceInfoUpdateResponse(
+            success=True,
+            total_ordinances=result["total_ordinances"],
+            updated=result["updated"],
+            failed=result["failed"],
+            message=f"자치법규 정보 업데이트 완료: {result['updated']}건 성공, {result['failed']}건 실패",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"자치법규 정보 업데이트 중 오류 발생: {str(e)}",
+        )
 
 
 @router.get("/{ordinance_id}", response_model=OrdinanceResponse)
