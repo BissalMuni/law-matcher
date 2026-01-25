@@ -31,6 +31,7 @@ yarn-error.log*
 # Database
 *.db
 *.sqlite
+backup.sql
 
 # Logs
 *.log
@@ -51,6 +52,7 @@ coverage/
 # Cache and Data
 cache/
 data/
+law.json
 
 # Test results
 test_*.json
@@ -60,3 +62,6 @@ test_*.html
 .law-api/
 .claude/
 .docs/
+
+# Secrets
+깃허브토큰.txt

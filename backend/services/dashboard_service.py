@@ -3,13 +3,14 @@ Dashboard Service
 """
 from typing import Optional
 from datetime import datetime, timedelta
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.ordinance import Ordinance
 from backend.models.law import Law
 from backend.models.amendment import LawAmendment
 from backend.models.review import AmendmentReview
+from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 
 
 class DashboardService:
@@ -20,17 +21,14 @@ class DashboardService:
 
     async def get_summary(self) -> dict:
         """Get dashboard summary"""
-        # Total ordinances
         total_ordinances = await self.db.scalar(
             select(func.count()).select_from(Ordinance).where(Ordinance.status == "ACTIVE")
         )
 
-        # Total parent laws (from laws table)
         total_parent_laws = await self.db.scalar(
             select(func.count()).select_from(Law)
         )
 
-        # Recent amendments (last 30 days)
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         recent_amendments = await self.db.scalar(
             select(func.count()).select_from(LawAmendment).where(
@@ -38,18 +36,40 @@ class DashboardService:
             )
         )
 
-        # Pending reviews
         pending_reviews = await self.db.scalar(
             select(func.count()).select_from(AmendmentReview).where(
                 AmendmentReview.status == "PENDING"
             )
         )
 
-        # Need revision count
         need_revision_count = await self.db.scalar(
             select(func.count()).select_from(AmendmentReview).where(
                 AmendmentReview.need_revision == True,
                 AmendmentReview.status == "PENDING",
+            )
+        )
+
+        revision_needs_action_count = await self.db.scalar(
+            select(func.count(func.distinct(Ordinance.id)))
+            .select_from(Ordinance)
+            .join(OrdinanceLawMapping, Ordinance.id == OrdinanceLawMapping.ordinance_id)
+            .join(Law, OrdinanceLawMapping.law_id == Law.id)
+            .where(
+                Ordinance.revision_date.isnot(None),
+                Law.proclaimed_date.isnot(None),
+                Ordinance.revision_date < Law.proclaimed_date
+            )
+        )
+
+        revision_completed_count = await self.db.scalar(
+            select(func.count(func.distinct(Ordinance.id)))
+            .select_from(Ordinance)
+            .join(OrdinanceLawMapping, Ordinance.id == OrdinanceLawMapping.ordinance_id)
+            .join(Law, OrdinanceLawMapping.law_id == Law.id)
+            .where(
+                Ordinance.revision_date.isnot(None),
+                Law.proclaimed_date.isnot(None),
+                Ordinance.revision_date >= Law.proclaimed_date
             )
         )
 
@@ -59,7 +79,9 @@ class DashboardService:
             "recent_amendments": recent_amendments or 0,
             "pending_reviews": pending_reviews or 0,
             "need_revision_count": need_revision_count or 0,
-            "last_sync_at": None,  # TODO: Track last sync time
+            "revision_needs_action_count": revision_needs_action_count or 0,
+            "revision_completed_count": revision_completed_count or 0,
+            "last_sync_at": None,
         }
 
     async def get_recent_amendments(self, limit: int = 10) -> dict:
@@ -73,7 +95,6 @@ class DashboardService:
 
         items = []
         for amendment in amendments:
-            # Count affected ordinances
             affected_count = await self.db.scalar(
                 select(func.count()).select_from(AmendmentReview).where(
                     AmendmentReview.amendment_id == amendment.id
@@ -106,10 +127,114 @@ class DashboardService:
         for review in reviews:
             items.append({
                 "id": review.id,
-                "ordinance_name": f"Ordinance #{review.ordinance_id}",  # TODO: Join
-                "law_name": f"Law #{review.amendment_id}",  # TODO: Join
+                "ordinance_name": f"Ordinance #{review.ordinance_id}",
+                "law_name": f"Law #{review.amendment_id}",
                 "urgency": review.revision_urgency or "LOW",
                 "created_at": review.created_at,
             })
 
         return {"items": items}
+
+    async def get_revision_needed(
+        self,
+        limit: int = 10,
+        status: Optional[str] = None,
+        department: Optional[str] = None
+    ) -> dict:
+        """Get revision-needed items."""
+        revision_status_case = case(
+            (Ordinance.revision_date < Law.proclaimed_date, "NEEDS_REVISION"),
+            else_="COMPLETED"
+        ).label("revision_status")
+
+        days_diff_case = (
+            func.extract('epoch', Law.proclaimed_date - Ordinance.revision_date) / 86400
+        ).cast(func.INTEGER()).label("days_diff")
+
+        query = (
+            select(
+                Ordinance.id.label("ordinance_id"),
+                Ordinance.name.label("ordinance_name"),
+                Ordinance.revision_date.label("ordinance_revision_date"),
+                Ordinance.department,
+                Law.id.label("law_id"),
+                Law.law_name,
+                Law.law_type,
+                Law.proclaimed_date.label("law_proclaimed_date"),
+                days_diff_case,
+                revision_status_case,
+            )
+            .select_from(Ordinance)
+            .join(OrdinanceLawMapping, Ordinance.id == OrdinanceLawMapping.ordinance_id)
+            .join(Law, OrdinanceLawMapping.law_id == Law.id)
+            .where(
+                Ordinance.revision_date.isnot(None),
+                Law.proclaimed_date.isnot(None)
+            )
+        )
+
+        if status:
+            if status == "NEEDS_REVISION":
+                query = query.where(Ordinance.revision_date < Law.proclaimed_date)
+            elif status == "COMPLETED":
+                query = query.where(Ordinance.revision_date >= Law.proclaimed_date)
+
+        if department:
+            query = query.where(Ordinance.department == department)
+
+        query = query.order_by(
+            case(
+                (Ordinance.revision_date < Law.proclaimed_date, 1),
+                else_=2
+            ),
+            func.abs(days_diff_case).desc()
+        ).limit(limit)
+
+        result = await self.db.execute(query)
+        rows = result.all()
+
+        items = []
+        for row in rows:
+            items.append({
+                "ordinance_id": row.ordinance_id,
+                "ordinance_name": row.ordinance_name,
+                "ordinance_revision_date": row.ordinance_revision_date,
+                "law_id": row.law_id,
+                "law_name": row.law_name,
+                "law_type": row.law_type,
+                "law_proclaimed_date": row.law_proclaimed_date,
+                "days_diff": row.days_diff,
+                "revision_status": row.revision_status,
+                "department": row.department,
+            })
+
+        needs_revision_count = await self.db.scalar(
+            select(func.count(func.distinct(Ordinance.id)))
+            .select_from(Ordinance)
+            .join(OrdinanceLawMapping, Ordinance.id == OrdinanceLawMapping.ordinance_id)
+            .join(Law, OrdinanceLawMapping.law_id == Law.id)
+            .where(
+                Ordinance.revision_date.isnot(None),
+                Law.proclaimed_date.isnot(None),
+                Ordinance.revision_date < Law.proclaimed_date
+            )
+        )
+
+        completed_count = await self.db.scalar(
+            select(func.count(func.distinct(Ordinance.id)))
+            .select_from(Ordinance)
+            .join(OrdinanceLawMapping, Ordinance.id == OrdinanceLawMapping.ordinance_id)
+            .join(Law, OrdinanceLawMapping.law_id == Law.id)
+            .where(
+                Ordinance.revision_date.isnot(None),
+                Law.proclaimed_date.isnot(None),
+                Ordinance.revision_date >= Law.proclaimed_date
+            )
+        )
+
+        return {
+            "total": len(items),
+            "needs_revision_count": needs_revision_count or 0,
+            "completed_count": completed_count or 0,
+            "items": items,
+        }
