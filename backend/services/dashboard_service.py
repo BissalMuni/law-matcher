@@ -3,7 +3,7 @@ Dashboard Service
 """
 from typing import Optional
 from datetime import datetime, timedelta
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.ordinance import Ordinance
@@ -148,8 +148,8 @@ class DashboardService:
         ).label("revision_status")
 
         days_diff_case = (
-            func.extract('epoch', Law.proclaimed_date - Ordinance.revision_date) / 86400
-        ).cast(func.INTEGER()).label("days_diff")
+            Law.proclaimed_date - Ordinance.revision_date
+        ).cast(Integer).label("days_diff")
 
         query = (
             select(

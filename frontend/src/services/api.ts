@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { RevisionNeededListResponse } from '../types/api'
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -220,6 +221,17 @@ export const dashboardApi = {
   getPendingReviews: async (limit: number = 10) => {
     const { data } = await api.get('/dashboard/pending-reviews', {
       params: { limit },
+    })
+    return data
+  },
+
+  getRevisionNeeded: async (params?: {
+    limit?: number
+    status?: 'NEEDS_REVISION' | 'UNDER_REVIEW' | 'COMPLETED'
+    department?: string
+  }): Promise<RevisionNeededListResponse> => {
+    const { data } = await api.get('/dashboard/revision-needed', {
+      params,
     })
     return data
   },
