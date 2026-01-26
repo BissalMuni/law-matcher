@@ -36,6 +36,7 @@ async def get_ordinances(
     category: Optional[str] = None,
     department: Optional[str] = None,
     search: Optional[str] = None,
+    no_parent_law_filter: Optional[str] = None,  # "no_mapping" | "confirmed_none" | None
     db: AsyncSession = Depends(get_db),
 ):
     """Get list of ordinances"""
@@ -46,6 +47,7 @@ async def get_ordinances(
         category=category,
         department=department,
         search=search,
+        no_parent_law_filter=no_parent_law_filter,
     )
 
 
@@ -345,6 +347,34 @@ async def delete_parent_law(
     try:
         await service.delete_law_mapping(parent_law_id)
         return {"success": True, "message": "삭제되었습니다."}
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{ordinance_id}/no-parent-law")
+async def set_no_parent_law(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """상위법령 없음으로 설정"""
+    service = OrdinanceService(db)
+    try:
+        result = await service.set_no_parent_law(ordinance_id, True)
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{ordinance_id}/no-parent-law")
+async def unset_no_parent_law(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """상위법령 없음 설정 해제"""
+    service = OrdinanceService(db)
+    try:
+        result = await service.set_no_parent_law(ordinance_id, False)
+        return result
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

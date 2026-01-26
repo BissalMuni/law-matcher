@@ -9,7 +9,6 @@ import {
   SyncOutlined,
   TeamOutlined,
   BarChartOutlined,
-  BookOutlined,
 } from '@ant-design/icons'
 
 const { Header, Sider, Content } = Layout
@@ -24,11 +23,6 @@ const menuItems = [
     key: '/ordinances',
     icon: <FileTextOutlined />,
     label: '자치법규',
-  },
-  {
-    key: '/laws',
-    icon: <BookOutlined />,
-    label: '상위법령',
   },
   {
     key: '/amendments',

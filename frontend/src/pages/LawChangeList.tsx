@@ -18,6 +18,9 @@ import {
   Progress,
   List,
   Alert,
+  Form,
+  Popconfirm,
+  Spin,
 } from 'antd'
 import {
   CheckCircleOutlined,
@@ -26,9 +29,14 @@ import {
   HistoryOutlined,
   SyncOutlined,
   LoadingOutlined,
+  DownloadOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  ArrowLeftOutlined,
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { lawChangesApi, lawSearchApi } from '../services/api'
+import { lawChangesApi, lawSearchApi, lawsApi, ordinanceApi } from '../services/api'
 import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
@@ -81,7 +89,7 @@ export default function LawChangeList() {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState<string>()
-  const [apiStatus, setApiStatus] = useState<string>()
+  const [apiStatus, setApiStatus] = useState<string>('all')
   const [deptName, setDeptName] = useState<string>()
   const [search, setSearch] = useState<string>()
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
@@ -112,6 +120,18 @@ export default function LawChangeList() {
   const [historyLawId, setHistoryLawId] = useState<number | null>(null)
   const [historyLawName, setHistoryLawName] = useState<string>('')
 
+  // 조례 상세 모달 (법령명 클릭 시)
+  const [ordinanceModalOpen, setOrdinanceModalOpen] = useState(false)
+  const [selectedLawForOrdinance, setSelectedLawForOrdinance] = useState<LawChange | null>(null)
+  const [linkedOrdinances, setLinkedOrdinances] = useState<any[]>([])
+  const [selectedOrdinance, setSelectedOrdinance] = useState<any | null>(null)
+  const [ordinanceLoading, setOrdinanceLoading] = useState(false)
+
+  // 상위법령 수정 모달
+  const [parentLawModalOpen, setParentLawModalOpen] = useState(false)
+  const [editingParentLaw, setEditingParentLaw] = useState<any | null>(null)
+  const [parentLawForm] = Form.useForm()
+
   // 동기화 날짜 목록 조회
   const { data: syncDates } = useQuery({
     queryKey: ['law-changes-sync-dates'],
@@ -133,7 +153,7 @@ export default function LawChangeList() {
         page,
         size: 20,
         status,
-        api_status: apiStatus,
+        api_status: apiStatus === 'all' ? undefined : apiStatus,
         dept_name: deptName,
         search,
         sync_date: selectedSyncDate,
@@ -295,6 +315,216 @@ export default function LawChangeList() {
     },
   })
 
+  // 조례의 상위법령 조회
+  const { data: parentLaws, refetch: refetchParentLaws } = useQuery({
+    queryKey: ['ordinance-parent-laws', selectedOrdinance?.id],
+    queryFn: () => ordinanceApi.getParentLaws(selectedOrdinance?.id),
+    enabled: !!selectedOrdinance?.id,
+  })
+
+  // 조례의 조문 조회
+  const { data: articles } = useQuery({
+    queryKey: ['ordinance-articles', selectedOrdinance?.id],
+    queryFn: () => ordinanceApi.getArticles(selectedOrdinance?.id),
+    enabled: !!selectedOrdinance?.id,
+  })
+
+  // 상위법령 추가 mutation
+  const createParentLawMutation = useMutation({
+    mutationFn: (data: any) => ordinanceApi.createParentLaw(selectedOrdinance?.id, data),
+    onSuccess: () => {
+      message.success('상위법령이 추가되었습니다.')
+      refetchParentLaws()
+      setParentLawModalOpen(false)
+      parentLawForm.resetFields()
+    },
+    onError: () => {
+      message.error('상위법령 추가에 실패했습니다.')
+    },
+  })
+
+  // 상위법령 수정 mutation
+  const updateParentLawMutation = useMutation({
+    mutationFn: ({ parentLawId, data }: { parentLawId: number; data: any }) =>
+      ordinanceApi.updateParentLaw(parentLawId, data),
+    onSuccess: () => {
+      message.success('상위법령이 수정되었습니다.')
+      refetchParentLaws()
+      setParentLawModalOpen(false)
+      setEditingParentLaw(null)
+      parentLawForm.resetFields()
+    },
+    onError: () => {
+      message.error('상위법령 수정에 실패했습니다.')
+    },
+  })
+
+  // 상위법령 삭제 mutation
+  const deleteParentLawMutation = useMutation({
+    mutationFn: (parentLawId: number) => ordinanceApi.deleteParentLaw(parentLawId),
+    onSuccess: () => {
+      message.success('상위법령이 삭제되었습니다.')
+      refetchParentLaws()
+    },
+    onError: () => {
+      message.error('상위법령 삭제에 실패했습니다.')
+    },
+  })
+
+  // 법령 삭제 mutation (laws + law_changes 모두 삭제)
+  const deleteLawMutation = useMutation({
+    mutationFn: (lawId: number) => lawsApi.delete(lawId),
+    onSuccess: () => {
+      message.success('법령이 삭제되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['law-changes'] })
+      queryClient.invalidateQueries({ queryKey: ['law-changes-stats'] })
+    },
+    onError: () => {
+      message.error('법령 삭제에 실패했습니다.')
+    },
+  })
+
+  // 법령명 클릭 핸들러 - 연계 조례 조회
+  const handleLawNameClick = async (record: LawChange) => {
+    setSelectedLawForOrdinance(record)
+    setOrdinanceLoading(true)
+    setOrdinanceModalOpen(true)
+
+    try {
+      // 법령 ID로 연계된 조례 조회
+      const ordinances = await lawsApi.getOrdinances(record.law_id)
+      setLinkedOrdinances(ordinances || [])
+
+      // 조례가 1개면 바로 선택
+      if (ordinances && ordinances.length === 1) {
+        const ordinanceDetail = await ordinanceApi.getById(ordinances[0].ordinance_id)
+        setSelectedOrdinance(ordinanceDetail)
+      } else {
+        setSelectedOrdinance(null)
+      }
+    } catch (error) {
+      message.error('연계 조례 조회에 실패했습니다.')
+      setLinkedOrdinances([])
+    } finally {
+      setOrdinanceLoading(false)
+    }
+  }
+
+  // 조례 선택 핸들러
+  const handleOrdinanceSelect = async (ordinance: any) => {
+    setOrdinanceLoading(true)
+    try {
+      const ordinanceDetail = await ordinanceApi.getById(ordinance.ordinance_id)
+      setSelectedOrdinance(ordinanceDetail)
+    } catch (error) {
+      message.error('조례 상세 조회에 실패했습니다.')
+    } finally {
+      setOrdinanceLoading(false)
+    }
+  }
+
+  // 조례 모달 닫기
+  const handleOrdinanceModalClose = () => {
+    setOrdinanceModalOpen(false)
+    setSelectedLawForOrdinance(null)
+    setLinkedOrdinances([])
+    setSelectedOrdinance(null)
+  }
+
+  // 상위법령 추가 핸들러
+  const handleAddParentLaw = () => {
+    setEditingParentLaw(null)
+    parentLawForm.resetFields()
+    // 현재 법령 정보로 폼 초기화
+    if (selectedLawForOrdinance) {
+      parentLawForm.setFieldsValue({
+        law_name: selectedLawForOrdinance.law_name,
+        law_type: selectedLawForOrdinance.law_type,
+      })
+    }
+    setParentLawModalOpen(true)
+  }
+
+  // 상위법령 수정 핸들러
+  const handleEditParentLaw = (record: any) => {
+    setEditingParentLaw(record)
+    parentLawForm.setFieldsValue({
+      ...record,
+    })
+    setParentLawModalOpen(true)
+  }
+
+  // 상위법령 폼 제출
+  const handleParentLawSubmit = (values: any) => {
+    const data = {
+      law_name: values.law_name,
+      law_type: values.law_type,
+      related_articles: values.related_articles,
+    }
+    if (editingParentLaw) {
+      updateParentLawMutation.mutate({ parentLawId: editingParentLaw.id, data })
+    } else {
+      createParentLawMutation.mutate(data)
+    }
+  }
+
+  // 상위법령 테이블 컬럼
+  const parentLawColumns = [
+    {
+      title: '법령명',
+      dataIndex: 'law_name',
+      key: 'law_name',
+    },
+    {
+      title: '법령ID',
+      dataIndex: 'law_id',
+      key: 'law_id',
+      width: 100,
+    },
+    {
+      title: '법령유형',
+      dataIndex: 'law_type',
+      key: 'law_type',
+      width: 90,
+    },
+    {
+      title: '공포일자',
+      dataIndex: 'proclaimed_date',
+      key: 'proclaimed_date',
+      width: 110,
+    },
+    {
+      title: '시행일자',
+      dataIndex: 'enforced_date',
+      key: 'enforced_date',
+      width: 110,
+    },
+    {
+      title: '관련조문',
+      dataIndex: 'related_articles',
+      key: 'related_articles',
+      width: 120,
+    },
+    {
+      title: '작업',
+      key: 'action',
+      width: 80,
+      render: (_: any, record: any) => (
+        <Space size="small">
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditParentLaw(record)} />
+          <Popconfirm
+            title="삭제 확인"
+            description="이 상위법령 매핑을 삭제하시겠습니까?"
+            onConfirm={() => deleteParentLawMutation.mutate(record.id)}
+            okText="삭제"
+            cancelText="취소"
+          >
+            <Button type="text" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
 
   const statusConfig: Record<string, { color: string; text: string }> = {
     pending: { color: 'orange', text: '대기' },
@@ -314,15 +544,22 @@ export default function LawChangeList() {
       title: '법령명',
       dataIndex: 'law_name',
       key: 'law_name',
-      width: 250,
+      width: 220,
       render: (text: string, record: LawChange) => (
-        <a onClick={() => { setSelectedChange(record); setDetailModalOpen(true); }}>
+        <a onClick={() => handleLawNameClick(record)}>
           {text}
         </a>
       ),
     },
     {
-      title: '상태',
+      title: '법령구분',
+      dataIndex: 'law_type',
+      key: 'law_type',
+      width: 90,
+      render: (type: string) => type || '-',
+    },
+    {
+      title: 'API상태',
       dataIndex: 'api_status',
       key: 'api_status',
       width: 100,
@@ -342,7 +579,7 @@ export default function LawChangeList() {
       },
     },
     {
-      title: '소관부처',
+      title: '조례관할부서',
       dataIndex: 'dept_name',
       key: 'dept_name',
       width: 120,
@@ -376,7 +613,7 @@ export default function LawChangeList() {
     {
       title: '작업',
       key: 'action',
-      width: 200,
+      width: 250,
       render: (_: any, record: LawChange) => (
         <Space>
           {record.status === 'pending' && record.api_status === 'success' && (
@@ -414,6 +651,23 @@ export default function LawChangeList() {
           >
             연혁
           </Button>
+          <Popconfirm
+            title="법령 삭제"
+            description="이 법령과 관련된 모든 데이터가 삭제됩니다. 계속하시겠습니까?"
+            onConfirm={() => deleteLawMutation.mutate(record.law_id)}
+            okText="삭제"
+            okButtonProps={{ danger: true }}
+            cancelText="취소"
+          >
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deleteLawMutation.isPending}
+            >
+              삭제
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -432,7 +686,7 @@ export default function LawChangeList() {
     enforced_date: '시행일',
     revision_type: '제개정구분',
     law_id: '법령ID',
-    dept_name: '소관부처',
+    dept_name: '조례관할부서',
   }
 
   // 테이블용 간결한 변경내용 렌더링
@@ -682,18 +936,18 @@ export default function LawChangeList() {
               ]}
             />
             <Select
-              placeholder="상태"
               style={{ width: 120 }}
-              allowClear
-              onChange={setApiStatus}
+              value={apiStatus}
+              onChange={(value) => setApiStatus(value)}
               options={[
+                { value: 'all', label: '전체' },
                 { value: 'success', label: '성공' },
                 { value: 'no_response', label: '응답없음' },
                 { value: 'not_found', label: '미발견' },
               ]}
             />
             <Select
-              placeholder="소관부처"
+              placeholder="조례관할부서"
               style={{ width: 180 }}
               allowClear
               showSearch
@@ -703,6 +957,27 @@ export default function LawChangeList() {
                 label: `${d.dept_name} (${d.pending}/${d.total})`,
               })) || []}
             />
+
+            {/* 엑셀 다운로드 */}
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={async () => {
+                try {
+                  await lawChangesApi.exportExcel({
+                    status,
+                    api_status: apiStatus === 'all' ? undefined : apiStatus,
+                    dept_name: deptName,
+                    sync_date: selectedSyncDate,
+                    search,
+                  })
+                  message.success('엑셀 파일이 다운로드되었습니다.')
+                } catch (error) {
+                  message.error('엑셀 다운로드 중 오류가 발생했습니다.')
+                }
+              }}
+            >
+              엑셀 다운로드
+            </Button>
 
             {/* 일괄 작업 버튼 */}
             {selectedRowKeys.length > 0 && (
@@ -793,7 +1068,7 @@ export default function LawChangeList() {
             <Descriptions.Item label="법령유형">
               {selectedChange.law_type || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="소관부처">
+            <Descriptions.Item label="조례관할부서">
               {selectedChange.dept_name || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="상태">
@@ -964,6 +1239,153 @@ export default function LawChangeList() {
             변경 연혁이 없습니다.
           </div>
         )}
+      </Modal>
+
+      {/* 조례 상세 모달 (법령명 클릭 시) */}
+      <Modal
+        title={
+          selectedOrdinance ? (
+            <Space>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                onClick={() => setSelectedOrdinance(null)}
+                style={{ marginRight: 8 }}
+              />
+              {selectedOrdinance.name}
+            </Space>
+          ) : (
+            `연계 자치법규 - ${selectedLawForOrdinance?.law_name}`
+          )
+        }
+        open={ordinanceModalOpen}
+        onCancel={handleOrdinanceModalClose}
+        footer={[
+          <Button key="close" onClick={handleOrdinanceModalClose}>
+            닫기
+          </Button>,
+        ]}
+        width={900}
+        styles={{ body: { maxHeight: '70vh', overflow: 'auto' } }}
+      >
+        {ordinanceLoading ? (
+          <div style={{ textAlign: 'center', padding: 48 }}>
+            <Spin size="large" />
+          </div>
+        ) : selectedOrdinance ? (
+          /* 조례 상세 화면 */
+          <div>
+            <Card title="기본 정보" size="small" style={{ marginBottom: 16 }}>
+              <Descriptions column={2} size="small">
+                <Descriptions.Item label="자치법규 코드">{selectedOrdinance.code}</Descriptions.Item>
+                <Descriptions.Item label="분류">{selectedOrdinance.category}</Descriptions.Item>
+                <Descriptions.Item label="소관부서">{selectedOrdinance.department}</Descriptions.Item>
+                <Descriptions.Item label="상태">{selectedOrdinance.status}</Descriptions.Item>
+                <Descriptions.Item label="제정일">{selectedOrdinance.enacted_date}</Descriptions.Item>
+                <Descriptions.Item label="시행일">{selectedOrdinance.enforced_date}</Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            <Card
+              title="상위법령"
+              size="small"
+              style={{ marginBottom: 16 }}
+              extra={
+                <Button type="primary" icon={<PlusOutlined />} size="small" onClick={handleAddParentLaw}>
+                  추가
+                </Button>
+              }
+            >
+              <Table
+                dataSource={parentLaws || []}
+                rowKey="id"
+                size="small"
+                pagination={false}
+                columns={parentLawColumns}
+                locale={{ emptyText: '상위법령 없음' }}
+              />
+            </Card>
+
+            <Card title="조문" size="small">
+              <Table
+                dataSource={articles || []}
+                rowKey="id"
+                size="small"
+                pagination={{ pageSize: 5 }}
+                columns={[
+                  { title: '조', dataIndex: 'article_no', key: 'article_no', width: 80 },
+                  { title: '항', dataIndex: 'paragraph_no', key: 'paragraph_no', width: 60 },
+                  { title: '내용', dataIndex: 'content', key: 'content' },
+                ]}
+              />
+            </Card>
+          </div>
+        ) : linkedOrdinances.length > 0 ? (
+          /* 연계 조례 목록 */
+          <List
+            dataSource={linkedOrdinances}
+            renderItem={(item: any) => (
+              <List.Item
+                style={{ cursor: 'pointer' }}
+                onClick={() => handleOrdinanceSelect(item)}
+              >
+                <List.Item.Meta
+                  title={<a>{item.ordinance_name}</a>}
+                  description={
+                    <Space>
+                      <span>{item.ordinance_category}</span>
+                      {item.related_articles && <span>| 관련조문: {item.related_articles}</span>}
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 48, color: '#999' }}>
+            연계된 자치법규가 없습니다.
+          </div>
+        )}
+      </Modal>
+
+      {/* 상위법령 추가/수정 모달 */}
+      <Modal
+        title={editingParentLaw ? '상위법령 수정' : '상위법령 추가'}
+        open={parentLawModalOpen}
+        onCancel={() => {
+          setParentLawModalOpen(false)
+          setEditingParentLaw(null)
+          parentLawForm.resetFields()
+        }}
+        onOk={() => parentLawForm.submit()}
+        confirmLoading={createParentLawMutation.isPending || updateParentLawMutation.isPending}
+      >
+        <Form form={parentLawForm} layout="vertical" onFinish={handleParentLawSubmit}>
+          <Form.Item
+            name="law_name"
+            label="법령명"
+            rules={[{ required: true, message: '법령명을 입력하세요' }]}
+          >
+            <Input placeholder="예: 지방자치법" />
+          </Form.Item>
+          <Form.Item
+            name="law_type"
+            label="법령 유형"
+            rules={[{ required: true, message: '법령 유형을 선택하세요' }]}
+          >
+            <Select
+              placeholder="유형 선택"
+              options={[
+                { value: '법률', label: '법률' },
+                { value: '시행령', label: '시행령' },
+                { value: '시행규칙', label: '시행규칙' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="related_articles" label="관련 조문">
+            <Input placeholder="예: 제1조, 제2조" />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   )

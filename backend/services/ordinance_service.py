@@ -33,6 +33,7 @@ class OrdinanceService:
         category: Optional[str] = None,
         department: Optional[str] = None,
         search: Optional[str] = None,
+        no_parent_law_filter: Optional[str] = None,
     ) -> dict:
         """Get paginated list of ordinances"""
         query = select(Ordinance).where(Ordinance.status == "ACTIVE")
@@ -43,6 +44,20 @@ class OrdinanceService:
             query = query.where(Ordinance.department == department)
         if search:
             query = query.where(Ordinance.name.ilike(f"%{search}%"))
+
+        # 상위법령 없음 필터
+        if no_parent_law_filter == "no_mapping":
+            # 상위법령 매핑이 없고, no_parent_law가 False인 조례
+            subquery = select(OrdinanceLawMapping.ordinance_id).distinct()
+            query = query.where(
+                and_(
+                    Ordinance.id.notin_(subquery),
+                    Ordinance.no_parent_law == False
+                )
+            )
+        elif no_parent_law_filter == "confirmed_none":
+            # 상위법령 없음으로 확인된 조례
+            query = query.where(Ordinance.no_parent_law == True)
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
@@ -83,6 +98,7 @@ class OrdinanceService:
                 "created_at": ordinance.created_at,
                 "updated_at": ordinance.updated_at,
                 "parent_law_count": parent_law_count,
+                "no_parent_law": ordinance.no_parent_law,
             }
             items.append(ordinance_dict)
 
@@ -92,6 +108,18 @@ class OrdinanceService:
             "size": size,
             "items": items,
         }
+
+    async def set_no_parent_law(self, ordinance_id: int, value: bool) -> dict:
+        """상위법령 없음 설정/해제"""
+        ordinance = await self.get_by_id(ordinance_id)
+        ordinance.no_parent_law = value
+        await self.db.commit()
+        await self.db.refresh(ordinance)
+
+        if value:
+            return {"success": True, "message": "상위법령 없음으로 설정되었습니다."}
+        else:
+            return {"success": True, "message": "상위법령 없음 설정이 해제되었습니다."}
 
     async def get_departments(self) -> List[dict]:
         """Get unique department list with count"""
@@ -144,6 +172,7 @@ class OrdinanceService:
         return [
             {
                 "id": m.id,
+                "law_internal_id": m.law.id if m.law else None,  # Law 테이블 PK (연계 조례 조회용)
                 "law_id": m.law.law_id if m.law else None,
                 "law_type": m.law.law_type if m.law else "",
                 "law_name": m.law.law_name if m.law else "",
