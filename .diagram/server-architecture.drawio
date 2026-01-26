@@ -1,0 +1,260 @@
+<mxfile host="65bd71144e">
+    <diagram name="서버 구축 방법" id="server-deployment">
+        <mxGraphModel dx="1035" dy="905" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title1" value="로매처 서버 구축 방법" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="400" y="20" width="300" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="decision" value="서버 구축&#xa;방법 선택" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="80" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="opt1-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;dashed=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="200" width="300" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="opt1-title" value="옵션 1: 서버 PC 직접 구매" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14" parent="1" vertex="1">
+                    <mxGeometry x="170" y="210" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="server1" value="물리 서버 PC" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;fillColor=#f5f5f5;strokeColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="250" width="100" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ip1" value="고정 IP 할당" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="140" y="340" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="port1" value="포트 개방&#xa;(80, 443, 8000)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="400" width="100" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fw1" value="방화벽 설정" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="340" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="opt2-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;dashed=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="200" width="300" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="opt2-title" value="옵션 2: 구청 서버 가상자원 할당" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14" parent="1" vertex="1">
+                    <mxGeometry x="730" y="210" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm1" value="가상머신 (VM)" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="770" y="250" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ip2" value="내부 IP 할당" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="340" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="port2" value="포트 포워딩&#xa;(80, 443, 8000)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="400" width="100" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="fw2" value="보안그룹 설정" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="860" y="340" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="deploy" value="로매처 배포&#xa;(Docker/직접설치)" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#f8cecc;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="540" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow1" value="" style="endArrow=classic;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="decision" target="opt1-box" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow2" value="" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="decision" target="opt2-box" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow3" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="opt1-box" target="deploy" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow4" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="opt2-box" target="deploy" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-s1-ip1" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="server1" target="ip1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-s1-fw1" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="server1" target="fw1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-ip1-port1" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0;entryDx=0;entryDy=0;" parent="1" source="ip1" target="port1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-vm1-ip2" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="vm1" target="ip2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-vm1-fw2" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="vm1" target="fw2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-ip2-port2" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0;entryDx=0;entryDy=0;" parent="1" source="ip2" target="port2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram name="서버 연계 구조" id="server-integration">
+        <mxGraphModel dx="414" dy="362" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title2" value="로매처 - 새올 서버 연계 구조" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="400" y="20" width="300" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="saewol-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;dashed=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="100" width="400" height="350" as="geometry"/>
+                </mxCell>
+                <mxCell id="saewol-title" value="새올 시스템" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=16" parent="1" vertex="1">
+                    <mxGeometry x="220" y="110" width="120" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="saewol-front" value="새올 프론트 서버&#xa;(기존 시스템)" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="160" width="140" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="saewol-back" value="새올 백엔드" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="160" width="140" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="saewol-db" value="새올 DB" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="300" width="80" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="menu-box" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="100" y="280" width="160" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="menu-title" value="새올 프론트 메뉴" style="text;html=1;strokeColor=none;fillColor=#e6e6e6;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="100" y="280" width="160" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="menu1" value="• 업무관리" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10" parent="1" vertex="1">
+                    <mxGeometry x="110" y="305" width="80" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="menu2" value="• 문서관리" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10" parent="1" vertex="1">
+                    <mxGeometry x="110" y="325" width="80" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="menu3" value="• 기록관리" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10" parent="1" vertex="1">
+                    <mxGeometry x="110" y="345" width="80" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="menu4" value="• 조례개정" style="text;html=1;strokeColor=none;fillColor=#90EE90;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="110" y="385" width="80" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="lawmatcher-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;dashed=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="620" y="100" width="400" height="350" as="geometry"/>
+                </mxCell>
+                <mxCell id="lawmatcher-title" value="로매처 시스템" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=16" parent="1" vertex="1">
+                    <mxGeometry x="760" y="110" width="120" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="law-front" value="로매처 프론트&#xa;(React)" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;fillColor=#b3d9ff;strokeColor=#0066cc;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="160" width="140" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="law-back" value="로매처 백엔드&#xa;(FastAPI)" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;fillColor=#b3d9ff;strokeColor=#0066cc;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="160" width="140" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="law-db" value="PostgreSQL" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#b3d9ff;strokeColor=#0066cc;" parent="1" vertex="1">
+                    <mxGeometry x="870" y="300" width="80" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-box" value="API Endpoints:&#xa;&#xa;GET /api/v1/ordinances&#xa;GET /api/v1/law-changes&#xa;POST /api/v1/sync" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;fontSize=10" parent="1" vertex="1">
+                    <mxGeometry x="660" y="300" width="150" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-sf-sb" value="" style="endArrow=classic;startArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="saewol-front" target="saewol-back" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-sb-sdb" value="" style="endArrow=classic;startArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="saewol-back" target="saewol-db" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-lf-lb" value="" style="endArrow=classic;startArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="law-front" target="law-back" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-lb-ldb" value="" style="endArrow=classic;startArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="law-back" target="law-db" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-menu-lf" value="iframe / 새창" style="endArrow=classic;html=1;strokeColor=#00CC00;strokeWidth=3;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="menu4" target="law-front" edge="1">
+                    <mxGeometry x="0.5" y="20" width="50" height="50" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arr-sb-lb" value="REST API" style="endArrow=classic;html=1;strokeColor=#0066CC;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;" parent="1" source="saewol-back" target="law-back" edge="1">
+                    <mxGeometry x="0.3" y="-20" width="50" height="50" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="746" y="136"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram name="네트워크 구성" id="network-diagram">
+        <mxGraphModel dx="414" dy="362" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title3" value="네트워크 구성도" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="450" y="20" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="internet" value="인터넷" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="80" width="140" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="dmz-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="200" width="400" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="dmz-title" value="DMZ 구간" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14" parent="1" vertex="1">
+                    <mxGeometry x="500" y="205" width="100" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="firewall" value="방화벽" style="shape=mxgraph.cisco.security.firewall;html=1;pointerEvents=1;dashed=0;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;" parent="1" vertex="1">
+                    <mxGeometry x="410" y="240" width="60" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="loadbalancer" value="로드밸런서&#xa;(선택)" style="shape=mxgraph.aws4.application_load_balancer;html=1;fillColor=#f5a800;strokeColor=#ffffff;verticalLabelPosition=bottom;verticalAlign=top;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="600" y="235" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="internal-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;dashed=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="150" y="380" width="800" height="350" as="geometry"/>
+                </mxCell>
+                <mxCell id="internal-title" value="내부 네트워크 (구청)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=14" parent="1" vertex="1">
+                    <mxGeometry x="470" y="385" width="160" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="server-zone" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="180" y="430" width="360" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="server-zone-title" value="서버 존" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=12" parent="1" vertex="1">
+                    <mxGeometry x="320" y="435" width="80" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="lawmatcher-server" value="로매처 서버&#xa;IP: 192.168.x.x&#xa;Port: 8000, 3000" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="210" y="480" width="130" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="saewol-server" value="새올 서버&#xa;IP: 192.168.x.x&#xa;Port: 80, 443" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;fillColor=#f8cecc;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="480" width="130" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-zone" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="600" y="430" width="300" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="db-zone-title" value="DB 존" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontStyle=1;fontSize=12" parent="1" vertex="1">
+                    <mxGeometry x="720" y="435" width="60" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="lawmatcher-db" value="로매처 DB&#xa;Port: 5432" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="640" y="480" width="90" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="saewol-db2" value="새올 DB" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="770" y="480" width="90" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="data-info" value="데이터 교환 형식:&#xa;&#xa;• JSON&#xa;• Content-Type: application/json&#xa;• UTF-8 인코딩" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;fontSize=10" parent="1" vertex="1">
+                    <mxGeometry x="180" y="640" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-inet-fw" value="" style="endArrow=classic;html=1;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="internet" target="firewall" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-fw-lb" value="" style="endArrow=classic;html=1;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="firewall" target="loadbalancer" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-lb-lm" value="" style="endArrow=classic;html=1;strokeWidth=2;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" target="lawmatcher-server" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="550" y="320" as="sourcePoint"/>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arr-lb-sw" value="" style="endArrow=classic;html=1;strokeWidth=2;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" target="saewol-server" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="550" y="320" as="sourcePoint"/>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arr-lm-lmdb" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="lawmatcher-server" target="lawmatcher-db" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-sw-swdb" value="" style="endArrow=classic;startArrow=classic;html=1;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="saewol-server" target="saewol-db2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arr-lm-sw" value="내부 API 통신" style="endArrow=classic;startArrow=classic;html=1;strokeColor=#FF6600;strokeWidth=2;dashed=1;" parent="1" source="lawmatcher-server" target="saewol-server" edge="1">
+                    <mxGeometry x="0.5" y="-15" width="50" height="50" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

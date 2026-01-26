@@ -1,12 +1,16 @@
 """
 LawChanges API endpoints - 법령 변경 이력 관리
 """
+import io
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date as date_type
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy import select, func, and_
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select, func, and_, cast, Date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 from backend.api.deps import get_db
 from backend.models.law_change import LawChange, ChangeStatus, ApiStatus
@@ -67,39 +71,58 @@ async def get_law_changes(
     - 동기화 날짜별 필터링 가능
     - 법령명 검색 가능
     """
-    query = select(LawChange).options(selectinload(LawChange.law))
+    # 기본 필터 조건 (count와 data 쿼리에서 공통 사용)
+    filters = []
 
-    # 필터링
     if status:
         try:
             status_enum = ChangeStatus(status)
-            query = query.where(LawChange.status == status_enum)
+            filters.append(LawChange.status == status_enum)
         except ValueError:
             pass
 
     if api_status:
         try:
             api_status_enum = ApiStatus(api_status)
-            query = query.where(LawChange.api_status == api_status_enum)
+            filters.append(LawChange.api_status == api_status_enum)
         except ValueError:
             pass
 
     if dept_name:
-        query = query.where(LawChange.dept_name.ilike(f"%{dept_name}%"))
+        filters.append(LawChange.dept_name.ilike(f"%{dept_name}%"))
 
     if sync_batch_id:
-        query = query.where(LawChange.sync_batch_id == sync_batch_id)
+        filters.append(LawChange.sync_batch_id == sync_batch_id)
 
     if sync_date:
-        # 날짜 필터링 (해당 날짜의 데이터만)
-        query = query.where(func.date(LawChange.sync_date) == sync_date)
+        # 날짜 필터링 (해당 날짜의 데이터만) - 문자열을 date로 변환
+        sync_date_obj = datetime.strptime(sync_date, "%Y-%m-%d").date()
+        filters.append(func.date(LawChange.sync_date) == sync_date_obj)
+
+    # 총 개수 쿼리 (별도로 구성)
+    if search:
+        count_query = (
+            select(func.count(LawChange.id))
+            .select_from(LawChange)
+            .join(Law, LawChange.law_id == Law.id)
+            .where(Law.law_name.ilike(f"%{search}%"))
+        )
+        if filters:
+            count_query = count_query.where(and_(*filters))
+    else:
+        count_query = select(func.count(LawChange.id)).select_from(LawChange)
+        if filters:
+            count_query = count_query.where(and_(*filters))
+
+    total = await db.scalar(count_query)
+
+    # 데이터 쿼리 (selectinload 포함)
+    query = select(LawChange).options(selectinload(LawChange.law))
+    if filters:
+        query = query.where(and_(*filters))
 
     if search:
-        query = query.join(Law).where(Law.law_name.ilike(f"%{search}%"))
-
-    # 총 개수
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query)
+        query = query.join(Law, LawChange.law_id == Law.id).where(Law.law_name.ilike(f"%{search}%"))
 
     # 페이징 및 정렬
     query = query.order_by(LawChange.sync_date.desc(), LawChange.id.desc())
@@ -163,6 +186,136 @@ async def get_law_change_stats(
         "rejected": rejected or 0,
         "by_dept": by_dept,
     }
+
+
+@router.get("/export")
+async def export_law_changes(
+    status: Optional[str] = None,
+    api_status: Optional[str] = None,
+    dept_name: Optional[str] = None,
+    sync_date: Optional[str] = None,
+    search: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    법령 변경 이력 엑셀 다운로드
+
+    - 현재 필터 조건에 맞는 데이터를 엑셀로 다운로드
+    """
+    # 필터 조건 구성
+    filters = []
+
+    if status:
+        try:
+            status_enum = ChangeStatus(status)
+            filters.append(LawChange.status == status_enum)
+        except ValueError:
+            pass
+
+    if api_status:
+        try:
+            api_status_enum = ApiStatus(api_status)
+            filters.append(LawChange.api_status == api_status_enum)
+        except ValueError:
+            pass
+
+    if dept_name:
+        filters.append(LawChange.dept_name.ilike(f"%{dept_name}%"))
+
+    if sync_date:
+        sync_date_obj = datetime.strptime(sync_date, "%Y-%m-%d").date()
+        filters.append(func.date(LawChange.sync_date) == sync_date_obj)
+
+    # 데이터 쿼리
+    query = select(LawChange).options(selectinload(LawChange.law))
+    if filters:
+        query = query.where(and_(*filters))
+
+    if search:
+        query = query.join(Law, LawChange.law_id == Law.id).where(Law.law_name.ilike(f"%{search}%"))
+
+    query = query.order_by(LawChange.sync_date.desc(), LawChange.id.desc())
+
+    result = await db.execute(query)
+    changes = result.scalars().all()
+
+    # 엑셀 생성
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "법령변경이력"
+
+    # 스타일 정의
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+
+    # 헤더
+    headers = [
+        "법령명", "법령구분", "API상태", "처리상태", "조례관할부서",
+        "변경전_공포일", "변경후_공포일", "변경전_시행일", "변경후_시행일",
+        "변경전_제개정", "변경후_제개정", "동기화일시", "처리일시", "처리메모"
+    ]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+
+    # 상태 한글 변환
+    api_status_map = {"success": "성공", "no_response": "응답없음", "not_found": "미발견"}
+    status_map = {"pending": "대기", "reviewing": "검토중", "approved": "승인됨", "rejected": "반려됨"}
+
+    # 데이터 행
+    for row_idx, change in enumerate(changes, 2):
+        old_vals = change.old_values or {}
+        new_vals = change.new_values or {}
+
+        row_data = [
+            change.law.law_name if change.law else "",
+            change.law.law_type if change.law else "",
+            api_status_map.get(change.api_status.value, change.api_status.value) if change.api_status else "",
+            status_map.get(change.status.value, change.status.value) if change.status else "",
+            change.dept_name or "",
+            old_vals.get("proclaimed_date", ""),
+            new_vals.get("proclaimed_date", ""),
+            old_vals.get("enforced_date", ""),
+            new_vals.get("enforced_date", ""),
+            old_vals.get("revision_type", ""),
+            new_vals.get("revision_type", ""),
+            change.sync_date.strftime("%Y-%m-%d %H:%M") if change.sync_date else "",
+            change.processed_at.strftime("%Y-%m-%d %H:%M") if change.processed_at else "",
+            change.process_note or "",
+        ]
+
+        for col, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=col, value=value)
+            cell.border = thin_border
+
+    # 열 너비 조정
+    column_widths = [35, 12, 10, 10, 15, 12, 12, 12, 12, 12, 12, 16, 16, 30]
+    for col, width in enumerate(column_widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
+
+    # 파일 저장
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    # 파일명 생성
+    filename = f"법령변경이력_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
+    )
 
 
 @router.get("/departments")

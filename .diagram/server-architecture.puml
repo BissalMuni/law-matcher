@@ -1,0 +1,178 @@
+@startuml server-deployment-options
+!theme plain
+title 로매처 서버 구축 방법
+
+skinparam rectangle {
+    BackgroundColor<<option1>> LightBlue
+    BackgroundColor<<option2>> LightGreen
+    BackgroundColor<<deploy>> LightYellow
+}
+
+rectangle "서버 구축 방법 선택" as decision #Orange
+
+rectangle "옵션 1: 서버 PC 직접 구매" <<option1>> {
+    node "물리 서버 PC" as pc1
+    card "고정 IP 할당" as ip1
+    card "포트 개방\n(80, 443, 8000)" as port1
+    card "방화벽 설정" as fw1
+
+    pc1 --> ip1
+    pc1 --> port1
+    pc1 --> fw1
+}
+
+rectangle "옵션 2: 구청 서버 가상자원" <<option2>> {
+    cloud "가상머신 (VM)" as vm1
+    card "내부 IP 할당" as ip2
+    card "포트 포워딩\n(80, 443, 8000)" as port2
+    card "보안그룹 설정" as fw2
+
+    vm1 --> ip2
+    vm1 --> port2
+    vm1 --> fw2
+}
+
+rectangle "로매처 배포\n(Docker/직접설치)" <<deploy>> as deploy
+
+decision --> pc1
+decision --> vm1
+fw1 --> deploy
+fw2 --> deploy
+
+@enduml
+
+@startuml server-integration
+!theme plain
+title 로매처 - 새올 서버 연계 구조
+
+skinparam rectangle {
+    BackgroundColor<<saewol>> LightCoral
+    BackgroundColor<<lawmatcher>> LightSkyBlue
+}
+
+rectangle "새올 시스템" <<saewol>> {
+    node "새올 프론트 서버\n(기존 시스템)" as sf
+    node "새올 백엔드" as sb
+    database "새올 DB" as sdb
+
+    sf <--> sb
+    sb <--> sdb
+}
+
+rectangle "로매처 시스템" <<lawmatcher>> {
+    node "로매처 프론트\n(React)" as lf
+    node "로매처 백엔드\n(FastAPI)" as lb
+    database "PostgreSQL" as ldb
+
+    lf <--> lb
+    lb <--> ldb
+}
+
+sf -[#green,thickness=2]-> lf : "iframe 또는 링크\n좌측 하단 '조례개정' 메뉴"
+sb -[#blue,thickness=2]-> lb : "REST API 호출\n/api/v1/ordinances\n/api/v1/law-changes"
+lb -[#orange,dashed]-> sb : "조례 데이터 조회"
+
+@enduml
+
+@startuml api-sequence
+!theme plain
+title API 연계 시퀀스 다이어그램
+
+actor "사용자" as user
+participant "새올 프론트" as saewol
+participant "로매처 프론트" as lawfront
+participant "로매처 API" as lawapi
+participant "새올 API" as saewolapi
+
+user -> saewol : 좌측 메뉴\n"조례개정" 클릭
+saewol -> lawfront : iframe/새창으로\n로매처 접속
+lawfront -> lawapi : GET /api/v1/ordinances
+lawapi --> lawfront : 조례 목록 (JSON)
+
+user -> lawfront : 법령 변경사항 조회
+lawfront -> lawapi : GET /api/v1/law-changes
+lawapi --> lawfront : 변경사항 목록 (JSON)
+
+note over lawapi, saewolapi
+    데이터 동기화 (선택사항)
+end note
+
+lawapi -> saewolapi : POST /sync/ordinances
+saewolapi --> lawapi : 동기화 결과
+
+@enduml
+
+@startuml network-diagram
+!theme plain
+title 네트워크 구성도
+
+cloud "인터넷" as internet
+
+rectangle "DMZ 구간" {
+    node "방화벽" as fw
+    node "로드밸런서\n(선택사항)" as lb
+}
+
+rectangle "내부 네트워크 (구청)" {
+    rectangle "서버 존" {
+        node "로매처 서버\nIP: 192.168.x.x\nPort: 8000, 3000" as lm
+        node "새올 서버\nIP: 192.168.x.x\nPort: 80, 443" as sw
+    }
+
+    rectangle "DB 존" {
+        database "로매처 DB\nPort: 5432" as lmdb
+        database "새올 DB" as swdb
+    }
+}
+
+internet --> fw
+fw --> lb
+lb --> lm
+lb --> sw
+lm <--> lmdb
+sw <--> swdb
+lm <-[#orange,dashed]-> sw : "내부 API 통신"
+
+@enduml
+
+@startuml data-exchange
+!theme plain
+title 데이터 교환 형식
+
+class OrdinanceRequest {
+    +title: string
+    +content: string
+    +enacted_date: date
+    +department: string
+}
+
+class OrdinanceResponse {
+    +id: int
+    +title: string
+    +content: string
+    +enacted_date: date
+    +department: string
+    +created_at: datetime
+    +updated_at: datetime
+}
+
+class LawChangeResponse {
+    +id: int
+    +law_name: string
+    +change_type: string
+    +effective_date: date
+    +affected_ordinances: string[]
+    +summary: string
+}
+
+OrdinanceRequest -right-> OrdinanceResponse : "API 응답 변환"
+
+note bottom of LawChangeResponse
+    change_type:
+    - "신규제정"
+    - "일부개정"
+    - "전부개정"
+    - "폐지"
+end note
+
+@enduml

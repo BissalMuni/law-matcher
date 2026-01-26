@@ -37,10 +37,23 @@ async def get_laws(
     size: int = Query(50, ge=1, le=100),
     search: Optional[str] = None,
     law_type: Optional[str] = None,
+    dept_name: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """상위법령 목록 조회"""
-    query = select(Law)
+    """상위법령 목록 조회 (담당부서는 연계 자치법규 기준 필터링)"""
+    from backend.models.ordinance import Ordinance
+
+    if dept_name:
+        # 담당부서 필터: 연계된 자치법규의 담당부서로 필터링
+        subquery = (
+            select(OrdinanceLawMapping.law_id)
+            .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
+            .where(Ordinance.department == dept_name)
+            .distinct()
+        )
+        query = select(Law).where(Law.id.in_(subquery))
+    else:
+        query = select(Law)
 
     if search:
         query = query.where(Law.law_name.ilike(f"%{search}%"))
@@ -56,10 +69,23 @@ async def get_laws(
 async def get_laws_count(
     search: Optional[str] = None,
     law_type: Optional[str] = None,
+    dept_name: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """상위법령 개수 조회"""
-    query = select(func.count(Law.id))
+    """상위법령 개수 조회 (담당부서는 연계 자치법규 기준 필터링)"""
+    from backend.models.ordinance import Ordinance
+
+    if dept_name:
+        # 담당부서 필터: 연계된 자치법규의 담당부서로 필터링
+        subquery = (
+            select(OrdinanceLawMapping.law_id)
+            .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
+            .where(Ordinance.department == dept_name)
+            .distinct()
+        )
+        query = select(func.count(Law.id)).where(Law.id.in_(subquery))
+    else:
+        query = select(func.count(Law.id))
 
     if search:
         query = query.where(Law.law_name.ilike(f"%{search}%"))
@@ -82,6 +108,28 @@ async def get_law_types(
     )
     rows = result.all()
     return [{"type": row[0], "count": row[1]} for row in rows]
+
+
+@router.get("/departments")
+async def get_law_departments(
+    db: AsyncSession = Depends(get_db),
+):
+    """상위법령 담당부서 목록 조회 (연계된 자치법규의 담당부서 기준)"""
+    from backend.models.ordinance import Ordinance
+
+    # 연계된 자치법규의 담당부서별 법령 개수 조회
+    result = await db.execute(
+        select(Ordinance.department, func.count(func.distinct(Law.id)).label("count"))
+        .select_from(Law)
+        .join(OrdinanceLawMapping, Law.id == OrdinanceLawMapping.law_id)
+        .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
+        .where(Ordinance.department.isnot(None))
+        .where(Ordinance.department != '')
+        .group_by(Ordinance.department)
+        .order_by(Ordinance.department)
+    )
+    rows = result.all()
+    return [{"name": row[0], "count": row[1]} for row in rows]
 
 
 @router.get("/sync-stream")
@@ -343,3 +391,47 @@ async def update_all_law_info(
             status_code=500,
             detail=f"법령 정보 업데이트 중 오류 발생: {str(e)}",
         )
+
+
+@router.delete("/{law_id}")
+async def delete_law(
+    law_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    법령 삭제 (laws + law_changes + ordinance_law_mappings 모두 삭제)
+    """
+    from backend.models.law_change import LawChange
+
+    # 법령 존재 확인
+    law = await db.get(Law, law_id)
+    if not law:
+        raise HTTPException(status_code=404, detail="법령을 찾을 수 없습니다.")
+
+    law_name = law.law_name
+
+    # 1. law_changes 삭제
+    await db.execute(
+        select(LawChange).where(LawChange.law_id == law_id)
+    )
+    law_changes_result = await db.execute(
+        select(LawChange).where(LawChange.law_id == law_id)
+    )
+    for lc in law_changes_result.scalars().all():
+        await db.delete(lc)
+
+    # 2. ordinance_law_mappings 삭제
+    mappings_result = await db.execute(
+        select(OrdinanceLawMapping).where(OrdinanceLawMapping.law_id == law_id)
+    )
+    for mapping in mappings_result.scalars().all():
+        await db.delete(mapping)
+
+    # 3. law 삭제
+    await db.delete(law)
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"법령 '{law_name}' 및 관련 데이터가 삭제되었습니다.",
+    }

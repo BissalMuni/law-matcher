@@ -12,19 +12,20 @@ import {
   Form,
   Input,
   Select,
-  DatePicker,
   message,
   Popconfirm,
+  List,
 } from 'antd'
-import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ordinanceApi, lawSearchApi } from '../services/api'
+import { ordinanceApi, lawsApi } from '../services/api'
 import dayjs from 'dayjs'
 
 const { Title } = Typography
 
 interface ParentLaw {
   id: number
+  law_internal_id: number  // Law 테이블 PK (연계 조례 조회용)
   law_id: string
   law_type: string
   law_name: string
@@ -59,9 +60,20 @@ export default function OrdinanceDetail() {
     enabled: !!id,
   })
 
+  // 연계 조례 모달
+  const [lawOrdinanceModalOpen, setLawOrdinanceModalOpen] = useState(false)
+  const [selectedLaw, setSelectedLaw] = useState<ParentLaw | null>(null)
+
+  // 연계 조례 조회
+  const { data: linkedOrdinances, isLoading: linkedOrdinancesLoading } = useQuery({
+    queryKey: ['law-ordinances', selectedLaw?.law_internal_id],
+    queryFn: () => selectedLaw?.law_internal_id ? lawsApi.getOrdinances(selectedLaw.law_internal_id) : null,
+    enabled: !!selectedLaw?.law_internal_id && lawOrdinanceModalOpen,
+  })
+
   const createMutation = useMutation({
     mutationFn: (data: {
-      law_id: string
+      law_id?: string
       law_type: string
       law_name: string
       proclaimed_date?: string
@@ -102,6 +114,28 @@ export default function OrdinanceDetail() {
     },
   })
 
+  const setNoParentLawMutation = useMutation({
+    mutationFn: () => ordinanceApi.setNoParentLaw(Number(id)),
+    onSuccess: () => {
+      message.success('상위법령 없음으로 설정되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id] })
+    },
+    onError: () => {
+      message.error('설정에 실패했습니다.')
+    },
+  })
+
+  const unsetNoParentLawMutation = useMutation({
+    mutationFn: () => ordinanceApi.unsetNoParentLaw(Number(id)),
+    onSuccess: () => {
+      message.success('상위법령 없음 설정이 해제되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id] })
+    },
+    onError: () => {
+      message.error('설정 해제에 실패했습니다.')
+    },
+  })
+
   const handleModalClose = () => {
     setIsModalOpen(false)
     setEditingParentLaw(null)
@@ -124,6 +158,12 @@ export default function OrdinanceDetail() {
     setIsModalOpen(true)
   }
 
+  // 상위법령 법령명 클릭 시 연계 조례 모달 열기
+  const handleLawNameClick = (record: ParentLaw) => {
+    setSelectedLaw(record)
+    setLawOrdinanceModalOpen(true)
+  }
+
   const handleSubmit = (values: any) => {
     const data = {
       law_name: values.law_name,
@@ -140,7 +180,14 @@ export default function OrdinanceDetail() {
   }
 
   const parentLawColumns = [
-    { title: '법령명', dataIndex: 'law_name', key: 'law_name' },
+    {
+      title: '법령명',
+      dataIndex: 'law_name',
+      key: 'law_name',
+      render: (text: string, record: ParentLaw) => (
+        <a onClick={() => handleLawNameClick(record)}>{text}</a>
+      ),
+    },
     {
       title: '법령ID',
       dataIndex: 'law_id',
@@ -209,6 +256,9 @@ export default function OrdinanceDetail() {
           <Descriptions.Item label="상태">{ordinance?.status}</Descriptions.Item>
           <Descriptions.Item label="제정일">{ordinance?.enacted_date}</Descriptions.Item>
           <Descriptions.Item label="시행일">{ordinance?.enforced_date}</Descriptions.Item>
+          <Descriptions.Item label="상위법령 없음">
+            {ordinance?.no_parent_law ? '확인됨' : '-'}
+          </Descriptions.Item>
         </Descriptions>
       </Card>
 
@@ -216,9 +266,36 @@ export default function OrdinanceDetail() {
         title="상위법령"
         style={{ marginBottom: 16 }}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            추가
-          </Button>
+          <Space>
+            {ordinance?.no_parent_law ? (
+              <Popconfirm
+                title="상위법령 없음 해제"
+                description="상위법령 없음 설정을 해제하시겠습니까?"
+                onConfirm={() => unsetNoParentLawMutation.mutate()}
+                okText="해제"
+                cancelText="취소"
+              >
+                <Button icon={<CloseOutlined />} loading={unsetNoParentLawMutation.isPending}>
+                  없음 해제
+                </Button>
+              </Popconfirm>
+            ) : (
+              <Popconfirm
+                title="상위법령 없음 확인"
+                description="이 조례에 상위법령이 없음을 확인하시겠습니까?"
+                onConfirm={() => setNoParentLawMutation.mutate()}
+                okText="확인"
+                cancelText="취소"
+              >
+                <Button icon={<CheckOutlined />} loading={setNoParentLawMutation.isPending}>
+                  없음
+                </Button>
+              </Popconfirm>
+            )}
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              추가
+            </Button>
+          </Space>
         }
       >
         <Table
@@ -227,6 +304,7 @@ export default function OrdinanceDetail() {
           size="small"
           pagination={false}
           columns={parentLawColumns}
+          locale={{ emptyText: ordinance?.no_parent_law ? '상위법령 없음 (확인됨)' : '상위법령 없음' }}
         />
       </Card>
 
@@ -277,6 +355,49 @@ export default function OrdinanceDetail() {
             <Input placeholder="예: 제1조, 제2조" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 연계 조례 모달 */}
+      <Modal
+        title={`연계 자치법규 - ${selectedLaw?.law_name}`}
+        open={lawOrdinanceModalOpen}
+        onCancel={() => {
+          setLawOrdinanceModalOpen(false)
+          setSelectedLaw(null)
+        }}
+        footer={null}
+        width={700}
+      >
+        {linkedOrdinancesLoading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <Spin />
+          </div>
+        ) : linkedOrdinances?.length > 0 ? (
+          <List
+            dataSource={linkedOrdinances}
+            renderItem={(item: any) => (
+              <List.Item>
+                <List.Item.Meta
+                  title={
+                    <a href={`/ordinances/${item.id}`} target="_blank" rel="noopener noreferrer">
+                      {item.name}
+                    </a>
+                  }
+                  description={
+                    <Space>
+                      <span>{item.category}</span>
+                      {item.related_articles && <span>| 관련조문: {item.related_articles}</span>}
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>
+            연계된 자치법규가 없습니다.
+          </div>
+        )}
       </Modal>
     </div>
   )
