@@ -16,6 +16,18 @@ body {
   min-height: 100vh;
 }
 
+.revision-row-needs_revision td {
+  background: #fff1f0;
+}
+
+.revision-row-completed td {
+  background: #f6ffed;
+}
+
+.revision-row-under_review td {
+  background: #fffbe6;
+}
+
 /* Tree indent 조절 */
 .ant-tree-indent-unit {
   width: 4px !important;
