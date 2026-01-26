@@ -30,6 +30,7 @@ class OrdinanceResponse(OrdinanceBase):
     created_at: datetime
     updated_at: datetime
     parent_law_count: Optional[int] = None  # 상위법령 연결 개수
+    no_parent_law: bool = False  # 상위법령 없음 확인 여부
 
     class Config:
         from_attributes = True

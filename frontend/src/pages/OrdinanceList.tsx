@@ -40,6 +40,7 @@ export default function OrdinanceList() {
   const [search, setSearch] = useState(() => searchParams.get('search') || '')
   const [category, setCategory] = useState<string | undefined>(() => searchParams.get('category') || undefined)
   const [selectedDepartment, setSelectedDepartment] = useState<string | undefined>(() => searchParams.get('department') || undefined)
+  const [noParentLawFilter, setNoParentLawFilter] = useState<string | undefined>(() => searchParams.get('noParentLaw') || undefined)
   const [initialLoaded, setInitialLoaded] = useState(false)
   const [treeCollapsed, setTreeCollapsed] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>(['all'])
@@ -63,7 +64,7 @@ export default function OrdinanceList() {
   })
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['ordinances', page, search, category, selectedDepartment],
+    queryKey: ['ordinances', page, search, category, selectedDepartment, noParentLawFilter],
     queryFn: () =>
       ordinanceApi.getList({
         page,
@@ -71,6 +72,7 @@ export default function OrdinanceList() {
         search: search || undefined,
         category,
         department: selectedDepartment,
+        no_parent_law_filter: noParentLawFilter,
       }),
     enabled: initialLoaded,
   })
@@ -87,8 +89,9 @@ export default function OrdinanceList() {
     if (search) params.set('search', search)
     if (category) params.set('category', category)
     if (selectedDepartment) params.set('department', selectedDepartment)
+    if (noParentLawFilter) params.set('noParentLaw', noParentLawFilter)
     setSearchParams(params, { replace: true })
-  }, [page, search, category, selectedDepartment, setSearchParams])
+  }, [page, search, category, selectedDepartment, noParentLawFilter, setSearchParams])
 
   // 법제처 API 동기화
   const syncMutation = useMutation({
@@ -343,9 +346,14 @@ export default function OrdinanceList() {
       title: '상위법령',
       dataIndex: 'parent_law_count',
       key: 'parent_law_count',
-      width: 100,
+      width: 120,
       align: 'center' as const,
-      render: (count: number) => count || 0,
+      render: (count: number, record: any) => {
+        if (record.no_parent_law) {
+          return <span style={{ color: '#999' }}>없음(확인)</span>
+        }
+        return count || 0
+      },
     },
   ]
 
@@ -407,6 +415,20 @@ export default function OrdinanceList() {
               options={[
                 { value: '조례', label: '조례' },
                 { value: '규칙', label: '규칙' },
+              ]}
+            />
+            <Select
+              placeholder="상위법령"
+              style={{ width: 160 }}
+              allowClear
+              value={noParentLawFilter}
+              onChange={(value) => {
+                setNoParentLawFilter(value)
+                setPage(1)
+              }}
+              options={[
+                { value: 'no_mapping', label: '미연결 (확인필요)' },
+                { value: 'confirmed_none', label: '없음 (확인완료)' },
               ]}
             />
             <Button

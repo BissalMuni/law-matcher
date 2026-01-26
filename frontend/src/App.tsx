@@ -7,7 +7,8 @@ import DepartmentList from './pages/DepartmentList'
 import DepartmentDetail from './pages/DepartmentDetail'
 import OrdinanceList from './pages/OrdinanceList'
 import OrdinanceDetail from './pages/OrdinanceDetail'
-import AmendmentList from './pages/AmendmentList'
+import LawList from './pages/LawList'
+import LawChangeList from './pages/LawChangeList'
 import ReviewList from './pages/ReviewList'
 import ReviewDetail from './pages/ReviewDetail'
 import Statistics from './pages/Statistics'
@@ -22,9 +23,10 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="ordinances" element={<OrdinanceList />} />
             <Route path="ordinances/:id" element={<OrdinanceDetail />} />
+            <Route path="laws" element={<LawList />} />
             <Route path="departments" element={<DepartmentList />} />
             <Route path="departments/:id" element={<DepartmentDetail />} />
-            <Route path="amendments" element={<AmendmentList />} />
+            <Route path="amendments" element={<LawChangeList />} />
             <Route path="reviews" element={<ReviewList />} />
             <Route path="reviews/:id" element={<ReviewDetail />} />
             <Route path="statistics" element={<Statistics />} />

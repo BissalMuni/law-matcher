@@ -29,6 +29,7 @@ class Ordinance(Base):
     enforced_date: Mapped[Optional[date]] = mapped_column(Date)  # 시행일자
     revision_date: Mapped[Optional[date]] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), default="ACTIVE")
+    no_parent_law: Mapped[bool] = mapped_column(default=False)  # 상위법령 없음 확인 여부
 
     # 법제처 API 추가 필드
     serial_no: Mapped[Optional[str]] = mapped_column(String(50))  # 자치법규일련번호

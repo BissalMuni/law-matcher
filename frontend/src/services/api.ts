@@ -15,6 +15,7 @@ export const ordinanceApi = {
     category?: string
     department?: string
     search?: string
+    no_parent_law_filter?: string  // "no_mapping" | "confirmed_none"
   }) => {
     const { data } = await api.get('/ordinances', { params })
     return data
@@ -36,7 +37,7 @@ export const ordinanceApi = {
   },
 
   createParentLaw: async (ordinanceId: number, parentLaw: {
-    law_id: string
+    law_id?: string
     law_type: string
     law_name: string
     proclaimed_date?: string
@@ -60,6 +61,16 @@ export const ordinanceApi = {
 
   deleteParentLaw: async (parentLawId: number) => {
     const { data } = await api.delete(`/ordinances/parent-laws/${parentLawId}`)
+    return data
+  },
+
+  setNoParentLaw: async (ordinanceId: number) => {
+    const { data } = await api.post(`/ordinances/${ordinanceId}/no-parent-law`)
+    return data
+  },
+
+  unsetNoParentLaw: async (ordinanceId: number) => {
+    const { data } = await api.delete(`/ordinances/${ordinanceId}/no-parent-law`)
     return data
   },
 
@@ -253,12 +264,13 @@ export const lawsApi = {
     size?: number
     search?: string
     law_type?: string
+    dept_name?: string
   }) => {
     const { data } = await api.get('/laws', { params })
     return data
   },
 
-  getCount: async (params?: { search?: string; law_type?: string }) => {
+  getCount: async (params?: { search?: string; law_type?: string; dept_name?: string }) => {
     const { data } = await api.get('/laws/count', { params })
     return data
   },
@@ -268,8 +280,23 @@ export const lawsApi = {
     return data
   },
 
+  getDepartments: async () => {
+    const { data } = await api.get('/laws/departments')
+    return data
+  },
+
   getById: async (id: number) => {
     const { data } = await api.get(`/laws/${id}`)
+    return data
+  },
+
+  getOrdinances: async (id: number) => {
+    const { data } = await api.get(`/laws/${id}/ordinances`)
+    return data
+  },
+
+  delete: async (id: number) => {
+    const { data } = await api.delete(`/laws/${id}`)
     return data
   },
 }
@@ -392,5 +419,29 @@ export const lawChangesApi = {
   getHistorySummary: async () => {
     const { data } = await api.get('/law-changes/history-summary')
     return data
+  },
+
+  // 엑셀 다운로드
+  exportExcel: async (params: {
+    status?: string
+    api_status?: string
+    dept_name?: string
+    sync_date?: string
+    search?: string
+  }) => {
+    const response = await api.get('/law-changes/export', {
+      params,
+      responseType: 'blob',
+    })
+    // 파일 다운로드 처리
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    const filename = `법령변경이력_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`
+    link.setAttribute('download', filename)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
   },
 }
