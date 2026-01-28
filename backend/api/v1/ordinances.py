@@ -260,15 +260,6 @@ async def get_ordinance(
     return await service.get_by_id(ordinance_id)
 
 
-@router.get("/{ordinance_id}/articles")
-async def get_ordinance_articles(
-    ordinance_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """Get ordinance articles"""
-    service = OrdinanceService(db)
-    return await service.get_articles(ordinance_id)
-
 
 @router.get("/{ordinance_id}/parent-laws")
 async def get_parent_laws(

@@ -14,7 +14,6 @@ from backend.core.database import Base
 from backend.models import (
     Department,
     Ordinance,
-    OrdinanceArticle,
     Law,
     OrdinanceLawMapping,
     LawSnapshot,
