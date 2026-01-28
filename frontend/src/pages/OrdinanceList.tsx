@@ -528,6 +528,7 @@ export default function OrdinanceList() {
         <Tabs
           activeKey={createModalTab}
           onChange={setCreateModalTab}
+          destroyInactiveTabPane={false}
           items={[
             {
               key: 'api',

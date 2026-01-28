@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Table,
   Tag,
@@ -87,13 +88,19 @@ interface SyncProgress {
 
 export default function LawChangeList() {
   const queryClient = useQueryClient()
-  const [page, setPage] = useState(1)
-  const [status, setStatus] = useState<string>()
-  const [apiStatus, setApiStatus] = useState<string>('all')
-  const [deptName, setDeptName] = useState<string>()
-  const [search, setSearch] = useState<string>()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // URL 쿼리 파라미터에서 초기값 읽기
+  const [page, setPage] = useState(() => {
+    const p = searchParams.get('page')
+    return p ? parseInt(p, 10) : 1
+  })
+  const [status, setStatus] = useState<string>(() => searchParams.get('status') || undefined)
+  const [apiStatus, setApiStatus] = useState<string>(() => searchParams.get('apiStatus') || 'all')
+  const [deptName, setDeptName] = useState<string>(() => searchParams.get('deptName') || undefined)
+  const [search, setSearch] = useState<string>(() => searchParams.get('search') || undefined)
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
-  const [selectedSyncDate, setSelectedSyncDate] = useState<string>()
+  const [selectedSyncDate, setSelectedSyncDate] = useState<string>(() => searchParams.get('syncDate') || undefined)
 
   // SSE 동기화 상태
   const [isSyncing, setIsSyncing] = useState(false)
@@ -131,6 +138,18 @@ export default function LawChangeList() {
   const [parentLawModalOpen, setParentLawModalOpen] = useState(false)
   const [editingParentLaw, setEditingParentLaw] = useState<any | null>(null)
   const [parentLawForm] = Form.useForm()
+
+  // 필터 상태 변경 시 URL 쿼리 파라미터 업데이트
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (page > 1) params.set('page', String(page))
+    if (status) params.set('status', status)
+    if (apiStatus && apiStatus !== 'all') params.set('apiStatus', apiStatus)
+    if (deptName) params.set('deptName', deptName)
+    if (search) params.set('search', search)
+    if (selectedSyncDate) params.set('syncDate', selectedSyncDate)
+    setSearchParams(params, { replace: true })
+  }, [page, status, apiStatus, deptName, search, selectedSyncDate, setSearchParams])
 
   // 동기화 날짜 목록 조회
   const { data: syncDates } = useQuery({

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Table, Tag, Typography, Space, Select, Button } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
@@ -10,10 +10,29 @@ const { Title } = Typography
 
 export default function ReviewList() {
   const navigate = useNavigate()
-  const [page, setPage] = useState(1)
-  const [needRevision, setNeedRevision] = useState<boolean>()
-  const [status, setStatus] = useState<string>()
-  const [urgency, setUrgency] = useState<string>()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // URL 쿼리 파라미터에서 초기값 읽기
+  const [page, setPage] = useState(() => {
+    const p = searchParams.get('page')
+    return p ? parseInt(p, 10) : 1
+  })
+  const [needRevision, setNeedRevision] = useState<boolean | undefined>(() => {
+    const v = searchParams.get('needRevision')
+    return v ? v === 'true' : undefined
+  })
+  const [status, setStatus] = useState<string | undefined>(() => searchParams.get('status') || undefined)
+  const [urgency, setUrgency] = useState<string | undefined>(() => searchParams.get('urgency') || undefined)
+
+  // 필터 상태 변경 시 URL 쿼리 파라미터 업데이트
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (page > 1) params.set('page', String(page))
+    if (needRevision !== undefined) params.set('needRevision', String(needRevision))
+    if (status) params.set('status', status)
+    if (urgency) params.set('urgency', urgency)
+    setSearchParams(params, { replace: true })
+  }, [page, needRevision, status, urgency, setSearchParams])
 
   const { data, isLoading } = useQuery({
     queryKey: ['reviews', page, needRevision, status, urgency],

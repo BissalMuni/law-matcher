@@ -3,7 +3,7 @@ Ordinance models
 """
 from datetime import datetime, date
 from typing import List, Optional, TYPE_CHECKING
-from sqlalchemy import String, Text, Date, DateTime, ForeignKey, Integer
+from sqlalchemy import String, Date, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.database import Base
@@ -47,9 +47,6 @@ class Ordinance(Base):
     department_rel: Mapped[Optional["Department"]] = relationship(
         back_populates="ordinances"
     )
-    articles: Mapped[List["OrdinanceArticle"]] = relationship(
-        back_populates="ordinance", cascade="all, delete-orphan"
-    )
     # 새로운 구조: laws 테이블과 N:M 관계
     law_mappings: Mapped[List["OrdinanceLawMapping"]] = relationship(
         back_populates="ordinance", cascade="all, delete-orphan"
@@ -57,19 +54,3 @@ class Ordinance(Base):
     reviews: Mapped[List["AmendmentReview"]] = relationship(
         back_populates="ordinance"
     )
-
-
-class OrdinanceArticle(Base):
-    """자치법규 조문"""
-    __tablename__ = "ordinance_articles"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    ordinance_id: Mapped[int] = mapped_column(ForeignKey("ordinances.id"))
-    article_no: Mapped[str] = mapped_column(String(20), nullable=False)
-    paragraph_no: Mapped[Optional[str]] = mapped_column(String(20))
-    item_no: Mapped[Optional[str]] = mapped_column(String(20))
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-    # Relationships
-    ordinance: Mapped["Ordinance"] = relationship(back_populates="articles")

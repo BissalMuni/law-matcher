@@ -68,17 +68,6 @@ class OrdinanceListResponse(BaseModel):
     items: List[OrdinanceResponse]
 
 
-class OrdinanceArticleResponse(BaseModel):
-    """Ordinance article response"""
-    id: int
-    article_no: str
-    paragraph_no: Optional[str] = None
-    item_no: Optional[str] = None
-    content: str
-
-    class Config:
-        from_attributes = True
-
 
 class LawResponse(BaseModel):
     """상위법령 마스터 응답 (API 기반)"""
