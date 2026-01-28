@@ -12,7 +12,7 @@ from fastapi import UploadFile
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.ordinance import Ordinance, OrdinanceArticle
+from backend.models.ordinance import Ordinance
 from backend.models.law import Law
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.core.exceptions import NotFoundError
@@ -146,16 +146,6 @@ class OrdinanceService:
         if not ordinance:
             raise NotFoundError(f"Ordinance {ordinance_id} not found")
         return ordinance
-
-    async def get_articles(self, ordinance_id: int) -> List[OrdinanceArticle]:
-        """Get ordinance articles"""
-        await self.get_by_id(ordinance_id)  # Check exists
-        result = await self.db.execute(
-            select(OrdinanceArticle)
-            .where(OrdinanceArticle.ordinance_id == ordinance_id)
-            .order_by(OrdinanceArticle.article_no)
-        )
-        return result.scalars().all()
 
     async def get_parent_laws(self, ordinance_id: int) -> List[dict]:
         """Get parent laws mapped to ordinance (new structure)"""
