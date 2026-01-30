@@ -406,8 +406,9 @@ class LawSyncService:
             try:
                 ordinance_serial_no = item.get("자치법규일련번호", "")
                 law_name = item.get("법령명한글", "")
+                law_id_str = item.get("법령ID", "")
 
-                if not ordinance_serial_no or not law_name:
+                if not ordinance_serial_no or (not law_id_str and not law_name):
                     continue
 
                 # Ordinance 조회
@@ -418,10 +419,19 @@ class LawSyncService:
                 if not ordinance:
                     continue
 
-                # Law 조회
-                stmt = select(Law).where(Law.law_name == law_name)
-                result = await self.db.execute(stmt)
-                law = result.scalar_one_or_none()
+                # Law 조회: 법령ID 우선, 없으면 법령명으로 fallback
+                law = None
+                if law_id_str:
+                    try:
+                        stmt = select(Law).where(Law.law_id == int(law_id_str))
+                        result = await self.db.execute(stmt)
+                        law = result.scalar_one_or_none()
+                    except (ValueError, TypeError):
+                        pass
+                if not law and law_name:
+                    stmt = select(Law).where(Law.law_name == law_name)
+                    result = await self.db.execute(stmt)
+                    law = result.scalar_one_or_none()
 
                 if not law:
                     continue

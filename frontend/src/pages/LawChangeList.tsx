@@ -138,6 +138,7 @@ export default function LawChangeList() {
   const [parentLawModalOpen, setParentLawModalOpen] = useState(false)
   const [editingParentLaw, setEditingParentLaw] = useState<any | null>(null)
   const [parentLawForm] = Form.useForm()
+  const [verifyingLawName, setVerifyingLawName] = useState(false)
 
   // 필터 상태 변경 시 URL 쿼리 파라미터 업데이트
   useEffect(() => {
@@ -403,6 +404,21 @@ export default function LawChangeList() {
     },
   })
 
+  // 법령 일괄 삭제 mutation
+  const bulkDeleteLawMutation = useMutation({
+    mutationFn: (lawIds: number[]) => lawsApi.bulkDelete(lawIds),
+    onSuccess: (result) => {
+      message.success(result.message)
+      setSelectedRowKeys([])
+      queryClient.invalidateQueries({ queryKey: ['law-changes'] })
+      queryClient.invalidateQueries({ queryKey: ['law-changes-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['law-changes-sync-dates'] })
+    },
+    onError: () => {
+      message.error('법령 일괄 삭제에 실패했습니다.')
+    },
+  })
+
   // 법령명 클릭 핸들러 - 연계 조례 조회
   const handleLawNameClick = async (record: LawChange) => {
     setSelectedLawForOrdinance(record)
@@ -473,8 +489,8 @@ export default function LawChangeList() {
     setParentLawModalOpen(true)
   }
 
-  // 상위법령 폼 제출
-  const handleParentLawSubmit = (values: any) => {
+  // 상위법령 실제 저장 처리
+  const executeParentLawSave = (values: any) => {
     const data = {
       law_name: values.law_name,
       law_type: values.law_type,
@@ -484,6 +500,49 @@ export default function LawChangeList() {
       updateParentLawMutation.mutate({ parentLawId: editingParentLaw.id, data })
     } else {
       createParentLawMutation.mutate(data)
+    }
+  }
+
+  // 상위법령 폼 제출 (법령명 검증 후 저장)
+  const handleParentLawSubmit = async (values: any) => {
+    const lawNameChanged = !editingParentLaw || editingParentLaw.law_name !== values.law_name
+
+    // 법령명이 변경된 경우 법제처 API로 검증
+    if (lawNameChanged) {
+      setVerifyingLawName(true)
+      try {
+        const result = await lawSearchApi.searchByName(values.law_name)
+        if (result.success) {
+          executeParentLawSave(values)
+        } else {
+          Modal.confirm({
+            title: '법령명 검증 실패',
+            content: result.message || `'${values.law_name}'에 대한 법제처 API 응답이 없습니다. 강제로 적용하시겠습니까?`,
+            okText: '강제적용',
+            okButtonProps: { danger: true },
+            cancelText: '취소',
+            onOk: () => {
+              executeParentLawSave(values)
+            },
+          })
+        }
+      } catch {
+        Modal.confirm({
+          title: '법령명 검증 실패',
+          content: '법제처 API 연결에 실패했습니다. 강제로 적용하시겠습니까?',
+          okText: '강제적용',
+          okButtonProps: { danger: true },
+          cancelText: '취소',
+          onOk: () => {
+            executeParentLawSave(values)
+          },
+        })
+      } finally {
+        setVerifyingLawName(false)
+      }
+    } else {
+      // 법령명 변경 없으면 바로 저장
+      executeParentLawSave(values)
     }
   }
 
@@ -695,9 +754,6 @@ export default function LawChangeList() {
   const rowSelection = {
     selectedRowKeys,
     onChange: (keys: React.Key[]) => setSelectedRowKeys(keys as number[]),
-    getCheckboxProps: (record: LawChange) => ({
-      disabled: record.status !== 'pending',
-    }),
   }
 
   const fieldNames: Record<string, string> = {
@@ -997,6 +1053,36 @@ export default function LawChangeList() {
             >
               엑셀 다운로드
             </Button>
+
+            {/* 일괄 삭제 */}
+            {selectedRowKeys.length > 0 && (
+              <Popconfirm
+                title="법령 일괄 삭제"
+                description={`선택된 ${selectedRowKeys.length}건의 법령과 관련된 모든 데이터가 삭제됩니다. 계속하시겠습니까?`}
+                onConfirm={() => {
+                  const items = data?.items || []
+                  const lawIds = [
+                    ...new Set(
+                      items
+                        .filter((item: LawChange) => selectedRowKeys.includes(item.id))
+                        .map((item: LawChange) => item.law_id)
+                    ),
+                  ]
+                  bulkDeleteLawMutation.mutate(lawIds)
+                }}
+                okText="삭제"
+                okButtonProps={{ danger: true }}
+                cancelText="취소"
+              >
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={bulkDeleteLawMutation.isPending}
+                >
+                  선택 삭제 ({selectedRowKeys.length})
+                </Button>
+              </Popconfirm>
+            )}
 
             {/* 일괄 작업 버튼 */}
             {selectedRowKeys.length > 0 && (
@@ -1377,7 +1463,7 @@ export default function LawChangeList() {
           parentLawForm.resetFields()
         }}
         onOk={() => parentLawForm.submit()}
-        confirmLoading={createParentLawMutation.isPending || updateParentLawMutation.isPending}
+        confirmLoading={verifyingLawName || createParentLawMutation.isPending || updateParentLawMutation.isPending}
       >
         <Form form={parentLawForm} layout="vertical" onFinish={handleParentLawSubmit}>
           <Form.Item

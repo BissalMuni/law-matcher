@@ -311,6 +311,11 @@ export const lawsApi = {
     const { data } = await api.delete(`/laws/${id}`)
     return data
   },
+
+  bulkDelete: async (lawIds: number[]) => {
+    const { data } = await api.post('/laws/bulk-delete', { law_ids: lawIds })
+    return data
+  },
 }
 
 // Ordinance Management API (추가 기능)

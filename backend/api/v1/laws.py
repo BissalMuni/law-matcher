@@ -393,6 +393,57 @@ async def update_all_law_info(
         )
 
 
+@router.post("/bulk-delete")
+async def bulk_delete_laws(
+    request: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    법령 일괄 삭제 (laws + law_changes + ordinance_law_mappings 모두 삭제)
+    """
+    from backend.models.law_change import LawChange
+
+    law_ids = request.get("law_ids", [])
+    if not law_ids:
+        raise HTTPException(status_code=400, detail="삭제할 법령이 없습니다.")
+
+    deleted_count = 0
+    not_found_count = 0
+
+    for law_id in law_ids:
+        law = await db.get(Law, law_id)
+        if not law:
+            not_found_count += 1
+            continue
+
+        # 1. law_changes 삭제
+        law_changes_result = await db.execute(
+            select(LawChange).where(LawChange.law_id == law_id)
+        )
+        for lc in law_changes_result.scalars().all():
+            await db.delete(lc)
+
+        # 2. ordinance_law_mappings 삭제
+        mappings_result = await db.execute(
+            select(OrdinanceLawMapping).where(OrdinanceLawMapping.law_id == law_id)
+        )
+        for mapping in mappings_result.scalars().all():
+            await db.delete(mapping)
+
+        # 3. law 삭제
+        await db.delete(law)
+        deleted_count += 1
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "not_found_count": not_found_count,
+        "message": f"법령 {deleted_count}건이 삭제되었습니다.",
+    }
+
+
 @router.delete("/{law_id}")
 async def delete_law(
     law_id: int,
