@@ -18,8 +18,7 @@
 docker exec -it law-matcher-db-1 psql -U lawmatcher -d lawmatcher
 ```
 
-
- List of relations
+'                 List of relations
  Schema |          Name          | Type  |   Owner
 --------+------------------------+-------+------------
  public | alembic_version        | table | lawmatcher
@@ -29,10 +28,9 @@ docker exec -it law-matcher-db-1 psql -U lawmatcher -d lawmatcher
  public | law_changes            | table | lawmatcher
  public | law_snapshots          | table | lawmatcher
  public | laws                   | table | lawmatcher
- public | ordinance_articles     | table | lawmatcher
  public | ordinance_law_mappings | table | lawmatcher
  public | ordinances             | table | lawmatcher
-(10 rows)
+(9 rows)'
 
 ### 외부에서 접속 (psql 설치 필요)
 

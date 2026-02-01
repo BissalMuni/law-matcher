@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Table, Input, Select, Space, Typography, Button, Tree, Row, Col, Card, Modal, List } from 'antd'
-import { SearchOutlined, ApartmentOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
+import { Table, Input, Select, Space, Typography, Button, Tree, Row, Col, Card, Modal, List, Popconfirm, message } from 'antd'
+import { SearchOutlined, ApartmentOutlined, LeftOutlined, RightOutlined, DeleteOutlined } from '@ant-design/icons'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { lawsApi } from '../services/api'
 import type { TreeDataNode } from 'antd'
 
@@ -24,6 +24,7 @@ interface LawItem {
   enforced_date?: string
   revision_type?: string
   dept_name?: string
+  ordinance_count?: number
 }
 
 interface OrdinanceMapping {
@@ -35,6 +36,7 @@ interface OrdinanceMapping {
 }
 
 export default function LawList() {
+  const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
   // URL 쿼리 파라미터에서 초기값 읽기
@@ -96,6 +98,19 @@ export default function LawList() {
     queryKey: ['law-ordinances', selectedLaw?.id],
     queryFn: () => lawsApi.getOrdinances(selectedLaw!.id),
     enabled: !!selectedLaw,
+  })
+
+  // 연계 매핑 삭제
+  const deleteMappingMutation = useMutation({
+    mutationFn: (mappingId: number) => lawsApi.deleteOrdinanceMapping(mappingId),
+    onSuccess: () => {
+      message.success('연계가 삭제되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['law-ordinances', selectedLaw?.id] })
+      queryClient.invalidateQueries({ queryKey: ['laws'] })
+    },
+    onError: () => {
+      message.error('삭제에 실패했습니다.')
+    },
   })
 
   // 최초 로딩 시 DB에서 불러오기
@@ -186,10 +201,14 @@ export default function LawList() {
       width: 110,
     },
     {
-      title: '소관부처',
-      dataIndex: 'dept_name',
-      key: 'dept_name',
-      width: 150,
+      title: '자치법규',
+      dataIndex: 'ordinance_count',
+      key: 'ordinance_count',
+      width: 100,
+      align: 'center' as const,
+      render: (count: number, record: LawItem) => (
+        <a onClick={() => handleShowOrdinances(record)}>{count || 0}</a>
+      ),
     },
   ]
 
@@ -294,7 +313,26 @@ export default function LawList() {
           dataSource={ordinances || []}
           locale={{ emptyText: '연계된 자치법규가 없습니다' }}
           renderItem={(item: OrdinanceMapping) => (
-            <List.Item>
+            <List.Item
+              actions={[
+                <Popconfirm
+                  key="delete"
+                  title="연계 삭제"
+                  description="이 자치법규 연계를 삭제하시겠습니까?"
+                  onConfirm={() => deleteMappingMutation.mutate(item.mapping_id)}
+                  okText="삭제"
+                  cancelText="취소"
+                >
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    loading={deleteMappingMutation.isPending}
+                  />
+                </Popconfirm>,
+              ]}
+            >
               <List.Item.Meta
                 title={
                   <a href={`/ordinances/${item.ordinance_id}`} target="_blank" rel="noopener noreferrer">

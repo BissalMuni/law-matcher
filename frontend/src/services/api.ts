@@ -17,18 +17,36 @@ export const ordinanceApi = {
     department?: string
     search?: string
     no_parent_law_filter?: string  // "no_mapping" | "confirmed_none"
+    needs_revision_filter?: string  // "needs_revision" | "no_revision"
   }) => {
     const { data } = await api.get('/ordinances', { params })
     return data
   },
 
-  getById: async (id: number) => {
-    const { data } = await api.get(`/ordinances/${id}`)
-    return data
+  exportExcel: async (params?: {
+    category?: string
+    department?: string
+    search?: string
+    no_parent_law_filter?: string
+    needs_revision_filter?: string
+  }) => {
+    const { data } = await api.get('/ordinances/export', {
+      params,
+      responseType: 'blob',
+    })
+    const url = window.URL.createObjectURL(new Blob([data]))
+    const link = document.createElement('a')
+    link.href = url
+    const filename = `자치법규목록_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`
+    link.setAttribute('download', filename)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
   },
 
-  getArticles: async (id: number) => {
-    const { data } = await api.get(`/ordinances/${id}/articles`)
+  getById: async (id: number) => {
+    const { data } = await api.get(`/ordinances/${id}`)
     return data
   },
 
@@ -236,6 +254,11 @@ export const dashboardApi = {
     return data
   },
 
+  getLatestSyncStats: async () => {
+    const { data } = await api.get('/dashboard/latest-sync-stats')
+    return data
+  },
+
   getRevisionNeeded: async (params?: {
     limit?: number
     status?: 'NEEDS_REVISION' | 'UNDER_REVIEW' | 'COMPLETED'
@@ -311,6 +334,11 @@ export const lawsApi = {
     const { data } = await api.delete(`/laws/${id}`)
     return data
   },
+
+  deleteOrdinanceMapping: async (mappingId: number) => {
+    const { data } = await api.delete(`/ordinances/law-mappings/${mappingId}`)
+    return data
+  },
 }
 
 // Ordinance Management API (추가 기능)
@@ -370,8 +398,16 @@ export const lawChangesApi = {
     sync_batch_id?: string
     sync_date?: string  // YYYY-MM-DD 형식
     search?: string
+    changed_field?: string  // 변경내용 필드 필터
+    revision_type?: string  // 제개정구분 필터
   }) => {
     const { data } = await api.get('/law-changes', { params })
+    return data
+  },
+
+  // 제개정구분 목록 조회 (드롭다운용)
+  getRevisionTypes: async () => {
+    const { data } = await api.get('/law-changes/revision-types')
     return data
   },
 
@@ -381,8 +417,8 @@ export const lawChangesApi = {
     return data
   },
 
-  getStats: async () => {
-    const { data } = await api.get('/law-changes/stats')
+  getStats: async (params?: { sync_date?: string }) => {
+    const { data } = await api.get('/law-changes/stats', { params })
     return data
   },
 

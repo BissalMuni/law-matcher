@@ -14,6 +14,7 @@ export default defineConfig({
     host: true,
     watch: {
       usePolling: true,
+      interval: 1000,
     },
     proxy: {
       '/api': {

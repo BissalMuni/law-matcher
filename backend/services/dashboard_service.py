@@ -11,6 +11,7 @@ from backend.models.law import Law
 from backend.models.amendment import LawAmendment
 from backend.models.review import AmendmentReview
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
+from backend.models.law_change import LawChange, ApiStatus
 
 
 class DashboardService:
@@ -134,6 +135,47 @@ class DashboardService:
             })
 
         return {"items": items}
+
+    async def get_latest_sync_stats(self) -> dict:
+        """최근 동기화 통계 - 개정구분별 건수"""
+        # 가장 최근 sync_date 조회
+        latest_sync_date = await self.db.scalar(
+            select(func.max(LawChange.sync_date))
+        )
+        if not latest_sync_date:
+            return {"sync_date": None, "total_laws": 0, "by_revision_type": []}
+
+        # 해당 sync_date의 법령 변경 건수 (날짜 기준으로 필터)
+        date_filter = func.date(LawChange.sync_date) == latest_sync_date.date()
+
+        total_laws = await self.db.scalar(
+            select(func.count(LawChange.id))
+            .where(date_filter, LawChange.api_status == ApiStatus.SUCCESS)
+        )
+
+        # 개정구분별 건수 (Law.revision_type 기준)
+        revision_type_query = (
+            select(
+                Law.revision_type,
+                func.count(LawChange.id).label("count"),
+            )
+            .select_from(LawChange)
+            .join(Law, LawChange.law_id == Law.id)
+            .where(date_filter, LawChange.api_status == ApiStatus.SUCCESS)
+            .group_by(Law.revision_type)
+            .order_by(func.count(LawChange.id).desc())
+        )
+        result = await self.db.execute(revision_type_query)
+        by_revision_type = [
+            {"revision_type": row[0] or "미분류", "count": row[1]}
+            for row in result.all()
+        ]
+
+        return {
+            "sync_date": latest_sync_date,
+            "total_laws": total_laws or 0,
+            "by_revision_type": by_revision_type,
+        }
 
     async def get_revision_needed(
         self,
