@@ -613,24 +613,44 @@ class OrdinanceService:
         related_articles: Optional[str] = None,
     ) -> OrdinanceLawMapping:
         """조례-법령 매핑 수정"""
+        from sqlalchemy.orm import selectinload
+
         result = await self.db.execute(
-            select(OrdinanceLawMapping).where(OrdinanceLawMapping.id == mapping_id)
+            select(OrdinanceLawMapping)
+            .options(selectinload(OrdinanceLawMapping.law))
+            .where(OrdinanceLawMapping.id == mapping_id)
         )
         mapping = result.scalar_one_or_none()
         if not mapping:
             raise NotFoundError(f"Mapping {mapping_id} not found")
 
-        # If law information is being changed, find or create new Law
+        # 기존 매핑된 Law 레코드를 직접 수정 (새 레코드 생성 방지)
         if law_name is not None or law_type is not None:
-            # Find or create the law
-            law = await self._find_or_create_law(
-                law_name=law_name or "",
-                law_type=law_type or "법률",
-                proclaimed_date=proclaimed_date,
-                enforced_date=enforced_date,
-            )
-            # Update mapping to point to new law
-            mapping.law_id = law.id
+            law = mapping.law
+            if law:
+                if law_name is not None:
+                    law.law_name = law_name
+                if law_type is not None:
+                    law.law_type = law_type
+                if proclaimed_date:
+                    try:
+                        law.proclaimed_date = datetime.strptime(proclaimed_date, '%Y-%m-%d').date()
+                    except ValueError:
+                        pass
+                if enforced_date:
+                    try:
+                        law.enforced_date = datetime.strptime(enforced_date, '%Y-%m-%d').date()
+                    except ValueError:
+                        pass
+            else:
+                # 매핑에 법령이 없는 경우에만 새로 찾거나 생성
+                law = await self._find_or_create_law(
+                    law_name=law_name or "",
+                    law_type=law_type or "법률",
+                    proclaimed_date=proclaimed_date,
+                    enforced_date=enforced_date,
+                )
+                mapping.law_id = law.id
 
         # Update related articles
         if related_articles is not None:
