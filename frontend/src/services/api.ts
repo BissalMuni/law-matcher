@@ -337,6 +337,8 @@ export const lawsApi = {
 
   deleteOrdinanceMapping: async (mappingId: number) => {
     const { data } = await api.delete(`/ordinances/law-mappings/${mappingId}`)
+  bulkDelete: async (lawIds: number[]) => {
+    const { data } = await api.post('/laws/bulk-delete', { law_ids: lawIds })
     return data
   },
 }
