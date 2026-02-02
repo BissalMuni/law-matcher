@@ -29,6 +29,7 @@ interface SyncDate {
   pending: number
 }
 
+// 동기화 진행 상태 인터페이스
 interface SyncProgress {
   type: string
   current?: number
