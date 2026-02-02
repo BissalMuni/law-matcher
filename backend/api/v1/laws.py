@@ -31,7 +31,7 @@ from backend.services.law_sync_service import LawSyncService
 router = APIRouter()
 
 
-@router.get("", response_model=List[LawResponse])
+@router.get("")
 async def get_laws(
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
@@ -43,6 +43,15 @@ async def get_laws(
     """상위법령 목록 조회 (담당부서는 연계 자치법규 기준 필터링)"""
     from backend.models.ordinance import Ordinance
 
+    # 연계 자치법규 개수 서브쿼리
+    ordinance_count_subq = (
+        select(func.count(OrdinanceLawMapping.id))
+        .where(OrdinanceLawMapping.law_id == Law.id)
+        .correlate(Law)
+        .scalar_subquery()
+        .label("ordinance_count")
+    )
+
     if dept_name:
         # 담당부서 필터: 연계된 자치법규의 담당부서로 필터링
         subquery = (
@@ -51,9 +60,9 @@ async def get_laws(
             .where(Ordinance.department == dept_name)
             .distinct()
         )
-        query = select(Law).where(Law.id.in_(subquery))
+        query = select(Law, ordinance_count_subq).where(Law.id.in_(subquery))
     else:
-        query = select(Law)
+        query = select(Law, ordinance_count_subq)
 
     if search:
         query = query.where(Law.law_name.ilike(f"%{search}%"))
@@ -62,7 +71,29 @@ async def get_laws(
 
     query = query.order_by(Law.law_name).offset((page - 1) * size).limit(size)
     result = await db.execute(query)
-    return result.scalars().all()
+    rows = result.all()
+
+    # Law 객체에 ordinance_count를 추가하여 반환
+    items = []
+    for law, ordinance_count in rows:
+        law_dict = {
+            "id": law.id,
+            "law_serial_no": law.law_serial_no,
+            "law_id": law.law_id,
+            "law_name": law.law_name,
+            "law_abbr": law.law_abbr,
+            "law_type": law.law_type,
+            "proclaimed_date": law.proclaimed_date,
+            "proclaimed_no": law.proclaimed_no,
+            "enforced_date": law.enforced_date,
+            "revision_type": law.revision_type,
+            "dept_name": law.dept_name,
+            "detail_link": law.detail_link,
+            "last_synced_at": law.last_synced_at,
+            "ordinance_count": ordinance_count or 0,
+        }
+        items.append(law_dict)
+    return items
 
 
 @router.get("/count")

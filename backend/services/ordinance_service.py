@@ -34,6 +34,7 @@ class OrdinanceService:
         department: Optional[str] = None,
         search: Optional[str] = None,
         no_parent_law_filter: Optional[str] = None,
+        needs_revision_filter: Optional[str] = None,
     ) -> dict:
         """Get paginated list of ordinances"""
         query = select(Ordinance).where(Ordinance.status == "ACTIVE")
@@ -59,6 +60,39 @@ class OrdinanceService:
             # 상위법령 없음으로 확인된 조례
             query = query.where(Ordinance.no_parent_law == True)
 
+        # 개정대상 필터
+        if needs_revision_filter:
+            # 상위법령이 있는 조례만 (매핑 존재)
+            has_mapping_subquery = select(OrdinanceLawMapping.ordinance_id).distinct()
+            if needs_revision_filter == "needs_revision":
+                # 상위법령 시행일이 조례 공포일보다 최신인 경우
+                revision_subquery = (
+                    select(OrdinanceLawMapping.ordinance_id)
+                    .join(Law, OrdinanceLawMapping.law_id == Law.id)
+                    .where(Law.enforced_date.isnot(None))
+                    .group_by(OrdinanceLawMapping.ordinance_id)
+                    .having(func.max(Law.enforced_date) > Ordinance.enacted_date)
+                )
+                query = query.where(
+                    Ordinance.id.in_(has_mapping_subquery),
+                    Ordinance.enacted_date.isnot(None),
+                    Ordinance.id.in_(revision_subquery),
+                )
+            elif needs_revision_filter == "no_revision":
+                # 상위법령 시행일이 조례 공포일 이하인 경우
+                revision_subquery = (
+                    select(OrdinanceLawMapping.ordinance_id)
+                    .join(Law, OrdinanceLawMapping.law_id == Law.id)
+                    .where(Law.enforced_date.isnot(None))
+                    .group_by(OrdinanceLawMapping.ordinance_id)
+                    .having(func.max(Law.enforced_date) > Ordinance.enacted_date)
+                )
+                query = query.where(
+                    Ordinance.id.in_(has_mapping_subquery),
+                    Ordinance.enacted_date.isnot(None),
+                    Ordinance.id.notin_(revision_subquery),
+                )
+
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
         total = await self.db.scalar(count_query)
@@ -68,7 +102,7 @@ class OrdinanceService:
         result = await self.db.execute(query)
         ordinances = result.scalars().all()
 
-        # Add parent law count for each ordinance
+        # Add parent law count and needs_revision for each ordinance
         items = []
         for ordinance in ordinances:
             # Count parent laws
@@ -77,6 +111,19 @@ class OrdinanceService:
                 .select_from(OrdinanceLawMapping)
                 .where(OrdinanceLawMapping.ordinance_id == ordinance.id)
             ) or 0
+
+            # 개정여부: 상위법령 중 가장 최근 시행일이 조례 공포일보다 최신이면 1(빨간불), 아니면 0(초록불)
+            needs_revision = None
+            if parent_law_count > 0 and ordinance.enacted_date:
+                max_enforced_date = await self.db.scalar(
+                    select(func.max(Law.enforced_date))
+                    .select_from(OrdinanceLawMapping)
+                    .join(Law, OrdinanceLawMapping.law_id == Law.id)
+                    .where(OrdinanceLawMapping.ordinance_id == ordinance.id)
+                    .where(Law.enforced_date.isnot(None))
+                )
+                if max_enforced_date:
+                    needs_revision = 1 if max_enforced_date > ordinance.enacted_date else 0
 
             # Convert to dict and add count
             ordinance_dict = {
@@ -99,6 +146,7 @@ class OrdinanceService:
                 "updated_at": ordinance.updated_at,
                 "parent_law_count": parent_law_count,
                 "no_parent_law": ordinance.no_parent_law,
+                "needs_revision": needs_revision,
             }
             items.append(ordinance_dict)
 
@@ -168,6 +216,7 @@ class OrdinanceService:
                 "law_name": m.law.law_name if m.law else "",
                 "proclaimed_date": m.law.proclaimed_date if m.law else None,
                 "enforced_date": m.law.enforced_date if m.law else None,
+                "revision_type": m.law.revision_type if m.law else None,
                 "related_articles": m.related_articles,
             }
             for m in mappings

@@ -1,8 +1,11 @@
 """
 Ordinance API endpoints
 """
+import io
 from typing import List, Optional
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import get_db, verify_admin_password
@@ -37,6 +40,7 @@ async def get_ordinances(
     department: Optional[str] = None,
     search: Optional[str] = None,
     no_parent_law_filter: Optional[str] = None,  # "no_mapping" | "confirmed_none" | None
+    needs_revision_filter: Optional[str] = None,  # "needs_revision" | "no_revision" | None
     db: AsyncSession = Depends(get_db),
 ):
     """Get list of ordinances"""
@@ -48,6 +52,7 @@ async def get_ordinances(
         department=department,
         search=search,
         no_parent_law_filter=no_parent_law_filter,
+        needs_revision_filter=needs_revision_filter,
     )
 
 
@@ -248,6 +253,90 @@ async def update_all_ordinance_info(
             status_code=500,
             detail=f"자치법규 정보 업데이트 중 오류 발생: {str(e)}",
         )
+
+
+@router.get("/export")
+async def export_ordinances(
+    category: Optional[str] = None,
+    department: Optional[str] = None,
+    search: Optional[str] = None,
+    no_parent_law_filter: Optional[str] = None,
+    needs_revision_filter: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """자치법규 목록 엑셀 다운로드 (필터 적용)"""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from datetime import datetime
+
+    service = OrdinanceService(db)
+    result = await service.get_list(
+        page=1,
+        size=10000,
+        category=category,
+        department=department,
+        search=search,
+        no_parent_law_filter=no_parent_law_filter,
+        needs_revision_filter=needs_revision_filter,
+    )
+    items = result.get("items", [])
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "자치법규목록"
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    headers = ["자치법규명", "종류", "제개정", "공포일", "시행일", "소관부서", "상위법령수", "개정여부"]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+
+    for row_idx, item in enumerate(items, 2):
+        needs_rev = item.get("needs_revision")
+        revision_text = "개정대상" if needs_rev == 1 else "대상아님" if needs_rev == 0 else "-"
+
+        row_data = [
+            item.get("name", ""),
+            item.get("category", ""),
+            item.get("revision_type", ""),
+            str(item.get("enacted_date", "") or ""),
+            str(item.get("enforced_date", "") or ""),
+            item.get("department", ""),
+            item.get("parent_law_count", 0),
+            revision_text,
+        ]
+        for col, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=col, value=value)
+            cell.border = thin_border
+            if col == 8 and needs_rev == 1:
+                cell.font = Font(color="FF0000")
+            elif col == 8 and needs_rev == 0:
+                cell.font = Font(color="00B050")
+
+    column_widths = [40, 8, 10, 12, 12, 15, 10, 10]
+    for col, width in enumerate(column_widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"자치법규목록_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
+    )
 
 
 @router.get("/{ordinance_id}", response_model=OrdinanceResponse)

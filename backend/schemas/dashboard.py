@@ -46,6 +46,19 @@ class PendingReviews(BaseModel):
     items: List[PendingReviewItem]
 
 
+class RevisionTypeCount(BaseModel):
+    """개정구분별 건수"""
+    revision_type: str
+    count: int
+
+
+class LatestSyncStats(BaseModel):
+    """최근 동기화 통계"""
+    sync_date: Optional[datetime] = None
+    total_laws: int = 0
+    by_revision_type: List[RevisionTypeCount] = []
+
+
 class RevisionNeededItem(BaseModel):
     """Revision needed item"""
     ordinance_id: int

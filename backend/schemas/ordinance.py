@@ -31,6 +31,7 @@ class OrdinanceResponse(OrdinanceBase):
     updated_at: datetime
     parent_law_count: Optional[int] = None  # 상위법령 연결 개수
     no_parent_law: bool = False  # 상위법령 없음 확인 여부
+    needs_revision: Optional[int] = None  # 개정여부 (1: 법령이 더 최신, 0: 조례가 더 최신)
 
     class Config:
         from_attributes = True
@@ -84,6 +85,7 @@ class LawResponse(BaseModel):
     dept_name: Optional[str] = None  # 소관부처명
     detail_link: Optional[str] = None  # 법령상세링크
     last_synced_at: Optional[datetime] = None
+    ordinance_count: Optional[int] = None  # 연계 자치법규 개수
 
     class Config:
         from_attributes = True

@@ -12,6 +12,10 @@ docker compose down
 
 docker compose build
 
+## 빌드 후 시작 (백그라운드)
+
+docker compose up -d --build
+
 ## 마이그레이션 생성
 
 docker compose run --rm -w /app/backend backend alembic revision --autogenerate -m "description"

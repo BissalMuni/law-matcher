@@ -4,8 +4,7 @@
 docker-compose exec db psql -U lawmatcher -d lawmatcher
 ```
 
-
- List of relations
+'                 List of relations
  Schema |          Name          | Type  |   Owner
 --------+------------------------+-------+------------
  public | alembic_version        | table | lawmatcher
@@ -15,10 +14,9 @@ docker-compose exec db psql -U lawmatcher -d lawmatcher
  public | law_changes            | table | lawmatcher
  public | law_snapshots          | table | lawmatcher
  public | laws                   | table | lawmatcher
- public | ordinance_articles     | table | lawmatcher
  public | ordinance_law_mappings | table | lawmatcher
  public | ordinances             | table | lawmatcher
-(10 rows)
+(9 rows)'
 
 ## List of relations
 

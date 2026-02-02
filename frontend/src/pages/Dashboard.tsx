@@ -1,18 +1,19 @@
-import { Row, Col, Card, Statistic, Table, Tag, List, Typography } from 'antd'
+import { Row, Col, Card, Statistic, Table, Tag, List, Typography, Badge } from 'antd'
 import {
   FileTextOutlined,
-  AlertOutlined,
   ExclamationCircleOutlined,
+  SyncOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { dashboardApi } from '../services/api'
 import { RevisionNeededItem } from '../types/api'
 
 const { Title } = Typography
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const [revisionPageSize, setRevisionPageSize] = useState(10)
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
@@ -20,14 +21,14 @@ export default function Dashboard() {
     queryFn: dashboardApi.getSummary,
   })
 
-  const { data: recentAmendments } = useQuery({
-    queryKey: ['dashboard', 'recent-amendments'],
-    queryFn: () => dashboardApi.getRecentAmendments(5),
-  })
-
   const { data: pendingReviews } = useQuery({
     queryKey: ['dashboard', 'pending-reviews'],
     queryFn: () => dashboardApi.getPendingReviews(5),
+  })
+
+  const { data: latestSyncStats } = useQuery({
+    queryKey: ['dashboard', 'latest-sync-stats'],
+    queryFn: dashboardApi.getLatestSyncStats,
   })
 
   const { data: revisionNeeded, isLoading: revisionLoading } = useQuery({
@@ -163,13 +164,19 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => navigate('/amendments')}>
             <Statistic
-              title="최근 개정"
-              value={summary?.recent_amendments || 0}
-              prefix={<AlertOutlined />}
+              title="최근 동기화 법령"
+              value={latestSyncStats?.total_laws || 0}
+              prefix={<SyncOutlined />}
+              suffix="건"
               loading={summaryLoading}
             />
+            {latestSyncStats?.sync_date && (
+              <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                {new Date(latestSyncStats.sync_date).toLocaleDateString()}
+              </div>
+            )}
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -187,18 +194,35 @@ export default function Dashboard() {
 
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={12}>
-          <Card title="최근 법령 개정" size="small">
-            <List
-              dataSource={recentAmendments?.items || []}
-              renderItem={(item: any) => (
-                <List.Item>
-                  <List.Item.Meta
-                    title={item.law_name}
-                    description={`${item.change_type} | 영향 조례: ${item.affected_ordinances}건`}
-                  />
-                </List.Item>
-              )}
-            />
+          <Card
+            title="최근 법령 개정 (개정구분별)"
+            size="small"
+            extra={latestSyncStats?.sync_date && (
+              <span style={{ fontSize: 12, color: '#999' }}>
+                {new Date(latestSyncStats.sync_date).toLocaleDateString()} 동기화
+              </span>
+            )}
+          >
+            {latestSyncStats?.by_revision_type?.length ? (
+              <List
+                dataSource={latestSyncStats.by_revision_type}
+                renderItem={(item: { revision_type: string; count: number }) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      title={item.revision_type}
+                    />
+                    <Badge
+                      count={`${item.count}건`}
+                      style={{ backgroundColor: item.revision_type === '전부개정' ? '#f5222d' : item.revision_type === '일부개정' ? '#1890ff' : '#52c41a' }}
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', color: '#999', padding: '16px 0' }}>
+                동기화 이력이 없습니다.
+              </div>
+            )}
           </Card>
         </Col>
         <Col xs={24} lg={12}>

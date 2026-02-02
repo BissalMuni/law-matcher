@@ -11,6 +11,7 @@ from backend.schemas.dashboard import (
     RecentAmendments,
     PendingReviews,
     RevisionNeededListResponse,
+    LatestSyncStats,
 )
 from backend.services.dashboard_service import DashboardService
 
@@ -44,6 +45,15 @@ async def get_pending_reviews(
     """Get pending reviews"""
     service = DashboardService(db)
     return await service.get_pending_reviews(limit)
+
+
+@router.get("/latest-sync-stats", response_model=LatestSyncStats)
+async def get_latest_sync_stats(
+    db: AsyncSession = Depends(get_db),
+):
+    """최근 동기화 통계 - 개정구분별 건수"""
+    service = DashboardService(db)
+    return await service.get_latest_sync_stats()
 
 
 @router.get("/revision-needed", response_model=RevisionNeededListResponse)

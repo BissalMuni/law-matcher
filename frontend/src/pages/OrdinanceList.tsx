@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Table, Input, Select, Space, Typography, Button, message, Upload, Tree, Row, Col, Card, Modal, Form, Spin, List, Tabs, DatePicker } from 'antd'
-import { SyncOutlined, SearchOutlined, UploadOutlined, ApartmentOutlined, LeftOutlined, RightOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { SyncOutlined, SearchOutlined, UploadOutlined, ApartmentOutlined, LeftOutlined, RightOutlined, PlusOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ordinanceApi, ordinanceManagementApi } from '../services/api'
 import type { UploadProps, TreeDataNode } from 'antd'
@@ -41,6 +41,7 @@ export default function OrdinanceList() {
   const [category, setCategory] = useState<string | undefined>(() => searchParams.get('category') || undefined)
   const [selectedDepartment, setSelectedDepartment] = useState<string | undefined>(() => searchParams.get('department') || undefined)
   const [noParentLawFilter, setNoParentLawFilter] = useState<string | undefined>(() => searchParams.get('noParentLaw') || undefined)
+  const [needsRevisionFilter, setNeedsRevisionFilter] = useState<string | undefined>(() => searchParams.get('needsRevision') || undefined)
   const [initialLoaded, setInitialLoaded] = useState(false)
   const [treeCollapsed, setTreeCollapsed] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>(['all'])
@@ -64,7 +65,7 @@ export default function OrdinanceList() {
   })
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['ordinances', page, search, category, selectedDepartment, noParentLawFilter],
+    queryKey: ['ordinances', page, search, category, selectedDepartment, noParentLawFilter, needsRevisionFilter],
     queryFn: () =>
       ordinanceApi.getList({
         page,
@@ -73,6 +74,7 @@ export default function OrdinanceList() {
         category,
         department: selectedDepartment,
         no_parent_law_filter: noParentLawFilter,
+        needs_revision_filter: needsRevisionFilter,
       }),
     enabled: initialLoaded,
   })
@@ -90,8 +92,9 @@ export default function OrdinanceList() {
     if (category) params.set('category', category)
     if (selectedDepartment) params.set('department', selectedDepartment)
     if (noParentLawFilter) params.set('noParentLaw', noParentLawFilter)
+    if (needsRevisionFilter) params.set('needsRevision', needsRevisionFilter)
     setSearchParams(params, { replace: true })
-  }, [page, search, category, selectedDepartment, noParentLawFilter, setSearchParams])
+  }, [page, search, category, selectedDepartment, noParentLawFilter, needsRevisionFilter, setSearchParams])
 
   // 법제처 API 동기화
   const syncMutation = useMutation({
@@ -355,6 +358,21 @@ export default function OrdinanceList() {
         return count || 0
       },
     },
+    {
+      title: '개정여부',
+      dataIndex: 'needs_revision',
+      key: 'needs_revision',
+      width: 80,
+      align: 'center' as const,
+      render: (value: number | null) => {
+        if (value === null || value === undefined) return '-'
+        return (
+          <span style={{ color: value === 1 ? '#f5222d' : '#52c41a', fontSize: 48 }}>
+            ●
+          </span>
+        )
+      },
+    },
   ]
 
   return (
@@ -431,6 +449,20 @@ export default function OrdinanceList() {
                 { value: 'confirmed_none', label: '없음 (확인완료)' },
               ]}
             />
+            <Select
+              placeholder="개정대상"
+              style={{ width: 140 }}
+              allowClear
+              value={needsRevisionFilter}
+              onChange={(value) => {
+                setNeedsRevisionFilter(value)
+                setPage(1)
+              }}
+              options={[
+                { value: 'needs_revision', label: '개정대상' },
+                { value: 'no_revision', label: '대상아님' },
+              ]}
+            />
             <Button
               icon={<SearchOutlined />}
               onClick={() => refetch()}
@@ -471,6 +503,25 @@ export default function OrdinanceList() {
               loading={updateOrdinanceInfoMutation.isPending}
             >
               업데이트
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={async () => {
+                try {
+                  await ordinanceApi.exportExcel({
+                    category,
+                    department: selectedDepartment,
+                    search: search || undefined,
+                    no_parent_law_filter: noParentLawFilter,
+                    needs_revision_filter: needsRevisionFilter,
+                  })
+                  message.success('엑셀 파일이 다운로드되었습니다.')
+                } catch (error) {
+                  message.error('엑셀 다운로드 중 오류가 발생했습니다.')
+                }
+              }}
+            >
+              엑셀 다운로드
             </Button>
           </Space>
 

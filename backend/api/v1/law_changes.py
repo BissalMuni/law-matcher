@@ -35,6 +35,7 @@ def _build_law_change_response(change: LawChange) -> dict:
         "law_id": change.law_id,
         "law_name": change.law.law_name if change.law else "",
         "law_type": change.law.law_type if change.law else None,
+        "revision_type": change.law.revision_type if change.law else None,
         "sync_date": change.sync_date,
         "sync_batch_id": change.sync_batch_id,
         "api_status": change.api_status.value if change.api_status else None,
@@ -62,6 +63,8 @@ async def get_law_changes(
     sync_batch_id: Optional[str] = None,
     sync_date: Optional[str] = None,  # YYYY-MM-DD 형식 날짜 필터
     search: Optional[str] = None,  # 법령명 검색
+    changed_field: Optional[str] = None,  # 변경내용 필드 필터 (proclaimed_date, enforced_date, revision_type 등)
+    revision_type: Optional[str] = None,  # 제개정구분 필터 (일부개정, 전부개정, 타법개정, 제정 등)
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -70,9 +73,12 @@ async def get_law_changes(
     - 부서별, 상태별, API 상태별 필터링 가능
     - 동기화 날짜별 필터링 가능
     - 법령명 검색 가능
+    - 변경내용 필드 필터링 가능
+    - 제개정구분 필터링 가능
     """
     # 기본 필터 조건 (count와 data 쿼리에서 공통 사용)
     filters = []
+    needs_law_join = False
 
     if status:
         try:
@@ -99,14 +105,24 @@ async def get_law_changes(
         sync_date_obj = datetime.strptime(sync_date, "%Y-%m-%d").date()
         filters.append(func.date(LawChange.sync_date) == sync_date_obj)
 
+    if changed_field:
+        # JSON 필드에서 특정 키가 존재하는 레코드만 필터링
+        filters.append(LawChange.new_values[changed_field].isnot(None))
+
+    if revision_type:
+        # Law.revision_type 기준 필터 (join 필요)
+        needs_law_join = True
+        filters.append(Law.revision_type == revision_type)
+
     # 총 개수 쿼리 (별도로 구성)
-    if search:
+    if search or needs_law_join:
         count_query = (
             select(func.count(LawChange.id))
             .select_from(LawChange)
             .join(Law, LawChange.law_id == Law.id)
-            .where(Law.law_name.ilike(f"%{search}%"))
         )
+        if search:
+            count_query = count_query.where(Law.law_name.ilike(f"%{search}%"))
         if filters:
             count_query = count_query.where(and_(*filters))
     else:
@@ -121,8 +137,10 @@ async def get_law_changes(
     if filters:
         query = query.where(and_(*filters))
 
-    if search:
-        query = query.join(Law, LawChange.law_id == Law.id).where(Law.law_name.ilike(f"%{search}%"))
+    if search or needs_law_join:
+        query = query.join(Law, LawChange.law_id == Law.id)
+        if search:
+            query = query.where(Law.law_name.ilike(f"%{search}%"))
 
     # 페이징 및 정렬
     query = query.order_by(LawChange.sync_date.desc(), LawChange.id.desc())
@@ -143,23 +161,37 @@ async def get_law_changes(
 
 @router.get("/stats", response_model=LawChangeStatsResponse)
 async def get_law_change_stats(
+    sync_date: Optional[str] = None,  # YYYY-MM-DD 형식 날짜 필터
     db: AsyncSession = Depends(get_db),
 ):
-    """법령 변경 통계 조회"""
+    """법령 변경 통계 조회 (선택된 동기화 날짜 기준)"""
+    # 날짜 필터 조건
+    date_filter = []
+    if sync_date:
+        sync_date_obj = datetime.strptime(sync_date, "%Y-%m-%d").date()
+        date_filter.append(func.date(LawChange.sync_date) == sync_date_obj)
+
     # 전체 통계
-    total = await db.scalar(select(func.count(LawChange.id)))
-    pending = await db.scalar(
-        select(func.count(LawChange.id)).where(LawChange.status == ChangeStatus.PENDING)
-    )
-    reviewing = await db.scalar(
-        select(func.count(LawChange.id)).where(LawChange.status == ChangeStatus.REVIEWING)
-    )
-    approved = await db.scalar(
-        select(func.count(LawChange.id)).where(LawChange.status == ChangeStatus.APPROVED)
-    )
-    rejected = await db.scalar(
-        select(func.count(LawChange.id)).where(LawChange.status == ChangeStatus.REJECTED)
-    )
+    base_query = select(func.count(LawChange.id))
+    if date_filter:
+        base_query = base_query.where(and_(*date_filter))
+    total = await db.scalar(base_query)
+
+    pending_query = select(func.count(LawChange.id)).where(LawChange.status == ChangeStatus.PENDING)
+    reviewing_query = select(func.count(LawChange.id)).where(LawChange.status == ChangeStatus.REVIEWING)
+    approved_query = select(func.count(LawChange.id)).where(LawChange.status == ChangeStatus.APPROVED)
+    rejected_query = select(func.count(LawChange.id)).where(LawChange.status == ChangeStatus.REJECTED)
+
+    if date_filter:
+        pending_query = pending_query.where(and_(*date_filter))
+        reviewing_query = reviewing_query.where(and_(*date_filter))
+        approved_query = approved_query.where(and_(*date_filter))
+        rejected_query = rejected_query.where(and_(*date_filter))
+
+    pending = await db.scalar(pending_query)
+    reviewing = await db.scalar(reviewing_query)
+    approved = await db.scalar(approved_query)
+    rejected = await db.scalar(rejected_query)
 
     # 부서별 통계
     dept_stats_query = (
@@ -169,9 +201,11 @@ async def get_law_change_stats(
             func.count(LawChange.id).filter(LawChange.status == ChangeStatus.PENDING).label("pending"),
         )
         .where(LawChange.dept_name.isnot(None))
-        .group_by(LawChange.dept_name)
-        .order_by(func.count(LawChange.id).desc())
     )
+    if date_filter:
+        dept_stats_query = dept_stats_query.where(and_(*date_filter))
+    dept_stats_query = dept_stats_query.group_by(LawChange.dept_name).order_by(func.count(LawChange.id).desc())
+
     dept_result = await db.execute(dept_stats_query)
     by_dept = [
         {"dept_name": row[0], "total": row[1], "pending": row[2]}
@@ -368,6 +402,26 @@ async def get_sync_batches(
             "no_response": row[4],
             "not_found": row[5],
         }
+        for row in result.all()
+    ]
+
+
+@router.get("/revision-types")
+async def get_revision_types(
+    db: AsyncSession = Depends(get_db),
+):
+    """제개정구분 목록 조회 (드롭다운용)"""
+    query = (
+        select(Law.revision_type, func.count(LawChange.id).label("count"))
+        .select_from(LawChange)
+        .join(Law, LawChange.law_id == Law.id)
+        .where(Law.revision_type.isnot(None))
+        .group_by(Law.revision_type)
+        .order_by(func.count(LawChange.id).desc())
+    )
+    result = await db.execute(query)
+    return [
+        {"revision_type": row[0], "count": row[1]}
         for row in result.all()
     ]
 

@@ -48,6 +48,7 @@ interface LawChange {
   law_id: number
   law_name: string
   law_type: string | null
+  revision_type: string | null
   sync_date: string
   sync_batch_id: string | null
   api_status: string
@@ -97,10 +98,11 @@ export default function LawChangeList() {
   })
   const [status, setStatus] = useState<string>(() => searchParams.get('status') || undefined)
   const [apiStatus, setApiStatus] = useState<string>(() => searchParams.get('apiStatus') || 'all')
-  const [deptName, setDeptName] = useState<string>(() => searchParams.get('deptName') || undefined)
+  const [changedField, setChangedField] = useState<string | undefined>(() => searchParams.get('changedField') || undefined)
   const [search, setSearch] = useState<string>(() => searchParams.get('search') || undefined)
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
   const [selectedSyncDate, setSelectedSyncDate] = useState<string>(() => searchParams.get('syncDate') || undefined)
+  const [revisionType, setRevisionType] = useState<string | undefined>(() => searchParams.get('revisionType') || undefined)
 
   // SSE 동기화 상태
   const [isSyncing, setIsSyncing] = useState(false)
@@ -146,16 +148,23 @@ export default function LawChangeList() {
     if (page > 1) params.set('page', String(page))
     if (status) params.set('status', status)
     if (apiStatus && apiStatus !== 'all') params.set('apiStatus', apiStatus)
-    if (deptName) params.set('deptName', deptName)
+    if (changedField) params.set('changedField', changedField)
     if (search) params.set('search', search)
     if (selectedSyncDate) params.set('syncDate', selectedSyncDate)
+    if (revisionType) params.set('revisionType', revisionType)
     setSearchParams(params, { replace: true })
-  }, [page, status, apiStatus, deptName, search, selectedSyncDate, setSearchParams])
+  }, [page, status, apiStatus, changedField, search, selectedSyncDate, revisionType, setSearchParams])
 
   // 동기화 날짜 목록 조회
   const { data: syncDates } = useQuery({
     queryKey: ['law-changes-sync-dates'],
     queryFn: () => lawChangesApi.getSyncDates(),
+  })
+
+  // 제개정구분 목록 조회
+  const { data: revisionTypes } = useQuery({
+    queryKey: ['law-changes-revision-types'],
+    queryFn: () => lawChangesApi.getRevisionTypes(),
   })
 
   // 최초 로드 시 가장 최근 날짜 선택
@@ -167,31 +176,26 @@ export default function LawChangeList() {
 
   // 데이터 조회 (날짜 필터 추가)
   const { data, isLoading } = useQuery({
-    queryKey: ['law-changes', page, status, apiStatus, deptName, search, selectedSyncDate],
+    queryKey: ['law-changes', page, status, apiStatus, changedField, search, selectedSyncDate, revisionType],
     queryFn: () =>
       lawChangesApi.getList({
         page,
         size: 20,
         status,
         api_status: apiStatus === 'all' ? undefined : apiStatus,
-        dept_name: deptName,
+        changed_field: changedField,
         search,
         sync_date: selectedSyncDate,
+        revision_type: revisionType,
       }),
     enabled: !isSyncing && !!selectedSyncDate,
   })
 
-  // 통계 조회
+  // 통계 조회 (선택된 동기화 날짜 기준)
   const { data: stats } = useQuery({
-    queryKey: ['law-changes-stats'],
-    queryFn: () => lawChangesApi.getStats(),
-    enabled: !isSyncing,
-  })
-
-  // 부서 목록 조회
-  const { data: departments } = useQuery({
-    queryKey: ['law-changes-departments'],
-    queryFn: () => lawChangesApi.getDepartments(),
+    queryKey: ['law-changes-stats', selectedSyncDate],
+    queryFn: () => lawChangesApi.getStats({ sync_date: selectedSyncDate }),
+    enabled: !isSyncing && !!selectedSyncDate,
   })
 
   // 연혁 조회
@@ -657,11 +661,11 @@ export default function LawChangeList() {
       },
     },
     {
-      title: '조례관할부서',
-      dataIndex: 'dept_name',
-      key: 'dept_name',
-      width: 120,
-      render: (dept: string) => dept || '-',
+      title: '제개정구분',
+      dataIndex: 'revision_type',
+      key: 'revision_type',
+      width: 100,
+      render: (type: string) => type || '-',
     },
     {
       title: '변경내용',
@@ -1022,14 +1026,34 @@ export default function LawChangeList() {
               ]}
             />
             <Select
-              placeholder="조례관할부서"
-              style={{ width: 180 }}
+              placeholder="변경내용"
+              style={{ width: 140 }}
               allowClear
-              showSearch
-              onChange={setDeptName}
-              options={departments?.map((d: any) => ({
-                value: d.dept_name,
-                label: `${d.dept_name} (${d.pending}/${d.total})`,
+              value={changedField}
+              onChange={(value) => {
+                setChangedField(value)
+                setPage(1)
+              }}
+              options={[
+                { value: 'proclaimed_date', label: '공포일' },
+                { value: 'enforced_date', label: '시행일' },
+                { value: 'revision_type', label: '제개정구분' },
+                { value: 'law_id', label: '법령ID' },
+                { value: 'dept_name', label: '소관부처' },
+              ]}
+            />
+            <Select
+              placeholder="제개정구분"
+              style={{ width: 140 }}
+              allowClear
+              value={revisionType}
+              onChange={(value) => {
+                setRevisionType(value)
+                setPage(1)
+              }}
+              options={revisionTypes?.map((rt: { revision_type: string; count: number }) => ({
+                value: rt.revision_type,
+                label: `${rt.revision_type} (${rt.count})`,
               })) || []}
             />
 
@@ -1041,7 +1065,6 @@ export default function LawChangeList() {
                   await lawChangesApi.exportExcel({
                     status,
                     api_status: apiStatus === 'all' ? undefined : apiStatus,
-                    dept_name: deptName,
                     sync_date: selectedSyncDate,
                     search,
                   })

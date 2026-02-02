@@ -31,6 +31,7 @@ interface ParentLaw {
   law_name: string
   proclaimed_date?: string
   enforced_date?: string
+  revision_type?: string
   related_articles?: string
 }
 
@@ -45,12 +46,6 @@ export default function OrdinanceDetail() {
   const { data: ordinance, isLoading } = useQuery({
     queryKey: ['ordinance', id],
     queryFn: () => ordinanceApi.getById(Number(id)),
-    enabled: !!id,
-  })
-
-  const { data: articles } = useQuery({
-    queryKey: ['ordinance', id, 'articles'],
-    queryFn: () => ordinanceApi.getArticles(Number(id)),
     enabled: !!id,
   })
 
@@ -69,6 +64,20 @@ export default function OrdinanceDetail() {
     queryKey: ['law-ordinances', selectedLaw?.law_internal_id],
     queryFn: () => selectedLaw?.law_internal_id ? lawsApi.getOrdinances(selectedLaw.law_internal_id) : null,
     enabled: !!selectedLaw?.law_internal_id && lawOrdinanceModalOpen,
+  })
+
+  // 법령 삭제
+  const deleteLawMutation = useMutation({
+    mutationFn: (lawId: number) => lawsApi.delete(lawId),
+    onSuccess: () => {
+      message.success('법령이 삭제되었습니다.')
+      setLawOrdinanceModalOpen(false)
+      setSelectedLaw(null)
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id, 'parent-laws'] })
+    },
+    onError: () => {
+      message.error('법령 삭제에 실패했습니다.')
+    },
   })
 
   const createMutation = useMutation({
@@ -212,6 +221,12 @@ export default function OrdinanceDetail() {
       key: 'enforced_date',
       width: 110,
     },
+    {
+      title: '개정구분',
+      dataIndex: 'revision_type',
+      key: 'revision_type',
+      width: 100,
+    },
     { title: '관련조문', dataIndex: 'related_articles', key: 'related_articles', width: 120 },
     {
       title: '작업',
@@ -308,20 +323,6 @@ export default function OrdinanceDetail() {
         />
       </Card>
 
-      <Card title="조문">
-        <Table
-          dataSource={articles || []}
-          rowKey="id"
-          size="small"
-          pagination={{ pageSize: 10 }}
-          columns={[
-            { title: '조', dataIndex: 'article_no', key: 'article_no', width: 80 },
-            { title: '항', dataIndex: 'paragraph_no', key: 'paragraph_no', width: 60 },
-            { title: '내용', dataIndex: 'content', key: 'content' },
-          ]}
-        />
-      </Card>
-
       <Modal
         title={editingParentLaw ? '상위법령 수정' : '상위법령 추가'}
         open={isModalOpen}
@@ -365,7 +366,24 @@ export default function OrdinanceDetail() {
           setLawOrdinanceModalOpen(false)
           setSelectedLaw(null)
         }}
-        footer={null}
+        footer={
+          <Popconfirm
+            title="법령 삭제"
+            description="이 법령과 관련된 모든 데이터가 삭제됩니다. 계속하시겠습니까?"
+            onConfirm={() => {
+              if (selectedLaw?.law_internal_id) {
+                deleteLawMutation.mutate(selectedLaw.law_internal_id)
+              }
+            }}
+            okText="삭제"
+            cancelText="취소"
+            okButtonProps={{ danger: true }}
+          >
+            <Button danger icon={<DeleteOutlined />} loading={deleteLawMutation.isPending}>
+              법령 삭제
+            </Button>
+          </Popconfirm>
+        }
         width={700}
       >
         {linkedOrdinancesLoading ? (
