@@ -2,24 +2,24 @@
 
 ## 컨테이너 시작 (백그라운드)
 
-docker compose up -d
+docker compose -f docker-compose.yml up -d
 
 ## 컨테이너 중지 및 삭제
 
-docker compose down
+docker compose -f docker-compose.yml down
 
 ## 이미지 빌드
 
-docker compose build
+docker compose -f docker-compose.yml build
 
 ## 빌드 후 시작 (백그라운드)
 
-docker compose up -d --build
+docker compose -f docker-compose.yml up -d --build
 
 ## 마이그레이션 생성
 
-docker compose run --rm -w /app/backend backend alembic revision --autogenerate -m "description"
+docker compose -f docker-compose.yml run --rm -w /app/backend backend alembic revision --autogenerate -m "description"
 
 ## 마이그레이션 적용
 
-docker compose run --rm -w /app/backend backend alembic upgrade head
+docker compose -f docker-compose.yml run --rm -w /app/backend backend alembic upgrade head
