@@ -1,4 +1,4 @@
-import { Row, Col, Card, Statistic, Table, Tag, List, Typography, Badge } from 'antd'
+import { Row, Col, Card, Statistic, Table, Tag, List, Typography, Tree } from 'antd'
 import {
   FileTextOutlined,
   ExclamationCircleOutlined,
@@ -31,10 +31,44 @@ export default function Dashboard() {
     queryFn: dashboardApi.getLatestSyncStats,
   })
 
+  const { data: revisionTree } = useQuery({
+    queryKey: ['dashboard', 'ordinance-revision-tree'],
+    queryFn: dashboardApi.getOrdinanceRevisionTree,
+  })
+
   const { data: revisionNeeded, isLoading: revisionLoading } = useQuery({
     queryKey: ['dashboard', 'revision-needed', revisionPageSize],
     queryFn: () => dashboardApi.getRevisionNeeded({ limit: revisionPageSize }),
   })
+
+  const revisionTreeData = useMemo(() => {
+    if (!revisionTree) return []
+    const byType = (revisionTree.by_revision_type || []).map(
+      (item: { revision_type: string; count: number }, idx: number) => ({
+        title: `${item.revision_type} ${item.count}건`,
+        key: `revision-type-${idx}`,
+        isLeaf: true,
+      })
+    )
+    return [
+      {
+        title: `개정검토 대상 조례 ${revisionTree.total_count}건`,
+        key: 'total',
+        children: [
+          {
+            title: `개정대상아님 ${revisionTree.no_revision_count}건`,
+            key: 'no-revision',
+            isLeaf: true,
+          },
+          {
+            title: `개정대상 ${revisionTree.needs_revision_count}건`,
+            key: 'needs-revision',
+            children: byType,
+          },
+        ],
+      },
+    ]
+  }, [revisionTree])
 
   const urgencyColor: Record<string, string> = {
     HIGH: 'red',
@@ -144,7 +178,7 @@ export default function Dashboard() {
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => navigate('/ordinances')}>
             <Statistic
               title="자치법규"
               value={summary?.total_ordinances || 0}
@@ -154,7 +188,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => navigate('/laws')}>
             <Statistic
               title="상위법령"
               value={summary?.total_parent_laws || 0}
@@ -183,10 +217,9 @@ export default function Dashboard() {
           <Card>
             <Statistic
               title="개정 필요"
-              value={summary?.revision_needs_action_count || 0}
+              value={revisionTree?.needs_revision_count || 0}
               valueStyle={{ color: '#cf1322' }}
               prefix={<ExclamationCircleOutlined />}
-              loading={summaryLoading}
             />
           </Card>
         </Col>
@@ -195,32 +228,18 @@ export default function Dashboard() {
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={12}>
           <Card
-            title="최근 법령 개정 (개정구분별)"
+            title="개정검토 대상 조례 현황"
             size="small"
-            extra={latestSyncStats?.sync_date && (
-              <span style={{ fontSize: 12, color: '#999' }}>
-                {new Date(latestSyncStats.sync_date).toLocaleDateString()} 동기화
-              </span>
-            )}
           >
-            {latestSyncStats?.by_revision_type?.length ? (
-              <List
-                dataSource={latestSyncStats.by_revision_type}
-                renderItem={(item: { revision_type: string; count: number }) => (
-                  <List.Item>
-                    <List.Item.Meta
-                      title={item.revision_type}
-                    />
-                    <Badge
-                      count={`${item.count}건`}
-                      style={{ backgroundColor: item.revision_type === '전부개정' ? '#f5222d' : item.revision_type === '일부개정' ? '#1890ff' : '#52c41a' }}
-                    />
-                  </List.Item>
-                )}
+            {revisionTreeData.length ? (
+              <Tree
+                treeData={revisionTreeData}
+                defaultExpandAll
+                selectable={false}
               />
             ) : (
               <div style={{ textAlign: 'center', color: '#999', padding: '16px 0' }}>
-                동기화 이력이 없습니다.
+                데이터가 없습니다.
               </div>
             )}
           </Card>

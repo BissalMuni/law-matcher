@@ -18,6 +18,8 @@ export const ordinanceApi = {
     search?: string
     no_parent_law_filter?: string  // "no_mapping" | "confirmed_none"
     needs_revision_filter?: string  // "needs_revision" | "no_revision"
+    revision_type?: string  // 제개정구분 필터
+    exclude_other_law_revision?: boolean  // 타법개정 제외
   }) => {
     const { data } = await api.get('/ordinances', { params })
     return data
@@ -29,6 +31,8 @@ export const ordinanceApi = {
     search?: string
     no_parent_law_filter?: string
     needs_revision_filter?: string
+    revision_type?: string
+    exclude_other_law_revision?: boolean
   }) => {
     const { data } = await api.get('/ordinances/export', {
       params,
@@ -101,6 +105,11 @@ export const ordinanceApi = {
 
   getDepartments: async () => {
     const { data } = await api.get('/ordinances/departments')
+    return data
+  },
+
+  getRevisionTypes: async () => {
+    const { data } = await api.get('/ordinances/revision-types')
     return data
   },
 }
@@ -256,6 +265,11 @@ export const dashboardApi = {
 
   getLatestSyncStats: async () => {
     const { data } = await api.get('/dashboard/latest-sync-stats')
+    return data
+  },
+
+  getOrdinanceRevisionTree: async () => {
+    const { data } = await api.get('/dashboard/ordinance-revision-tree')
     return data
   },
 

@@ -3,7 +3,7 @@ Dashboard Service
 """
 from typing import Optional
 from datetime import datetime, timedelta
-from sqlalchemy import select, func, case, Integer
+from sqlalchemy import select, func, case, Integer, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.ordinance import Ordinance
@@ -279,4 +279,80 @@ class DashboardService:
             "needs_revision_count": needs_revision_count or 0,
             "completed_count": completed_count or 0,
             "items": items,
+        }
+
+    async def get_ordinance_revision_tree(self) -> dict:
+        """자치법규 개정 현황 트리 - 전체법령/개정대상아님/개정대상(제개정구분별)"""
+        # 조례별 상위법령 최대 시행일 vs 조례 공포일 비교 (ordinance_service와 동일 로직)
+        base_join = (
+            select(
+                Ordinance.id.label("ordinance_id"),
+                func.max(Law.enforced_date).label("max_enforced_date"),
+                Ordinance.enacted_date,
+            )
+            .select_from(Ordinance)
+            .join(OrdinanceLawMapping, Ordinance.id == OrdinanceLawMapping.ordinance_id)
+            .join(Law, OrdinanceLawMapping.law_id == Law.id)
+            .where(
+                Ordinance.status == "ACTIVE",
+                Ordinance.enacted_date.isnot(None),
+                Law.enforced_date.isnot(None),
+            )
+            .group_by(Ordinance.id, Ordinance.enacted_date)
+        ).subquery()
+
+        # 전체 (상위법령 매핑이 있는 자치법규)
+        total_count = await self.db.scalar(
+            select(func.count()).select_from(base_join)
+        )
+
+        # 개정대상 (max_enforced_date > enacted_date)
+        needs_revision_count = await self.db.scalar(
+            select(func.count()).select_from(base_join).where(
+                base_join.c.max_enforced_date > base_join.c.enacted_date
+            )
+        )
+
+        # 개정대상아님
+        no_revision_count = await self.db.scalar(
+            select(func.count()).select_from(base_join).where(
+                base_join.c.max_enforced_date <= base_join.c.enacted_date
+            )
+        )
+
+        # 개정대상 중 제개정구분별 건수
+        needs_revision_ordinances = (
+            select(base_join.c.ordinance_id)
+            .where(base_join.c.max_enforced_date > base_join.c.enacted_date)
+        ).subquery()
+
+        revision_type_query = (
+            select(
+                Law.revision_type,
+                func.count(func.distinct(OrdinanceLawMapping.ordinance_id)).label("count"),
+            )
+            .select_from(OrdinanceLawMapping)
+            .join(Law, OrdinanceLawMapping.law_id == Law.id)
+            .where(
+                OrdinanceLawMapping.ordinance_id.in_(
+                    select(needs_revision_ordinances.c.ordinance_id)
+                ),
+                Law.enforced_date.isnot(None),
+                Law.revision_type.isnot(None),
+                Law.revision_type != '',
+            )
+            .group_by(Law.revision_type)
+            .order_by(func.count(func.distinct(OrdinanceLawMapping.ordinance_id)).desc())
+        )
+        result = await self.db.execute(revision_type_query)
+        by_revision_type = [
+            {"revision_type": row[0], "count": row[1]}
+            for row in result.all()
+        ]
+
+        return {
+            "total_count": total_count or 0,
+            "no_revision_count": no_revision_count or 0,
+            "needs_revision_count": needs_revision_count or 0,
+            "by_revision_type": by_revision_type,
         }

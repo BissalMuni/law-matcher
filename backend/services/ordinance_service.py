@@ -35,6 +35,8 @@ class OrdinanceService:
         search: Optional[str] = None,
         no_parent_law_filter: Optional[str] = None,
         needs_revision_filter: Optional[str] = None,
+        revision_type: Optional[str] = None,
+        exclude_other_law_revision: bool = False,
     ) -> dict:
         """Get paginated list of ordinances"""
         query = select(Ordinance).where(Ordinance.status == "ACTIVE")
@@ -45,9 +47,22 @@ class OrdinanceService:
             query = query.where(Ordinance.department == department)
         if search:
             query = query.where(Ordinance.name.ilike(f"%{search}%"))
+        if revision_type:
+            # 상위법령(Law)의 제개정구분으로 필터링
+            revision_type_subquery = (
+                select(OrdinanceLawMapping.ordinance_id)
+                .join(Law, OrdinanceLawMapping.law_id == Law.id)
+                .where(Law.revision_type == revision_type)
+                .distinct()
+            )
+            query = query.where(Ordinance.id.in_(revision_type_subquery))
 
-        # 상위법령 없음 필터
-        if no_parent_law_filter == "no_mapping":
+        # 상위법령 필터
+        if no_parent_law_filter == "connected":
+            # 상위법령 매핑이 있는 조례
+            subquery = select(OrdinanceLawMapping.ordinance_id).distinct()
+            query = query.where(Ordinance.id.in_(subquery))
+        elif no_parent_law_filter == "no_mapping":
             # 상위법령 매핑이 없고, no_parent_law가 False인 조례
             subquery = select(OrdinanceLawMapping.ordinance_id).distinct()
             query = query.where(
@@ -70,6 +85,11 @@ class OrdinanceService:
                     select(OrdinanceLawMapping.ordinance_id)
                     .join(Law, OrdinanceLawMapping.law_id == Law.id)
                     .where(Law.enforced_date.isnot(None))
+                )
+                if exclude_other_law_revision:
+                    revision_subquery = revision_subquery.where(Law.revision_type != '타법개정')
+                revision_subquery = (
+                    revision_subquery
                     .group_by(OrdinanceLawMapping.ordinance_id)
                     .having(func.max(Law.enforced_date) > Ordinance.enacted_date)
                 )
@@ -84,6 +104,11 @@ class OrdinanceService:
                     select(OrdinanceLawMapping.ordinance_id)
                     .join(Law, OrdinanceLawMapping.law_id == Law.id)
                     .where(Law.enforced_date.isnot(None))
+                )
+                if exclude_other_law_revision:
+                    revision_subquery = revision_subquery.where(Law.revision_type != '타법개정')
+                revision_subquery = (
+                    revision_subquery
                     .group_by(OrdinanceLawMapping.ordinance_id)
                     .having(func.max(Law.enforced_date) > Ordinance.enacted_date)
                 )
@@ -112,16 +137,31 @@ class OrdinanceService:
                 .where(OrdinanceLawMapping.ordinance_id == ordinance.id)
             ) or 0
 
+            # 상위법령 제개정구분 목록 조회
+            law_revision_types_result = await self.db.execute(
+                select(Law.revision_type)
+                .select_from(OrdinanceLawMapping)
+                .join(Law, OrdinanceLawMapping.law_id == Law.id)
+                .where(OrdinanceLawMapping.ordinance_id == ordinance.id)
+                .where(Law.revision_type.isnot(None))
+                .where(Law.revision_type != '')
+                .distinct()
+            )
+            law_revision_types = [row[0] for row in law_revision_types_result.all()]
+
             # 개정여부: 상위법령 중 가장 최근 시행일이 조례 공포일보다 최신이면 1(빨간불), 아니면 0(초록불)
             needs_revision = None
             if parent_law_count > 0 and ordinance.enacted_date:
-                max_enforced_date = await self.db.scalar(
+                enforced_query = (
                     select(func.max(Law.enforced_date))
                     .select_from(OrdinanceLawMapping)
                     .join(Law, OrdinanceLawMapping.law_id == Law.id)
                     .where(OrdinanceLawMapping.ordinance_id == ordinance.id)
                     .where(Law.enforced_date.isnot(None))
                 )
+                if exclude_other_law_revision:
+                    enforced_query = enforced_query.where(Law.revision_type != '타법개정')
+                max_enforced_date = await self.db.scalar(enforced_query)
                 if max_enforced_date:
                     needs_revision = 1 if max_enforced_date > ordinance.enacted_date else 0
 
@@ -147,6 +187,7 @@ class OrdinanceService:
                 "parent_law_count": parent_law_count,
                 "no_parent_law": ordinance.no_parent_law,
                 "needs_revision": needs_revision,
+                "law_revision_types": law_revision_types,
             }
             items.append(ordinance_dict)
 
@@ -184,6 +225,24 @@ class OrdinanceService:
         )
         rows = result.all()
         return [{"name": row[0], "count": row[1]} for row in rows]
+
+    async def get_revision_types(self) -> List[dict]:
+        """상위법령의 제개정구분 목록 조회 (드롭다운용)"""
+        result = await self.db.execute(
+            select(
+                Law.revision_type,
+                func.count(func.distinct(OrdinanceLawMapping.ordinance_id)).label('count')
+            )
+            .join(OrdinanceLawMapping, OrdinanceLawMapping.law_id == Law.id)
+            .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
+            .where(Ordinance.status == "ACTIVE")
+            .where(Law.revision_type.isnot(None))
+            .where(Law.revision_type != '')
+            .group_by(Law.revision_type)
+            .order_by(func.count(func.distinct(OrdinanceLawMapping.ordinance_id)).desc())
+        )
+        rows = result.all()
+        return [{"revision_type": row[0], "count": row[1]} for row in rows]
 
     async def get_by_id(self, ordinance_id: int) -> Ordinance:
         """Get ordinance by ID"""

@@ -12,6 +12,7 @@ from backend.schemas.dashboard import (
     PendingReviews,
     RevisionNeededListResponse,
     LatestSyncStats,
+    OrdinanceRevisionTreeResponse,
 )
 from backend.services.dashboard_service import DashboardService
 
@@ -54,6 +55,15 @@ async def get_latest_sync_stats(
     """최근 동기화 통계 - 개정구분별 건수"""
     service = DashboardService(db)
     return await service.get_latest_sync_stats()
+
+
+@router.get("/ordinance-revision-tree", response_model=OrdinanceRevisionTreeResponse)
+async def get_ordinance_revision_tree(
+    db: AsyncSession = Depends(get_db),
+):
+    """자치법규 개정 현황 트리 통계"""
+    service = DashboardService(db)
+    return await service.get_ordinance_revision_tree()
 
 
 @router.get("/revision-needed", response_model=RevisionNeededListResponse)

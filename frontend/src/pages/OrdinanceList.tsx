@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Table, Input, Select, Space, Typography, Button, message, Upload, Tree, Row, Col, Card, Modal, Form, Spin, List, Tabs, DatePicker } from 'antd'
-import { SyncOutlined, SearchOutlined, UploadOutlined, ApartmentOutlined, LeftOutlined, RightOutlined, PlusOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons'
+import { Table, Input, Select, Space, Typography, Button, message, Upload, Card, Modal, Form, Spin, List, Tabs, DatePicker, Checkbox } from 'antd'
+import { SyncOutlined, SearchOutlined, UploadOutlined, PlusOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ordinanceApi, ordinanceManagementApi } from '../services/api'
-import type { UploadProps, TreeDataNode } from 'antd'
+import type { UploadProps } from 'antd'
 
 interface OrdinanceSearchResultItem {
   serial_no: string
@@ -37,14 +37,18 @@ export default function OrdinanceList() {
     const p = searchParams.get('page')
     return p ? parseInt(p, 10) : 1
   })
+  const [pageSize, setPageSize] = useState(() => {
+    const s = searchParams.get('size')
+    return s ? parseInt(s, 10) : 20
+  })
   const [search, setSearch] = useState(() => searchParams.get('search') || '')
   const [category, setCategory] = useState<string | undefined>(() => searchParams.get('category') || undefined)
   const [selectedDepartment, setSelectedDepartment] = useState<string | undefined>(() => searchParams.get('department') || undefined)
   const [noParentLawFilter, setNoParentLawFilter] = useState<string | undefined>(() => searchParams.get('noParentLaw') || undefined)
   const [needsRevisionFilter, setNeedsRevisionFilter] = useState<string | undefined>(() => searchParams.get('needsRevision') || undefined)
+  const [revisionType, setRevisionType] = useState<string | undefined>(() => searchParams.get('revisionType') || undefined)
+  const [excludeOtherLawRevision, setExcludeOtherLawRevision] = useState(() => searchParams.get('excludeOtherLaw') === 'true')
   const [initialLoaded, setInitialLoaded] = useState(false)
-  const [treeCollapsed, setTreeCollapsed] = useState(false)
-  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>(['all'])
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [passwordAction, setPasswordAction] = useState<'sync' | 'upload' | null>(null)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
@@ -64,17 +68,25 @@ export default function OrdinanceList() {
     queryFn: () => ordinanceApi.getDepartments(),
   })
 
+  // 제개정구분 목록 조회
+  const { data: revisionTypes } = useQuery({
+    queryKey: ['ordinance-revision-types'],
+    queryFn: () => ordinanceApi.getRevisionTypes(),
+  })
+
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['ordinances', page, search, category, selectedDepartment, noParentLawFilter, needsRevisionFilter],
+    queryKey: ['ordinances', page, pageSize, search, category, selectedDepartment, noParentLawFilter, needsRevisionFilter, revisionType, excludeOtherLawRevision],
     queryFn: () =>
       ordinanceApi.getList({
         page,
-        size: 20,
+        size: pageSize,
         search: search || undefined,
         category,
         department: selectedDepartment,
         no_parent_law_filter: noParentLawFilter,
         needs_revision_filter: needsRevisionFilter,
+        revision_type: revisionType,
+        exclude_other_law_revision: excludeOtherLawRevision || undefined,
       }),
     enabled: initialLoaded,
   })
@@ -88,13 +100,16 @@ export default function OrdinanceList() {
   useEffect(() => {
     const params = new URLSearchParams()
     if (page > 1) params.set('page', String(page))
+    if (pageSize !== 20) params.set('size', String(pageSize))
     if (search) params.set('search', search)
     if (category) params.set('category', category)
     if (selectedDepartment) params.set('department', selectedDepartment)
     if (noParentLawFilter) params.set('noParentLaw', noParentLawFilter)
     if (needsRevisionFilter) params.set('needsRevision', needsRevisionFilter)
+    if (revisionType) params.set('revisionType', revisionType)
+    if (excludeOtherLawRevision) params.set('excludeOtherLaw', 'true')
     setSearchParams(params, { replace: true })
-  }, [page, search, category, selectedDepartment, noParentLawFilter, needsRevisionFilter, setSearchParams])
+  }, [page, pageSize, search, category, selectedDepartment, noParentLawFilter, needsRevisionFilter, revisionType, excludeOtherLawRevision, setSearchParams])
 
   // 법제처 API 동기화
   const syncMutation = useMutation({
@@ -271,39 +286,6 @@ export default function OrdinanceList() {
     })
   }
 
-  // 트리 데이터 생성
-  const treeData: TreeDataNode[] = [
-    {
-      title: `전체 (${departments?.reduce((sum: number, d: DepartmentItem) => sum + d.count, 0) || 0})`,
-      key: 'all',
-      icon: <ApartmentOutlined />,
-      children: departments?.map((dept: DepartmentItem) => ({
-        title: `${dept.name} (${dept.count})`,
-        key: dept.name,
-      })) || [],
-    },
-  ]
-
-  const onTreeSelect = (selectedKeys: React.Key[]) => {
-    const key = selectedKeys[0] as string
-    if (key === 'all') {
-      // "전체" 클릭 시 트리 확장/축소 토글
-      setExpandedKeys(prev =>
-        prev.includes('all') ? [] : ['all']
-      )
-      setSelectedDepartment(undefined)
-    } else if (!key) {
-      setSelectedDepartment(undefined)
-    } else {
-      setSelectedDepartment(key)
-    }
-    setPage(1)
-  }
-
-  const onTreeExpand = (keys: React.Key[]) => {
-    setExpandedKeys(keys)
-  }
-
   const columns = [
     {
       title: '자치법규명',
@@ -326,6 +308,16 @@ export default function OrdinanceList() {
       dataIndex: 'revision_type',
       key: 'revision_type',
       width: 100,
+    },
+    {
+      title: '법령제개정',
+      dataIndex: 'law_revision_types',
+      key: 'law_revision_types',
+      width: 120,
+      render: (types: string[] | null) => {
+        if (!types || types.length === 0) return '-'
+        return types.join(', ')
+      },
     },
     {
       title: '공포일',
@@ -379,168 +371,190 @@ export default function OrdinanceList() {
     <div>
       <Title level={4}>자치법규 목록</Title>
 
-      <Row gutter={16}>
-        <Col style={{ width: treeCollapsed ? 105 : 'calc((100% - 48px) * 5 / 24)', transition: 'width 0.3s ease', flexShrink: 0 }}>
-          <Card
-            size="small"
-            title={
-              <div
-                onClick={() => setTreeCollapsed(!treeCollapsed)}
-                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 4 }}
-              >
-                {treeCollapsed ? <RightOutlined /> : <LeftOutlined />}
-                소관부서
-              </div>
-            }
-            style={{ height: 'calc(100vh - 220px)', overflow: 'auto' }}
-            styles={{ body: { display: treeCollapsed ? 'none' : 'block' } }}
-          >
-            <Tree
-              showIcon
-              expandedKeys={expandedKeys}
-              onExpand={onTreeExpand}
-              treeData={treeData}
-              onSelect={onTreeSelect}
-              selectedKeys={selectedDepartment ? [selectedDepartment] : ['all']}
-            />
-          </Card>
-        </Col>
-        <Col style={{ flex: 1, transition: 'all 0.3s ease' }}>
-          <Space style={{ marginBottom: 16 }} wrap>
-            <Input
-              placeholder="자치법규명 검색"
-              defaultValue={search}
-              onPressEnter={(e) => setSearch((e.target as HTMLInputElement).value)}
-              onChange={(e) => !e.target.value && setSearch('')}
-              style={{ width: 300 }}
-              allowClear
-              suffix={
-                <SearchOutlined
-                  style={{ cursor: 'pointer', color: '#1890ff' }}
-                  onClick={() => {
-                    const input = document.querySelector('input[placeholder="자치법규명 검색"]') as HTMLInputElement
-                    if (input) setSearch(input.value)
-                  }}
-                />
-              }
-            />
-            <Select
-              placeholder="분류"
-              style={{ width: 120 }}
-              allowClear
-              value={category}
-              onChange={setCategory}
-              options={[
-                { value: '조례', label: '조례' },
-                { value: '규칙', label: '규칙' },
-              ]}
-            />
-            <Select
-              placeholder="상위법령"
-              style={{ width: 160 }}
-              allowClear
-              value={noParentLawFilter}
-              onChange={(value) => {
-                setNoParentLawFilter(value)
-                setPage(1)
-              }}
-              options={[
-                { value: 'no_mapping', label: '미연결 (확인필요)' },
-                { value: 'confirmed_none', label: '없음 (확인완료)' },
-              ]}
-            />
-            <Select
-              placeholder="개정대상"
-              style={{ width: 140 }}
-              allowClear
-              value={needsRevisionFilter}
-              onChange={(value) => {
-                setNeedsRevisionFilter(value)
-                setPage(1)
-              }}
-              options={[
-                { value: 'needs_revision', label: '개정대상' },
-                { value: 'no_revision', label: '대상아님' },
-              ]}
-            />
-            <Button
-              icon={<SearchOutlined />}
-              onClick={() => refetch()}
-              loading={isLoading}
-            >
-              DB 조회
-            </Button>
-            <Button
-              type="primary"
-              icon={<SyncOutlined />}
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Select
+          placeholder="소관부서"
+          style={{ width: 180 }}
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          value={selectedDepartment}
+          onChange={(value) => {
+            setSelectedDepartment(value)
+            setPage(1)
+          }}
+          options={departments?.map((dept: DepartmentItem) => ({
+            value: dept.name,
+            label: `${dept.name} (${dept.count})`,
+          })) || []}
+        />
+        <Input
+          placeholder="자치법규명 검색"
+          defaultValue={search}
+          onPressEnter={(e) => setSearch((e.target as HTMLInputElement).value)}
+          onChange={(e) => !e.target.value && setSearch('')}
+          style={{ width: 300 }}
+          allowClear
+          suffix={
+            <SearchOutlined
+              style={{ cursor: 'pointer', color: '#1890ff' }}
               onClick={() => {
-                setPasswordAction('sync')
-                setPasswordModalOpen(true)
+                const input = document.querySelector('input[placeholder="자치법규명 검색"]') as HTMLInputElement
+                if (input) setSearch(input.value)
               }}
-              loading={syncMutation.isPending}
-            >
-              법제처 동기화
-            </Button>
-            <Upload {...uploadProps}>
-              <Button icon={<UploadOutlined />}>소관부서 엑셀 업로드</Button>
-            </Upload>
-            <a
-              href="https://elis.go.kr/locgovalr/locgovSeAlrList"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              소관부서별 자치법규 목록
-            </a>
-            <Button
-              icon={<PlusOutlined />}
-              onClick={() => setCreateModalOpen(true)}
-            >
-              신규
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => updateOrdinanceInfoMutation.mutate()}
-              loading={updateOrdinanceInfoMutation.isPending}
-            >
-              업데이트
-            </Button>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={async () => {
-                try {
-                  await ordinanceApi.exportExcel({
-                    category,
-                    department: selectedDepartment,
-                    search: search || undefined,
-                    no_parent_law_filter: noParentLawFilter,
-                    needs_revision_filter: needsRevisionFilter,
-                  })
-                  message.success('엑셀 파일이 다운로드되었습니다.')
-                } catch (error) {
-                  message.error('엑셀 다운로드 중 오류가 발생했습니다.')
-                }
-              }}
-            >
-              엑셀 다운로드
-            </Button>
-          </Space>
+            />
+          }
+        />
+        <Select
+          placeholder="분류"
+          style={{ width: 120 }}
+          allowClear
+          value={category}
+          onChange={setCategory}
+          options={[
+            { value: '조례', label: '조례' },
+            { value: '규칙', label: '규칙' },
+          ]}
+        />
+        <Select
+          placeholder="상위법령"
+          style={{ width: 160 }}
+          allowClear
+          value={noParentLawFilter}
+          onChange={(value) => {
+            setNoParentLawFilter(value)
+            setPage(1)
+          }}
+          options={[
+            { value: 'connected', label: '연결' },
+            { value: 'confirmed_none', label: '없음 (상위법없음)' },
+            { value: 'no_mapping', label: '미연결 (확인필요)' },
+          ]}
+        />
+        <Select
+          placeholder="개정대상"
+          style={{ width: 140 }}
+          allowClear
+          value={needsRevisionFilter}
+          onChange={(value) => {
+            setNeedsRevisionFilter(value)
+            setPage(1)
+          }}
+          options={[
+            { value: 'needs_revision', label: '개정대상' },
+            { value: 'no_revision', label: '대상아님' },
+          ]}
+        />
+        <Select
+          placeholder="제개정구분"
+          style={{ width: 160 }}
+          allowClear
+          value={revisionType}
+          onChange={(value) => {
+            setRevisionType(value)
+            setPage(1)
+          }}
+          options={revisionTypes?.map((rt: { revision_type: string; count: number }) => ({
+            value: rt.revision_type,
+            label: `${rt.revision_type} (${rt.count})`,
+          })) || []}
+        />
+        <Checkbox
+          checked={excludeOtherLawRevision}
+          onChange={(e) => {
+            setExcludeOtherLawRevision(e.target.checked)
+            setPage(1)
+          }}
+        >
+          타법개정 제외
+        </Checkbox>
+        <Button
+          icon={<SearchOutlined />}
+          onClick={() => refetch()}
+          loading={isLoading}
+        >
+          DB 조회
+        </Button>
+        <Button
+          type="primary"
+          icon={<SyncOutlined />}
+          onClick={() => {
+            setPasswordAction('sync')
+            setPasswordModalOpen(true)
+          }}
+          loading={syncMutation.isPending}
+        >
+          법제처 동기화
+        </Button>
+        <Upload {...uploadProps}>
+          <Button icon={<UploadOutlined />}>소관부서 엑셀 업로드</Button>
+        </Upload>
+        <a
+          href="https://elis.go.kr/locgovalr/locgovSeAlrList"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          소관부서별 자치법규 목록
+        </a>
+        <Button
+          icon={<PlusOutlined />}
+          onClick={() => setCreateModalOpen(true)}
+        >
+          신규
+        </Button>
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={() => updateOrdinanceInfoMutation.mutate()}
+          loading={updateOrdinanceInfoMutation.isPending}
+        >
+          업데이트
+        </Button>
+        <Button
+          icon={<DownloadOutlined />}
+          onClick={async () => {
+            try {
+              await ordinanceApi.exportExcel({
+                category,
+                department: selectedDepartment,
+                search: search || undefined,
+                no_parent_law_filter: noParentLawFilter,
+                needs_revision_filter: needsRevisionFilter,
+                revision_type: revisionType,
+                exclude_other_law_revision: excludeOtherLawRevision || undefined,
+              })
+              message.success('엑셀 파일이 다운로드되었습니다.')
+            } catch (error) {
+              message.error('엑셀 다운로드 중 오류가 발생했습니다.')
+            }
+          }}
+        >
+          엑셀 다운로드
+        </Button>
+      </Space>
 
-          <Table
-            columns={columns}
-            dataSource={data?.items || []}
-            rowKey="id"
-            loading={isLoading}
-            scroll={{ x: 1000 }}
-            pagination={{
-              current: page,
-              total: data?.total || 0,
-              pageSize: 20,
-              onChange: setPage,
-              showTotal: (total) => `총 ${total}건`,
-            }}
-          />
-        </Col>
-      </Row>
+      <Table
+        columns={columns}
+        dataSource={data?.items || []}
+        rowKey="id"
+        loading={isLoading}
+        scroll={{ x: 1000 }}
+        pagination={{
+          current: page,
+          total: data?.total || 0,
+          pageSize: pageSize,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 20, 50, 100],
+          onChange: (newPage, newSize) => {
+            if (newSize !== pageSize) {
+              setPageSize(newSize)
+              setPage(1)
+            } else {
+              setPage(newPage)
+            }
+          },
+          showTotal: (total) => `총 ${total}건`,
+        }}
+      />
 
       <Modal
         title="관리자 비밀번호 입력"

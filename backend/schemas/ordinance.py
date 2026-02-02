@@ -32,6 +32,7 @@ class OrdinanceResponse(OrdinanceBase):
     parent_law_count: Optional[int] = None  # 상위법령 연결 개수
     no_parent_law: bool = False  # 상위법령 없음 확인 여부
     needs_revision: Optional[int] = None  # 개정여부 (1: 법령이 더 최신, 0: 조례가 더 최신)
+    law_revision_types: Optional[List[str]] = None  # 상위법령 제개정구분 목록
 
     class Config:
         from_attributes = True

@@ -59,6 +59,14 @@ class LatestSyncStats(BaseModel):
     by_revision_type: List[RevisionTypeCount] = []
 
 
+class OrdinanceRevisionTreeResponse(BaseModel):
+    """자치법규 개정 현황 트리"""
+    total_count: int = 0
+    no_revision_count: int = 0
+    needs_revision_count: int = 0
+    by_revision_type: List[RevisionTypeCount] = []
+
+
 class RevisionNeededItem(BaseModel):
     """Revision needed item"""
     ordinance_id: int

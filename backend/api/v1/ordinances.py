@@ -41,6 +41,8 @@ async def get_ordinances(
     search: Optional[str] = None,
     no_parent_law_filter: Optional[str] = None,  # "no_mapping" | "confirmed_none" | None
     needs_revision_filter: Optional[str] = None,  # "needs_revision" | "no_revision" | None
+    revision_type: Optional[str] = None,  # 제개정구분 필터
+    exclude_other_law_revision: bool = False,  # 타법개정 제외 여부
     db: AsyncSession = Depends(get_db),
 ):
     """Get list of ordinances"""
@@ -53,6 +55,8 @@ async def get_ordinances(
         search=search,
         no_parent_law_filter=no_parent_law_filter,
         needs_revision_filter=needs_revision_filter,
+        revision_type=revision_type,
+        exclude_other_law_revision=exclude_other_law_revision,
     )
 
 
@@ -63,6 +67,15 @@ async def get_departments(
     """소관부서 목록 조회 (트리용)"""
     service = OrdinanceService(db)
     return await service.get_departments()
+
+
+@router.get("/revision-types")
+async def get_revision_types(
+    db: AsyncSession = Depends(get_db),
+):
+    """제개정구분 목록 조회 (드롭다운용)"""
+    service = OrdinanceService(db)
+    return await service.get_revision_types()
 
 
 @router.post("/sync", response_model=OrdinanceSyncResponse)
@@ -262,6 +275,8 @@ async def export_ordinances(
     search: Optional[str] = None,
     no_parent_law_filter: Optional[str] = None,
     needs_revision_filter: Optional[str] = None,
+    revision_type: Optional[str] = None,
+    exclude_other_law_revision: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
     """자치법규 목록 엑셀 다운로드 (필터 적용)"""
@@ -278,6 +293,8 @@ async def export_ordinances(
         search=search,
         no_parent_law_filter=no_parent_law_filter,
         needs_revision_filter=needs_revision_filter,
+        revision_type=revision_type,
+        exclude_other_law_revision=exclude_other_law_revision,
     )
     items = result.get("items", [])
 
