@@ -47,6 +47,7 @@ async def get_ordinances(
     needs_revision_filter: Optional[str] = None,  # "needs_revision" | "no_revision" | None
     revision_type: Optional[str] = None,  # 제개정구분 필터
     exclude_other_law_revision: bool = False,  # 타법개정 제외 여부
+    review_result_filter: Optional[str] = None,  # 검토결과 필터: "개정필요" | "개정불필요" | "검토중" | "보류" | "미검토"
     db: AsyncSession = Depends(get_db),
 ):
     """Get list of ordinances"""
@@ -61,6 +62,7 @@ async def get_ordinances(
         needs_revision_filter=needs_revision_filter,
         revision_type=revision_type,
         exclude_other_law_revision=exclude_other_law_revision,
+        review_result_filter=review_result_filter,
     )
 
 

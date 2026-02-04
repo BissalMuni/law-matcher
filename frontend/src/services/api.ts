@@ -20,6 +20,7 @@ export const ordinanceApi = {
     needs_revision_filter?: string  // "needs_revision" | "no_revision"
     revision_type?: string  // 제개정구분 필터
     exclude_other_law_revision?: boolean  // 타법개정 제외
+    review_result_filter?: string  // 검토결과 필터
   }) => {
     const { data } = await api.get('/ordinances', { params })
     return data

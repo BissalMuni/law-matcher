@@ -39,6 +39,7 @@ class OrdinanceService:
         needs_revision_filter: Optional[str] = None,
         revision_type: Optional[str] = None,
         exclude_other_law_revision: bool = False,
+        review_result_filter: Optional[str] = None,
     ) -> dict:
         """Get paginated list of ordinances"""
         query = select(Ordinance).where(Ordinance.status == "ACTIVE")
@@ -120,6 +121,35 @@ class OrdinanceService:
                     Ordinance.id.notin_(revision_subquery),
                 )
 
+        # 검토결과 필터
+        if review_result_filter:
+            if review_result_filter == "미검토":
+                # 검토이력이 없는 조례
+                has_review_subquery = select(OrdinanceReview.ordinance_id).distinct()
+                query = query.where(Ordinance.id.notin_(has_review_subquery))
+            else:
+                # 최신 검토결과가 해당 값인 조례
+                latest_review_subquery = (
+                    select(
+                        OrdinanceReview.ordinance_id,
+                        func.max(OrdinanceReview.created_at).label("max_created")
+                    )
+                    .group_by(OrdinanceReview.ordinance_id)
+                    .subquery()
+                )
+                matched_subquery = (
+                    select(OrdinanceReview.ordinance_id)
+                    .join(
+                        latest_review_subquery,
+                        and_(
+                            OrdinanceReview.ordinance_id == latest_review_subquery.c.ordinance_id,
+                            OrdinanceReview.created_at == latest_review_subquery.c.max_created,
+                        )
+                    )
+                    .where(OrdinanceReview.review_result == review_result_filter)
+                )
+                query = query.where(Ordinance.id.in_(matched_subquery))
+
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
         total = await self.db.scalar(count_query)
@@ -167,6 +197,14 @@ class OrdinanceService:
                 if max_enforced_date:
                     needs_revision = 1 if max_enforced_date > ordinance.enacted_date else 0
 
+            # 최신 검토결과 조회
+            latest_review_result = await self.db.scalar(
+                select(OrdinanceReview.review_result)
+                .where(OrdinanceReview.ordinance_id == ordinance.id)
+                .order_by(OrdinanceReview.created_at.desc())
+                .limit(1)
+            )
+
             # Convert to dict and add count
             ordinance_dict = {
                 "id": ordinance.id,
@@ -190,6 +228,7 @@ class OrdinanceService:
                 "no_parent_law": ordinance.no_parent_law,
                 "needs_revision": needs_revision,
                 "law_revision_types": law_revision_types,
+                "latest_review_result": latest_review_result,
             }
             items.append(ordinance_dict)
 

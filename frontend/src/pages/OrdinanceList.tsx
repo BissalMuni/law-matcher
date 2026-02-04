@@ -48,6 +48,7 @@ export default function OrdinanceList() {
   const [needsRevisionFilter, setNeedsRevisionFilter] = useState<string | undefined>(() => searchParams.get('needsRevision') || undefined)
   const [revisionType, setRevisionType] = useState<string | undefined>(() => searchParams.get('revisionType') || undefined)
   const [excludeOtherLawRevision, setExcludeOtherLawRevision] = useState(() => searchParams.get('excludeOtherLaw') === 'true')
+  const [reviewResultFilter, setReviewResultFilter] = useState<string | undefined>(() => searchParams.get('reviewResult') || undefined)
   const [initialLoaded, setInitialLoaded] = useState(false)
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [passwordAction, setPasswordAction] = useState<'sync' | 'upload' | null>(null)
@@ -75,7 +76,7 @@ export default function OrdinanceList() {
   })
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['ordinances', page, pageSize, search, category, selectedDepartment, noParentLawFilter, needsRevisionFilter, revisionType, excludeOtherLawRevision],
+    queryKey: ['ordinances', page, pageSize, search, category, selectedDepartment, noParentLawFilter, needsRevisionFilter, revisionType, excludeOtherLawRevision, reviewResultFilter],
     queryFn: () =>
       ordinanceApi.getList({
         page,
@@ -87,6 +88,7 @@ export default function OrdinanceList() {
         needs_revision_filter: needsRevisionFilter,
         revision_type: revisionType,
         exclude_other_law_revision: excludeOtherLawRevision || undefined,
+        review_result_filter: reviewResultFilter,
       }),
     enabled: initialLoaded,
   })
@@ -108,8 +110,9 @@ export default function OrdinanceList() {
     if (needsRevisionFilter) params.set('needsRevision', needsRevisionFilter)
     if (revisionType) params.set('revisionType', revisionType)
     if (excludeOtherLawRevision) params.set('excludeOtherLaw', 'true')
+    if (reviewResultFilter) params.set('reviewResult', reviewResultFilter)
     setSearchParams(params, { replace: true })
-  }, [page, pageSize, search, category, selectedDepartment, noParentLawFilter, needsRevisionFilter, revisionType, excludeOtherLawRevision, setSearchParams])
+  }, [page, pageSize, search, category, selectedDepartment, noParentLawFilter, needsRevisionFilter, revisionType, excludeOtherLawRevision, reviewResultFilter, setSearchParams])
 
   // 법제처 API 동기화
   const syncMutation = useMutation({
@@ -365,6 +368,30 @@ export default function OrdinanceList() {
         )
       },
     },
+    {
+      title: '검토결과',
+      dataIndex: 'latest_review_result',
+      key: 'latest_review_result',
+      width: 100,
+      align: 'center' as const,
+      render: (value: string | null, record: any) => {
+        if (!value) return '-'
+        const colorMap: Record<string, string> = {
+          '개정필요': '#f5222d',
+          '개정불필요': '#52c41a',
+          '검토중': '#faad14',
+          '보류': '#999',
+        }
+        return (
+          <a
+            onClick={() => navigate(`/ordinances/${record.id}`)}
+            style={{ color: colorMap[value] || '#333' }}
+          >
+            {value}
+          </a>
+        )
+      },
+    },
   ]
 
   return (
@@ -468,6 +495,23 @@ export default function OrdinanceList() {
         >
           타법개정 제외
         </Checkbox>
+        <Select
+          placeholder="검토결과"
+          style={{ width: 140 }}
+          allowClear
+          value={reviewResultFilter}
+          onChange={(value) => {
+            setReviewResultFilter(value)
+            setPage(1)
+          }}
+          options={[
+            { value: '개정필요', label: '개정필요' },
+            { value: '개정불필요', label: '개정불필요' },
+            { value: '검토중', label: '검토중' },
+            { value: '보류', label: '보류' },
+            { value: '미검토', label: '미검토' },
+          ]}
+        />
         <Button
           icon={<SearchOutlined />}
           onClick={() => refetch()}
