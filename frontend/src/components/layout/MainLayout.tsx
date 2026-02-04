@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, theme } from 'antd'
+import { Layout, Menu, theme, Dropdown, Space, Avatar } from 'antd'
+import type { MenuProps } from 'antd'
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -10,7 +11,11 @@ import {
   TeamOutlined,
   BarChartOutlined,
   BookOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  DownOutlined,
 } from '@ant-design/icons'
+import { useAuth } from '../../contexts/AuthContext'
 
 const { Header, Sider, Content } = Layout
 
@@ -56,6 +61,7 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
+  const { user, logout } = useAuth()
   const {
     token: { colorBgContainer },
   } = theme.useToken()
@@ -63,6 +69,29 @@ export default function MainLayout() {
   const handleMenuClick = ({ key }: { key: string }) => {
     navigate(key)
   }
+
+  const handleLogout = () => {
+    logout()
+    navigate('/landing')
+  }
+
+  const userMenuItems: MenuProps['items'] = [
+    {
+      key: 'profile',
+      icon: <UserOutlined />,
+      label: '프로필',
+      disabled: true,
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: '로그아웃',
+      onClick: handleLogout,
+    },
+  ]
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -104,7 +133,21 @@ export default function MainLayout() {
           }}
         >
           <h2 style={{ margin: 0 }}>OLM 자치법규 개정 검토 시스템</h2>
-          <SyncOutlined style={{ fontSize: 20, cursor: 'pointer' }} />
+
+          <Dropdown menu={{ items: userMenuItems }} trigger={['click']}>
+            <Space style={{ cursor: 'pointer' }}>
+              <Avatar
+                size="small"
+                icon={<UserOutlined />}
+                style={{ backgroundColor: '#667eea' }}
+              />
+              <span>
+                {user?.full_name || user?.username}
+                {user?.user_type === 'DEPARTMENT' && ' (부서)'}
+              </span>
+              <DownOutlined style={{ fontSize: 12 }} />
+            </Space>
+          </Dropdown>
         </Header>
         <Content
           style={{

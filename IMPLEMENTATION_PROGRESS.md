@@ -202,41 +202,88 @@ alembic current
 
 ---
 
-## 📝 Phase 3: 프론트엔드 인증 UI (대기 중)
+## 📝 Phase 3: 프론트엔드 인증 UI (완료)
 
-### 5. ⏳ 프론트엔드 타입 정의
-**파일**: `/frontend/src/types/auth.ts` (신규)
-- User, LoginRequest, RegisterRequest, TokenResponse 타입
+### 5. ✅ 프론트엔드 타입 정의
+**파일**: `/frontend/src/types/auth.ts` (신규 생성)
+- User, LoginRequest, RegisterRequest, TokenResponse 타입 정의
+- AuthContextType 타입 정의
 
-### 6. ⏳ AuthContext 생성
-**파일**: `/frontend/src/contexts/AuthContext.tsx` (신규)
+### 6. ✅ AuthContext 생성
+**파일**: `/frontend/src/contexts/AuthContext.tsx` (신규 생성)
 - 로그인/로그아웃 상태 관리
 - useAuth hook 제공
+- JWT 토큰 localStorage 자동 저장/복원
+- 토큰 유효성 자동 검증
 
-### 7. ⏳ API 서비스 수정
+### 7. ✅ API 서비스 수정
 **파일**: `/frontend/src/services/api.ts`
-- JWT 토큰 인터셉터 추가
-- authApi (login, register, me) 추가
+- JWT 토큰 자동 인터셉터 추가
+- authApi (login, register, me, changePassword) 추가
+- 401 오류 자동 처리 (토큰 만료 시 자동 로그아웃)
 
-### 8. ⏳ 인증 페이지 생성
+### 8. ✅ 인증 페이지 생성
 **파일**:
-- `/frontend/src/pages/Landing.tsx` (신규): 랜딩 페이지
-- `/frontend/src/pages/Login.tsx` (신규): 로그인 페이지
-- `/frontend/src/pages/Register.tsx` (신규): 회원가입 페이지
+- `/frontend/src/pages/Landing.tsx` (신규 생성): 랜딩 페이지 (시스템 소개)
+- `/frontend/src/pages/Login.tsx` (신규 생성): 로그인 페이지
+- `/frontend/src/pages/Register.tsx` (신규 생성): 회원가입 페이지 (일반/부서 담당자 선택)
 
-### 9. ⏳ ProtectedRoute 컴포넌트 생성
-**파일**: `/frontend/src/components/ProtectedRoute.tsx` (신규)
+### 9. ✅ ProtectedRoute 컴포넌트 생성
+**파일**: `/frontend/src/components/ProtectedRoute.tsx` (신규 생성)
 - 인증 확인 후 라우팅
+- 미인증 사용자 자동 리디렉션
 
-### 10. ⏳ App.tsx 라우팅 수정
+### 10. ✅ App.tsx 라우팅 수정
 **파일**: `/frontend/src/App.tsx`
+- AuthProvider로 전체 앱 래핑
 - Landing, Login, Register 라우트 추가
-- ProtectedRoute 적용
+- ProtectedRoute 적용 (모든 메인 페이지 보호)
 
-### 11. ⏳ MainLayout 수정
+### 11. ✅ MainLayout 수정
 **파일**: `/frontend/src/components/layout/MainLayout.tsx`
-- 사용자 정보 표시
+- 헤더에 사용자 정보 표시 (이름, 사용자 유형)
+- 사용자 드롭다운 메뉴 추가
 - 로그아웃 버튼 추가
+
+---
+
+---
+
+## 📝 Phase 3 완료 내용 요약
+
+### ✅ 구현된 기능
+1. **인증 시스템 UI**
+   - 랜딩 페이지: 시스템 소개 및 로그인/회원가입 링크
+   - 로그인 페이지: 사용자명/비밀번호 로그인
+   - 회원가입 페이지: 일반 사용자/부서 담당자 선택 가능
+
+2. **상태 관리**
+   - AuthContext를 통한 전역 인증 상태 관리
+   - JWT 토큰 localStorage 자동 저장
+   - 페이지 새로고침 시 인증 상태 자동 복원
+
+3. **보안 기능**
+   - ProtectedRoute로 미인증 사용자 차단
+   - JWT 토큰 자동 인터셉터 (모든 API 요청에 자동 추가)
+   - 401 오류 자동 처리 (토큰 만료 시 자동 로그아웃)
+
+4. **사용자 경험**
+   - 헤더에 사용자 정보 표시
+   - 드롭다운 메뉴로 로그아웃 기능
+   - 로그인 후 자동으로 메인 페이지 이동
+
+### 📂 생성된 파일 목록
+- `/frontend/src/types/auth.ts`
+- `/frontend/src/contexts/AuthContext.tsx`
+- `/frontend/src/pages/Landing.tsx`
+- `/frontend/src/pages/Login.tsx`
+- `/frontend/src/pages/Register.tsx`
+- `/frontend/src/components/ProtectedRoute.tsx`
+
+### 🔧 수정된 파일 목록
+- `/frontend/src/services/api.ts`
+- `/frontend/src/App.tsx`
+- `/frontend/src/components/layout/MainLayout.tsx`
 
 ---
 
@@ -397,13 +444,18 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   - ✅ 마이그레이션 실행 완료 (DB 테이블 업데이트 완료)
   - ⏳ 스키마, 서비스, API 수정 필요
 
-- ⏳ **Phase 3 대기 중**: 프론트엔드 인증 UI (0%)
+- ✅ **Phase 3 완료**: 프론트엔드 인증 UI (100%)
+  - ✅ 타입 정의, AuthContext, API 서비스 수정 완료
+  - ✅ Landing, Login, Register 페이지 생성 완료
+  - ✅ ProtectedRoute, App.tsx 라우팅, MainLayout 수정 완료
+  - ✅ JWT 토큰 자동 관리, 인증 상태 유지 기능 완료
+
 - ⏳ **Phase 4 대기 중**: 검토 의견 UI 자동화 (0%)
 - ⏳ **Phase 5 대기 중**: 테스트 및 검증 (0%)
 
-**전체 진행률**: 약 40% 완료
+**전체 진행률**: 약 60% 완료
 
 ---
 
-**마지막 업데이트**: 2026-02-04 (마이그레이션 실행 완료, DB 테이블 업데이트 완료)
-**현재 상태**: Phase 1 완료, Phase 2 진행 중 (스키마/서비스/API 수정 필요)
+**마지막 업데이트**: 2026-02-04 (프론트엔드 인증 UI 구현 완료)
+**현재 상태**: Phase 1, 3 완료 / Phase 2 진행 중 (스키마/서비스/API 수정 필요)
