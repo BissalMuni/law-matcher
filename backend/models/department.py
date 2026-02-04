@@ -25,3 +25,4 @@ class Department(Base):
 
     # Relationships
     ordinances: Mapped[List["Ordinance"]] = relationship(back_populates="department_rel")
+    users: Mapped[List["User"]] = relationship(back_populates="department")

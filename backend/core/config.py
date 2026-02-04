@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # Admin
     ADMIN_PASSWORD: str = "admin123"  # 기본 비밀번호 (반드시 .env에서 변경하세요)
 
+    # JWT Authentication
+    SECRET_KEY: str = "your-secret-key-change-this-in-production-min-32-chars"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
+
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 
