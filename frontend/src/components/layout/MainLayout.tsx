@@ -5,9 +5,9 @@ import {
   DashboardOutlined,
   FileTextOutlined,
   AlertOutlined,
-  CheckSquareOutlined,
+  // CheckSquareOutlined,
   SyncOutlined,
-  TeamOutlined,
+  // TeamOutlined,
   BarChartOutlined,
   BookOutlined,
 } from '@ant-design/icons'
@@ -30,20 +30,20 @@ const menuItems = [
     icon: <AlertOutlined />,
     label: '개정법령',
   },
-  {
-    key: '/reviews',
-    icon: <CheckSquareOutlined />,
-    label: '개정 검토',
-  },
-  {
-    key: '/departments',
-    icon: <TeamOutlined />,
-    label: '부서별관리',
-  },
+  // {
+  //   key: '/reviews',
+  //   icon: <CheckSquareOutlined />,
+  //   label: '개정 검토',
+  // },
+  // {
+  //   key: '/departments',
+  //   icon: <TeamOutlined />,
+  //   label: '부서별관리',
+  // },
   {
     key: '/statistics',
     icon: <BarChartOutlined />,
-    label: '통계정보',
+    label: '법령연계통계',
   },
   {
     key: '/dashboard',

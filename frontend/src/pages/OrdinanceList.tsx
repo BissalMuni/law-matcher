@@ -341,12 +341,6 @@ export default function OrdinanceList() {
       width: 100,
     },
     {
-      title: '소관부서',
-      dataIndex: 'org_name',
-      key: 'org_name',
-      width: 150,
-    },
-    {
       title: '상위법령(개수)',
       dataIndex: 'parent_law_count',
       key: 'parent_law_count',
@@ -409,7 +403,7 @@ export default function OrdinanceList() {
         <div style={{ width: sidebarWidth, flexShrink: 0, position: 'relative' }}>
           <Card
             size="small"
-            title="소관부서"
+            title="담당부서"
             style={{ position: 'sticky', top: 16 }}
             bodyStyle={{ maxHeight: 'calc(100vh - 200px)', overflow: 'auto', padding: 0 }}
           >
@@ -572,7 +566,7 @@ export default function OrdinanceList() {
           법제처 동기화
         </Button>
         <Upload {...uploadProps}>
-          <Button icon={<UploadOutlined />}>소관부서 엑셀 업로드</Button>
+          <Button icon={<UploadOutlined />}>담당부서 엑셀 업로드</Button>
         </Upload>
         <a
           href="https://elis.go.kr/locgovalr/locgovSeAlrList"
