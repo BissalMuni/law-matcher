@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Table, Input, Select, Space, Typography, Button, message, Upload, Card, Modal, Form, Spin, List, Tabs, DatePicker, Checkbox } from 'antd'
+import { Table, Input, Select, Space, Typography, Button, message, Upload, Card, Modal, Form, Spin, List, Tabs, DatePicker, Checkbox, Menu } from 'antd'
 import { SyncOutlined, SearchOutlined, UploadOutlined, PlusOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ordinanceApi, ordinanceManagementApi } from '../services/api'
@@ -62,6 +62,34 @@ export default function OrdinanceList() {
   const [selectedOrdinance, setSelectedOrdinance] = useState<OrdinanceSearchResultItem | null>(null)
   const [departmentInput, setDepartmentInput] = useState('')
   const [manualForm] = Form.useForm()
+  const [sidebarWidth, setSidebarWidth] = useState(220)
+  const isResizing = useRef(false)
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    isResizing.current = true
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = sidebarWidth
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return
+      const newWidth = Math.max(150, Math.min(400, startWidth + e.clientX - startX))
+      setSidebarWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      isResizing.current = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [sidebarWidth])
 
   // 소관부서 목록 조회
   const { data: departments } = useQuery({
@@ -291,6 +319,12 @@ export default function OrdinanceList() {
 
   const columns = [
     {
+      title: '담당부서',
+      dataIndex: 'department',
+      key: 'department',
+      width: 150,
+    },
+    {
       title: '자치법규명',
       dataIndex: 'name',
       key: 'name',
@@ -307,41 +341,13 @@ export default function OrdinanceList() {
       width: 100,
     },
     {
-      title: '제개정',
-      dataIndex: 'revision_type',
-      key: 'revision_type',
-      width: 100,
-    },
-    {
-      title: '법령제개정',
-      dataIndex: 'law_revision_types',
-      key: 'law_revision_types',
-      width: 120,
-      render: (types: string[] | null) => {
-        if (!types || types.length === 0) return '-'
-        return types.join(', ')
-      },
-    },
-    {
-      title: '공포일',
-      dataIndex: 'enacted_date',
-      key: 'enacted_date',
-      width: 110,
-    },
-    {
-      title: '시행일',
-      dataIndex: 'enforced_date',
-      key: 'enforced_date',
-      width: 110,
-    },
-    {
       title: '소관부서',
-      dataIndex: 'department',
-      key: 'department',
+      dataIndex: 'org_name',
+      key: 'org_name',
       width: 150,
     },
     {
-      title: '상위법령',
+      title: '상위법령(개수)',
       dataIndex: 'parent_law_count',
       key: 'parent_law_count',
       width: 120,
@@ -369,7 +375,7 @@ export default function OrdinanceList() {
       },
     },
     {
-      title: '검토결과',
+      title: '검토의견',
       dataIndex: 'latest_review_result',
       key: 'latest_review_result',
       width: 100,
@@ -398,23 +404,58 @@ export default function OrdinanceList() {
     <div>
       <Title level={4}>자치법규 목록</Title>
 
+      <div style={{ display: 'flex', gap: 16 }}>
+        {/* 소관부서 사이드 네비 */}
+        <div style={{ width: sidebarWidth, flexShrink: 0, position: 'relative' }}>
+          <Card
+            size="small"
+            title="소관부서"
+            style={{ position: 'sticky', top: 16 }}
+            bodyStyle={{ maxHeight: 'calc(100vh - 200px)', overflow: 'auto', padding: 0 }}
+          >
+            <Menu
+              mode="inline"
+              selectedKeys={selectedDepartment ? [selectedDepartment] : ['__all__']}
+              onClick={({ key }) => {
+                if (key === '__all__') {
+                  setSelectedDepartment(undefined)
+                  setPage(1)
+                } else {
+                  setSelectedDepartment(key)
+                  setPage(1)
+                }
+              }}
+              items={[
+                {
+                  key: '__all__',
+                  label: `전체 (${departments?.reduce((sum: number, d: DepartmentItem) => sum + d.count, 0) || 0})`,
+                },
+                ...(departments?.map((dept: DepartmentItem) => ({
+                  key: dept.name,
+                  label: `${dept.name} (${dept.count})`,
+                })) || []),
+              ]}
+              style={{ border: 'none' }}
+            />
+          </Card>
+          {/* 리사이즈 핸들 */}
+          <div
+            onMouseDown={handleMouseDown}
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: -4,
+              width: 8,
+              height: '100%',
+              cursor: 'col-resize',
+              zIndex: 10,
+            }}
+          />
+        </div>
+
+        {/* 메인 콘텐츠 */}
+        <div style={{ flex: 1, minWidth: 0 }}>
       <Space style={{ marginBottom: 16 }} wrap>
-        <Select
-          placeholder="소관부서"
-          style={{ width: 180 }}
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          value={selectedDepartment}
-          onChange={(value) => {
-            setSelectedDepartment(value)
-            setPage(1)
-          }}
-          options={departments?.map((dept: DepartmentItem) => ({
-            value: dept.name,
-            label: `${dept.name} (${dept.count})`,
-          })) || []}
-        />
         <Input
           placeholder="자치법규명 검색"
           defaultValue={search}
@@ -599,6 +640,8 @@ export default function OrdinanceList() {
           showTotal: (total) => `총 ${total}건`,
         }}
       />
+        </div>
+      </div>
 
       <Modal
         title="관리자 비밀번호 입력"
