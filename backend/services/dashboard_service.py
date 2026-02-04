@@ -73,6 +73,11 @@ class DashboardService:
             )
         )
 
+        # Get latest sync time from Law table
+        last_sync_at = await self.db.scalar(
+            select(func.max(Law.last_synced_at)).select_from(Law)
+        )
+
         return {
             "total_ordinances": total_ordinances or 0,
             "total_parent_laws": total_parent_laws or 0,
@@ -81,7 +86,7 @@ class DashboardService:
             "need_revision_count": need_revision_count or 0,
             "revision_needs_action_count": revision_needs_action_count or 0,
             "revision_completed_count": revision_completed_count or 0,
-            "last_sync_at": None,
+            "last_sync_at": last_sync_at,
         }
 
     async def get_recent_amendments(self, limit: int = 10) -> dict:
@@ -113,7 +118,13 @@ class DashboardService:
     async def get_pending_reviews(self, limit: int = 10) -> dict:
         """Get pending reviews"""
         result = await self.db.execute(
-            select(AmendmentReview)
+            select(
+                AmendmentReview,
+                Ordinance.name.label("ordinance_name"),
+                LawAmendment.law_name.label("law_name"),
+            )
+            .join(Ordinance, AmendmentReview.ordinance_id == Ordinance.id)
+            .join(LawAmendment, AmendmentReview.amendment_id == LawAmendment.id)
             .where(
                 AmendmentReview.need_revision == True,
                 AmendmentReview.status == "PENDING",
@@ -121,14 +132,14 @@ class DashboardService:
             .order_by(AmendmentReview.created_at.desc())
             .limit(limit)
         )
-        reviews = result.scalars().all()
+        rows = result.all()
 
         items = []
-        for review in reviews:
+        for review, ordinance_name, law_name in rows:
             items.append({
                 "id": review.id,
-                "ordinance_name": f"Ordinance #{review.ordinance_id}",
-                "law_name": f"Law #{review.amendment_id}",
+                "ordinance_name": ordinance_name or f"Ordinance #{review.ordinance_id}",
+                "law_name": law_name or f"Law #{review.amendment_id}",
                 "urgency": review.revision_urgency or "LOW",
                 "created_at": review.created_at,
             })
