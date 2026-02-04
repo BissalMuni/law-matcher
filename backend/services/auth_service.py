@@ -4,6 +4,7 @@ Authentication Service
 from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
 from backend.models.user import User
@@ -22,9 +23,11 @@ class AuthService:
         self.db = db
 
     async def get_by_username(self, username: str) -> Optional[User]:
-        """Get user by username"""
+        """Get user by username with department info"""
         result = await self.db.execute(
-            select(User).where(User.username == username)
+            select(User)
+            .options(selectinload(User.department))
+            .where(User.username == username)
         )
         return result.scalar_one_or_none()
 

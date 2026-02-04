@@ -11,7 +11,7 @@ from backend.schemas.auth import (
     TokenResponse,
     PasswordChangeRequest,
 )
-from backend.schemas.user import UserResponse
+from backend.schemas.user import UserResponse, UserWithDepartmentResponse
 from backend.services.auth_service import AuthService
 from backend.models.user import User
 
@@ -92,16 +92,21 @@ async def login(
     )
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=UserWithDepartmentResponse)
 async def get_current_user_info(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get current authenticated user information
+    Get current authenticated user information with department info
 
     Requires: Authorization header with Bearer token
     """
-    return UserResponse.model_validate(current_user)
+    # Build response with department info
+    user_data = UserResponse.model_validate(current_user).model_dump()
+    user_data['department_name'] = current_user.department.name if current_user.department else None
+    user_data['department_code'] = current_user.department.code if current_user.department else None
+
+    return UserWithDepartmentResponse(**user_data)
 
 
 @router.post("/change-password", response_model=UserResponse)
