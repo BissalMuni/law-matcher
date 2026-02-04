@@ -15,8 +15,10 @@ import {
   message,
   Popconfirm,
   List,
+  Tag,
+  Timeline,
 } from 'antd'
-import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, LinkOutlined, UserOutlined, BankOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ordinanceApi, lawsApi } from '../services/api'
 import dayjs from 'dayjs'
@@ -35,6 +37,18 @@ interface ParentLaw {
   related_articles?: string
 }
 
+interface OrdinanceReview {
+  id: number
+  ordinance_id: number
+  reviewer_type: string  // "DEPARTMENT" | "GENERAL"
+  reviewer_name?: string
+  reviewer_department?: string
+  review_content: string
+  review_result?: string
+  created_at: string
+  updated_at: string
+}
+
 export default function OrdinanceDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -42,6 +56,11 @@ export default function OrdinanceDetail() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingParentLaw, setEditingParentLaw] = useState<ParentLaw | null>(null)
   const [form] = Form.useForm()
+
+  // 검토이력 상태
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
+  const [editingReview, setEditingReview] = useState<OrdinanceReview | null>(null)
+  const [reviewForm] = Form.useForm()
 
   const { data: ordinance, isLoading } = useQuery({
     queryKey: ['ordinance', id],
@@ -52,6 +71,13 @@ export default function OrdinanceDetail() {
   const { data: parentLaws } = useQuery({
     queryKey: ['ordinance', id, 'parent-laws'],
     queryFn: () => ordinanceApi.getParentLaws(Number(id)),
+    enabled: !!id,
+  })
+
+  // 검토이력 조회
+  const { data: reviews } = useQuery({
+    queryKey: ['ordinance', id, 'reviews'],
+    queryFn: () => ordinanceApi.getReviews(Number(id)),
     enabled: !!id,
   })
 
@@ -145,10 +171,59 @@ export default function OrdinanceDetail() {
     },
   })
 
+  // 검토이력 mutation
+  const createReviewMutation = useMutation({
+    mutationFn: (data: {
+      reviewer_type: string
+      reviewer_name?: string
+      reviewer_department?: string
+      review_content: string
+      review_result?: string
+    }) => ordinanceApi.createReview(Number(id), data),
+    onSuccess: () => {
+      message.success('검토의견이 등록되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id, 'reviews'] })
+      handleReviewModalClose()
+    },
+    onError: () => {
+      message.error('검토의견 등록에 실패했습니다.')
+    },
+  })
+
+  const updateReviewMutation = useMutation({
+    mutationFn: ({ reviewId, data }: { reviewId: number; data: any }) =>
+      ordinanceApi.updateReview(reviewId, data),
+    onSuccess: () => {
+      message.success('검토의견이 수정되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id, 'reviews'] })
+      handleReviewModalClose()
+    },
+    onError: () => {
+      message.error('검토의견 수정에 실패했습니다.')
+    },
+  })
+
+  const deleteReviewMutation = useMutation({
+    mutationFn: (reviewId: number) => ordinanceApi.deleteReview(reviewId),
+    onSuccess: () => {
+      message.success('검토의견이 삭제되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id, 'reviews'] })
+    },
+    onError: () => {
+      message.error('검토의견 삭제에 실패했습니다.')
+    },
+  })
+
   const handleModalClose = () => {
     setIsModalOpen(false)
     setEditingParentLaw(null)
     form.resetFields()
+  }
+
+  const handleReviewModalClose = () => {
+    setIsReviewModalOpen(false)
+    setEditingReview(null)
+    reviewForm.resetFields()
   }
 
   const handleAdd = () => {
@@ -188,13 +263,52 @@ export default function OrdinanceDetail() {
     }
   }
 
+  // 검토이력 핸들러
+  const handleAddReview = () => {
+    setEditingReview(null)
+    reviewForm.resetFields()
+    setIsReviewModalOpen(true)
+  }
+
+  const handleEditReview = (record: OrdinanceReview) => {
+    setEditingReview(record)
+    reviewForm.setFieldsValue(record)
+    setIsReviewModalOpen(true)
+  }
+
+  const handleReviewSubmit = (values: any) => {
+    if (editingReview) {
+      updateReviewMutation.mutate({ reviewId: editingReview.id, data: values })
+    } else {
+      createReviewMutation.mutate(values)
+    }
+  }
+
+  const reviewResultColor: Record<string, string> = {
+    '개정필요': 'red',
+    '개정불필요': 'green',
+    '검토중': 'orange',
+    '보류': 'default',
+  }
+
   const parentLawColumns = [
     {
       title: '법령명',
       dataIndex: 'law_name',
       key: 'law_name',
       render: (text: string, record: ParentLaw) => (
-        <a onClick={() => handleLawNameClick(record)}>{text}</a>
+        <Space>
+          <a onClick={() => handleLawNameClick(record)}>{text}</a>
+          <a
+            href={`https://www.law.go.kr/법령/${encodeURIComponent(record.law_name)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="법제처에서 보기"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <LinkOutlined style={{ color: '#1890ff' }} />
+          </a>
+        </Space>
       ),
     },
     {
@@ -322,6 +436,117 @@ export default function OrdinanceDetail() {
           locale={{ emptyText: ordinance?.no_parent_law ? '상위법령 없음 (확인됨)' : '상위법령 없음' }}
         />
       </Card>
+
+      {/* 검토이력 카드 */}
+      <Card
+        title="검토결과"
+        style={{ marginBottom: 16 }}
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAddReview}>
+            검토의견 추가
+          </Button>
+        }
+      >
+        {reviews?.items?.length > 0 ? (
+          <Timeline
+            items={reviews.items.map((review: OrdinanceReview) => ({
+              color: review.reviewer_type === 'GENERAL' ? 'blue' : 'green',
+              children: (
+                <div key={review.id}>
+                  <div style={{ marginBottom: 8 }}>
+                    <Space>
+                      <Tag color={review.reviewer_type === 'GENERAL' ? 'blue' : 'green'}>
+                        {review.reviewer_type === 'GENERAL' ? '구청 총괄' : '부서 담당자'}
+                      </Tag>
+                      {review.review_result && (
+                        <Tag color={reviewResultColor[review.review_result] || 'default'}>
+                          {review.review_result}
+                        </Tag>
+                      )}
+                      <span style={{ color: '#999', fontSize: 12 }}>
+                        {review.reviewer_name && `${review.reviewer_name}`}
+                        {review.reviewer_department && ` (${review.reviewer_department})`}
+                      </span>
+                    </Space>
+                  </div>
+                  <div style={{ marginBottom: 8 }}>{review.review_content}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#999', fontSize: 12 }}>
+                      {new Date(review.created_at).toLocaleString()}
+                    </span>
+                    <Space size="small">
+                      <Button type="text" size="small" icon={<EditOutlined />} onClick={() => handleEditReview(review)} />
+                      <Popconfirm
+                        title="삭제 확인"
+                        description="이 검토의견을 삭제하시겠습니까?"
+                        onConfirm={() => deleteReviewMutation.mutate(review.id)}
+                        okText="삭제"
+                        cancelText="취소"
+                      >
+                        <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    </Space>
+                  </div>
+                </div>
+              ),
+            }))}
+          />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>
+            등록된 검토의견이 없습니다.
+          </div>
+        )}
+      </Card>
+
+      {/* 검토이력 모달 */}
+      <Modal
+        title={editingReview ? '검토의견 수정' : '검토의견 추가'}
+        open={isReviewModalOpen}
+        onCancel={handleReviewModalClose}
+        onOk={() => reviewForm.submit()}
+        confirmLoading={createReviewMutation.isPending || updateReviewMutation.isPending}
+      >
+        <Form form={reviewForm} layout="vertical" onFinish={handleReviewSubmit}>
+          <Form.Item
+            name="reviewer_type"
+            label="검토자 유형"
+            rules={[{ required: true, message: '검토자 유형을 선택하세요' }]}
+          >
+            <Select
+              placeholder="유형 선택"
+              options={[
+                { value: 'DEPARTMENT', label: '부서 담당자' },
+                { value: 'GENERAL', label: '구청 총괄' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="reviewer_name" label="검토자명">
+            <Input placeholder="예: 홍길동" />
+          </Form.Item>
+          <Form.Item name="reviewer_department" label="소속부서">
+            <Input placeholder="예: 법무담당관" />
+          </Form.Item>
+          <Form.Item
+            name="review_content"
+            label="검토의견"
+            rules={[{ required: true, message: '검토의견을 입력하세요' }]}
+          >
+            <Input.TextArea rows={4} placeholder="검토의견을 입력하세요" />
+          </Form.Item>
+          <Form.Item name="review_result" label="검토결과">
+            <Select
+              placeholder="결과 선택"
+              allowClear
+              options={[
+                { value: '개정필요', label: '개정필요' },
+                { value: '개정불필요', label: '개정불필요' },
+                { value: '검토중', label: '검토중' },
+                { value: '보류', label: '보류' },
+              ]}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title={editingParentLaw ? '상위법령 수정' : '상위법령 추가'}

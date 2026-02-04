@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.ordinance import Ordinance
 from backend.models.law import Law
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
+from backend.models.ordinance_review import OrdinanceReview
 from backend.core.exceptions import NotFoundError
+from backend.schemas.ordinance import OrdinanceReviewCreate, OrdinanceReviewUpdate
 from backend.external.moleg_client import MolegClient
 from backend.services.law_sync_service import LawSyncService
 
@@ -997,3 +999,77 @@ class OrdinanceService:
             "updated": updated,
             "failed": failed,
         }
+
+    # ========== 검토이력 CRUD ==========
+
+    async def get_reviews(self, ordinance_id: int) -> List[OrdinanceReview]:
+        """조례의 검토이력 목록 조회"""
+        await self.get_by_id(ordinance_id)  # 조례 존재 확인
+
+        stmt = (
+            select(OrdinanceReview)
+            .where(OrdinanceReview.ordinance_id == ordinance_id)
+            .order_by(OrdinanceReview.created_at.desc())
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def create_review(
+        self,
+        ordinance_id: int,
+        data: OrdinanceReviewCreate,
+    ) -> OrdinanceReview:
+        """조례 검토이력 추가"""
+        await self.get_by_id(ordinance_id)  # 조례 존재 확인
+
+        review = OrdinanceReview(
+            ordinance_id=ordinance_id,
+            reviewer_type=data.reviewer_type,
+            reviewer_name=data.reviewer_name,
+            reviewer_department=data.reviewer_department,
+            review_content=data.review_content,
+            review_result=data.review_result,
+        )
+        self.db.add(review)
+        await self.db.commit()
+        await self.db.refresh(review)
+        return review
+
+    async def update_review(
+        self,
+        review_id: int,
+        data: OrdinanceReviewUpdate,
+    ) -> OrdinanceReview:
+        """조례 검토이력 수정"""
+        result = await self.db.execute(
+            select(OrdinanceReview).where(OrdinanceReview.id == review_id)
+        )
+        review = result.scalar_one_or_none()
+        if not review:
+            raise NotFoundError(f"Review {review_id} not found")
+
+        if data.reviewer_name is not None:
+            review.reviewer_name = data.reviewer_name
+        if data.reviewer_department is not None:
+            review.reviewer_department = data.reviewer_department
+        if data.review_content is not None:
+            review.review_content = data.review_content
+        if data.review_result is not None:
+            review.review_result = data.review_result
+
+        await self.db.commit()
+        await self.db.refresh(review)
+        return review
+
+    async def delete_review(self, review_id: int) -> bool:
+        """조례 검토이력 삭제"""
+        result = await self.db.execute(
+            select(OrdinanceReview).where(OrdinanceReview.id == review_id)
+        )
+        review = result.scalar_one_or_none()
+        if not review:
+            raise NotFoundError(f"Review {review_id} not found")
+
+        await self.db.delete(review)
+        await self.db.commit()
+        return True

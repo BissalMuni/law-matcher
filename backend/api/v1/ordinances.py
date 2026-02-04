@@ -25,6 +25,10 @@ from backend.schemas.ordinance import (
     OrdinanceSearchResult,
     OrdinanceRegisterFromApiRequest,
     OrdinanceInfoUpdateResponse,
+    OrdinanceReviewCreate,
+    OrdinanceReviewUpdate,
+    OrdinanceReviewResponse,
+    OrdinanceReviewListResponse,
 )
 from backend.services.ordinance_service import OrdinanceService
 from backend.core.exceptions import NotFoundError
@@ -530,6 +534,63 @@ async def delete_law_mapping(
     service = OrdinanceService(db)
     try:
         await service.delete_law_mapping(mapping_id)
+        return {"success": True, "message": "삭제되었습니다."}
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ==================== 검토이력 API ====================
+
+@router.get("/{ordinance_id}/reviews", response_model=OrdinanceReviewListResponse)
+async def get_ordinance_reviews(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """조례의 검토이력 목록 조회"""
+    service = OrdinanceService(db)
+    reviews = await service.get_reviews(ordinance_id)
+    return OrdinanceReviewListResponse(total=len(reviews), items=reviews)
+
+
+@router.post("/{ordinance_id}/reviews", response_model=OrdinanceReviewResponse)
+async def create_ordinance_review(
+    ordinance_id: int,
+    data: OrdinanceReviewCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """조례 검토이력 추가"""
+    service = OrdinanceService(db)
+    try:
+        review = await service.create_review(ordinance_id, data)
+        return review
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/reviews/{review_id}", response_model=OrdinanceReviewResponse)
+async def update_ordinance_review(
+    review_id: int,
+    data: OrdinanceReviewUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """조례 검토이력 수정"""
+    service = OrdinanceService(db)
+    try:
+        review = await service.update_review(review_id, data)
+        return review
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/reviews/{review_id}")
+async def delete_ordinance_review(
+    review_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """조례 검토이력 삭제"""
+    service = OrdinanceService(db)
+    try:
+        await service.delete_review(review_id)
         return {"success": True, "message": "삭제되었습니다."}
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

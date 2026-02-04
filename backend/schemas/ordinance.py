@@ -353,3 +353,44 @@ class LawChangeSyncStatsResponse(BaseModel):
     not_found: int
     pending: int
     approved: int
+
+
+# ==================== OrdinanceReview 스키마 ====================
+
+class OrdinanceReviewBase(BaseModel):
+    """자치법규 검토이력 기본"""
+    reviewer_type: str  # "DEPARTMENT" (부서담당자) | "GENERAL" (구청총괄)
+    reviewer_name: Optional[str] = None
+    reviewer_department: Optional[str] = None
+    review_content: str
+    review_result: Optional[str] = None  # 개정필요/개정불필요/검토중/보류
+
+
+class OrdinanceReviewCreate(OrdinanceReviewBase):
+    """자치법규 검토이력 생성"""
+    pass
+
+
+class OrdinanceReviewUpdate(BaseModel):
+    """자치법규 검토이력 수정"""
+    reviewer_name: Optional[str] = None
+    reviewer_department: Optional[str] = None
+    review_content: Optional[str] = None
+    review_result: Optional[str] = None
+
+
+class OrdinanceReviewResponse(OrdinanceReviewBase):
+    """자치법규 검토이력 응답"""
+    id: int
+    ordinance_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OrdinanceReviewListResponse(BaseModel):
+    """자치법규 검토이력 목록 응답"""
+    total: int
+    items: List[OrdinanceReviewResponse]

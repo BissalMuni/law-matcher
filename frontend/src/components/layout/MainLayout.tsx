@@ -16,11 +16,6 @@ const { Header, Sider, Content } = Layout
 
 const menuItems = [
   {
-    key: '/dashboard',
-    icon: <DashboardOutlined />,
-    label: '대시보드',
-  },
-  {
     key: '/ordinances',
     icon: <FileTextOutlined />,
     label: '자치법규',
@@ -49,6 +44,11 @@ const menuItems = [
     key: '/statistics',
     icon: <BarChartOutlined />,
     label: '통계정보',
+  },
+  {
+    key: '/dashboard',
+    icon: <DashboardOutlined />,
+    label: '대시보드',
   },
 ]
 

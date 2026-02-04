@@ -97,6 +97,38 @@ export const ordinanceApi = {
     return data
   },
 
+  // 검토이력 API
+  getReviews: async (ordinanceId: number) => {
+    const { data } = await api.get(`/ordinances/${ordinanceId}/reviews`)
+    return data
+  },
+
+  createReview: async (ordinanceId: number, reviewData: {
+    reviewer_type: string  // "DEPARTMENT" | "GENERAL"
+    reviewer_name?: string
+    reviewer_department?: string
+    review_content: string
+    review_result?: string  // 개정필요/개정불필요/검토중/보류
+  }) => {
+    const { data } = await api.post(`/ordinances/${ordinanceId}/reviews`, reviewData)
+    return data
+  },
+
+  updateReview: async (reviewId: number, updateData: {
+    reviewer_name?: string
+    reviewer_department?: string
+    review_content?: string
+    review_result?: string
+  }) => {
+    const { data } = await api.put(`/ordinances/reviews/${reviewId}`, updateData)
+    return data
+  },
+
+  deleteReview: async (reviewId: number) => {
+    const { data } = await api.delete(`/ordinances/reviews/${reviewId}`)
+    return data
+  },
+
   syncFromMoleg: async (params?: { org?: string; sborg?: string; password?: string }) => {
     const headers = params?.password ? { 'X-Admin-Password': params.password } : {}
     const { data } = await api.post('/ordinances/sync', params || {}, { headers })

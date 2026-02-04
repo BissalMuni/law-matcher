@@ -19,7 +19,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<MainLayout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route index element={<Navigate to="/ordinances" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="ordinances" element={<OrdinanceList />} />
             <Route path="ordinances/:id" element={<OrdinanceDetail />} />
