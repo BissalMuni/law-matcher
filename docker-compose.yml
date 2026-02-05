@@ -7,16 +7,27 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://lawmatcher:lawmatcher@db:5432/lawmatcher
+      - DATABASE_URL=postgresql+asyncpg://lawmatcher:${POSTGRES_PASSWORD:-lawmatcher}@db:5432/lawmatcher
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - MOLEG_API_KEY=${MOLEG_API_KEY}
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./backend:/app/backend
     command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    networks:
+      - lawmatcher-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # Celery Worker
   worker:
@@ -24,16 +35,22 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      - DATABASE_URL=postgresql+asyncpg://lawmatcher:lawmatcher@db:5432/lawmatcher
+      - DATABASE_URL=postgresql+asyncpg://lawmatcher:${POSTGRES_PASSWORD:-lawmatcher}@db:5432/lawmatcher
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - MOLEG_API_KEY=${MOLEG_API_KEY}
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./backend:/app/backend
     command: celery -A backend.tasks worker -l info
+    restart: unless-stopped
+    networks:
+      - lawmatcher-network
 
   # Frontend
   frontend:
@@ -43,24 +60,36 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://backend:8000
+      - VITE_API_URL=http://localhost:8000
     depends_on:
       - backend
     volumes:
       - ./frontend/src:/app/src
     command: npm run dev -- --host
+    restart: unless-stopped
+    networks:
+      - lawmatcher-network
 
   # PostgreSQL Database
   db:
     image: postgres:15-alpine
     environment:
       - POSTGRES_USER=lawmatcher
-      - POSTGRES_PASSWORD=lawmatcher
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-lawmatcher}
       - POSTGRES_DB=lawmatcher
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - lawmatcher-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lawmatcher -d lawmatcher"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Redis
   redis:
@@ -69,7 +98,20 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - lawmatcher-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  lawmatcher-network:
+    driver: bridge

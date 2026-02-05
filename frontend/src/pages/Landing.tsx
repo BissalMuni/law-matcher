@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Button, Typography, Layout, Row, Col } from 'antd'
-import { LoginOutlined, UserAddOutlined, FileTextOutlined } from '@ant-design/icons'
+import { LoginOutlined, UserAddOutlined } from '@ant-design/icons'
+import logo from '../assets/logo.svg'
 
 const { Title, Paragraph } = Typography
 const { Content } = Layout
@@ -9,10 +10,19 @@ const Landing = () => {
   const navigate = useNavigate()
 
   return (
-    <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+    <Layout style={{ minHeight: '100vh', background: '#000' }}>
       <Content style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '50px' }}>
         <div style={{ textAlign: 'center', maxWidth: '800px' }}>
-          <FileTextOutlined style={{ fontSize: '80px', color: '#fff', marginBottom: '20px' }} />
+          <img
+            src={logo}
+            alt="OLM Logo"
+            style={{
+              width: '400px',
+              maxWidth: '90%',
+              marginBottom: '30px',
+              filter: 'drop-shadow(0 0 20px rgba(24, 144, 255, 0.3))'
+            }}
+          />
 
           <Title level={1} style={{ color: '#fff', fontSize: '48px', marginBottom: '20px' }}>
             자치법규 정비 시스템
@@ -33,8 +43,8 @@ const Landing = () => {
                   height: '50px',
                   fontSize: '18px',
                   padding: '0 40px',
-                  background: '#fff',
-                  color: '#667eea',
+                  background: '#1890ff',
+                  color: '#fff',
                   border: 'none',
                 }}
               >
@@ -51,8 +61,8 @@ const Landing = () => {
                   fontSize: '18px',
                   padding: '0 40px',
                   background: 'transparent',
-                  color: '#fff',
-                  borderColor: '#fff',
+                  color: '#52c41a',
+                  borderColor: '#52c41a',
                   borderWidth: '2px',
                 }}
               >
@@ -67,7 +77,7 @@ const Landing = () => {
             </Title>
             <Row gutter={24} style={{ marginTop: '20px' }}>
               <Col span={8}>
-                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.1)', borderRadius: '8px' }}>
+                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
                   <Title level={5} style={{ color: '#fff' }}>
                     상위법령 추적
                   </Title>
@@ -77,7 +87,7 @@ const Landing = () => {
                 </div>
               </Col>
               <Col span={8}>
-                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.1)', borderRadius: '8px' }}>
+                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
                   <Title level={5} style={{ color: '#fff' }}>
                     검토 의견 관리
                   </Title>
@@ -87,7 +97,7 @@ const Landing = () => {
                 </div>
               </Col>
               <Col span={8}>
-                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.1)', borderRadius: '8px' }}>
+                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
                   <Title level={5} style={{ color: '#fff' }}>
                     통계 대시보드
                   </Title>

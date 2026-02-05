@@ -16,6 +16,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // 개발 모드 체크: 환경변수 또는 쿼리 파라미터
+  const isDevBypass = () => {
+    const envBypass = import.meta.env.VITE_DEV_BYPASS_AUTH === 'true'
+    const urlParams = new URLSearchParams(window.location.search)
+    const queryBypass = urlParams.get('dev') === 'true'
+    return envBypass || queryBypass
+  }
+
   // Initialize auth state from localStorage
   useEffect(() => {
     const initAuth = async () => {
@@ -91,7 +99,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     register,
     logout,
-    isAuthenticated: !!user && !!token,
+    isAuthenticated: isDevBypass() || (!!user && !!token),
     isLoading,
   }
 

@@ -28,22 +28,24 @@ const Login = () => {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+    <Layout style={{ minHeight: '100vh', background: '#000' }}>
       <Content style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '50px' }}>
         <Card
           style={{
             width: '100%',
             maxWidth: '450px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            boxShadow: '0 4px 20px rgba(255,255,255,0.1)',
             borderRadius: '12px',
+            background: '#1a1a1a',
+            border: '1px solid rgba(255,255,255,0.1)',
           }}
         >
           <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-            <LoginOutlined style={{ fontSize: '48px', color: '#667eea', marginBottom: '16px' }} />
-            <Title level={2} style={{ marginBottom: '8px' }}>
+            <LoginOutlined style={{ fontSize: '48px', color: '#1890ff', marginBottom: '16px' }} />
+            <Title level={2} style={{ marginBottom: '8px', color: '#fff' }}>
               로그인
             </Title>
-            <Text type="secondary">자치법규 정비 시스템</Text>
+            <Text style={{ color: '#bfbfbf' }}>자치법규 정비 시스템</Text>
           </div>
 
           <Form name="login" onFinish={onFinish} layout="vertical" size="large">
@@ -80,16 +82,16 @@ const Login = () => {
           </Form>
 
           <div style={{ textAlign: 'center', marginTop: '20px' }}>
-            <Text type="secondary">
+            <Text style={{ color: '#bfbfbf' }}>
               계정이 없으신가요?{' '}
-              <Link to="/register" style={{ color: '#667eea', fontWeight: 500 }}>
+              <Link to="/register" style={{ color: '#52c41a', fontWeight: 500 }}>
                 회원가입
               </Link>
             </Text>
           </div>
 
           <div style={{ textAlign: 'center', marginTop: '16px' }}>
-            <Link to="/landing" style={{ color: '#8c8c8c' }}>
+            <Link to="/landing" style={{ color: '#1890ff' }}>
               <ArrowLeftOutlined /> 홈으로 돌아가기
             </Link>
           </div>
