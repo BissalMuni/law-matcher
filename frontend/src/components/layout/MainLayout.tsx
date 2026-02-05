@@ -143,7 +143,12 @@ export default function MainLayout() {
               />
               <span>
                 {user?.full_name || user?.username}
-                {user?.user_type === 'DEPARTMENT' && ' (부서)'}
+                {user?.user_type === 'DEPARTMENT' && user?.department_name && (
+                  <span style={{ color: '#888', fontSize: '13px' }}> ({user.department_name})</span>
+                )}
+                {user?.user_type === 'DEPARTMENT' && !user?.department_name && (
+                  <span style={{ color: '#888', fontSize: '13px' }}> (부서)</span>
+                )}
               </span>
               <DownOutlined style={{ fontSize: 12 }} />
             </Space>

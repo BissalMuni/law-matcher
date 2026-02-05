@@ -4,7 +4,7 @@ Authentication schemas
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
-from backend.schemas.user import UserResponse
+from backend.schemas.user import UserResponse, UserWithDepartmentResponse
 
 
 class RegisterRequest(BaseModel):
@@ -44,10 +44,10 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """JWT token response"""
+    """JWT token response with department info"""
     access_token: str
     token_type: str = "bearer"
-    user: UserResponse
+    user: UserWithDepartmentResponse
 
     class Config:
         json_schema_extra = {

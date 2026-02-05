@@ -50,10 +50,15 @@ async def register(
     # Create access token
     access_token = service.create_token(user)
 
+    # Build response with department info
+    user_data = UserResponse.model_validate(user).model_dump()
+    user_data['department_name'] = user.department.name if user.department else None
+    user_data['department_code'] = user.department.code if user.department else None
+
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        user=UserResponse.model_validate(user),
+        user=UserWithDepartmentResponse(**user_data),
     )
 
 
@@ -85,10 +90,15 @@ async def login(
     # Create access token
     access_token = service.create_token(user)
 
+    # Build response with department info
+    user_data = UserResponse.model_validate(user).model_dump()
+    user_data['department_name'] = user.department.name if user.department else None
+    user_data['department_code'] = user.department.code if user.department else None
+
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        user=UserResponse.model_validate(user),
+        user=UserWithDepartmentResponse(**user_data),
     )
 
 

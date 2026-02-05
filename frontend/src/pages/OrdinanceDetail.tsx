@@ -284,6 +284,7 @@ export default function OrdinanceDetail() {
       reviewForm.setFieldsValue({
         reviewer_type: user.user_type,
         reviewer_name: user.full_name || user.username,
+        reviewer_department: user.department_name || undefined,
       })
     }
 

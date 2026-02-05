@@ -9,6 +9,8 @@ export interface User {
   full_name: string | null
   user_type: 'DEPARTMENT' | 'GENERAL'
   department_id: number | null
+  department_name?: string | null
+  department_code?: string | null
   is_active: boolean
   created_at: string
   updated_at: string
