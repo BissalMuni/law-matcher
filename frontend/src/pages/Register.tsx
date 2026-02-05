@@ -18,7 +18,6 @@ interface Department {
 const Register = () => {
   const [loading, setLoading] = useState(false)
   const [departments, setDepartments] = useState<Department[]>([])
-  const [userType, setUserType] = useState<'GENERAL' | 'DEPARTMENT'>('GENERAL')
   const { register } = useAuth()
   const navigate = useNavigate()
   const [form] = Form.useForm()
@@ -44,8 +43,8 @@ const Register = () => {
         username: values.username,
         password: values.password,
         full_name: values.full_name,
-        user_type: values.user_type,
-        department_id: values.user_type === 'DEPARTMENT' ? values.department_id : undefined,
+        user_type: 'DEPARTMENT' as const,
+        department_id: values.department_id,
       }
 
       await register(registerData)
@@ -57,13 +56,6 @@ const Register = () => {
       message.error(errorMessage)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleUserTypeChange = (value: 'GENERAL' | 'DEPARTMENT') => {
-    setUserType(value)
-    if (value === 'GENERAL') {
-      form.setFieldValue('department_id', undefined)
     }
   }
 
@@ -86,7 +78,7 @@ const Register = () => {
             <Text type="secondary">자치법규 정비 시스템</Text>
           </div>
 
-          <Form form={form} name="register" onFinish={onFinish} layout="vertical" size="large" initialValues={{ user_type: 'GENERAL' }}>
+          <Form form={form} name="register" onFinish={onFinish} layout="vertical" size="large">
             <Form.Item
               name="email"
               rules={[
@@ -154,38 +146,25 @@ const Register = () => {
             </Form.Item>
 
             <Form.Item
-              name="user_type"
-              label="사용자 유형"
-              rules={[{ required: true, message: '사용자 유형을 선택하세요' }]}
+              name="department_id"
+              label="소속 부서"
+              rules={[{ required: true, message: '소속 부서를 선택하세요' }]}
             >
-              <Select placeholder="사용자 유형 선택" onChange={handleUserTypeChange}>
-                <Option value="GENERAL">일반 사용자</Option>
-                <Option value="DEPARTMENT">부서 담당자</Option>
+              <Select
+                placeholder="부서 선택"
+                showSearch
+                optionFilterProp="children"
+                filterOption={(input: string, option: { children?: unknown }) =>
+                  String(option?.children || '').toLowerCase().includes(input.toLowerCase())
+                }
+              >
+                {departments.map((dept: Department) => (
+                  <Option key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </Option>
+                ))}
               </Select>
             </Form.Item>
-
-            {userType === 'DEPARTMENT' && (
-              <Form.Item
-                name="department_id"
-                label="소속 부서"
-                rules={[{ required: true, message: '소속 부서를 선택하세요' }]}
-              >
-                <Select
-                  placeholder="부서 선택"
-                  showSearch
-                  optionFilterProp="children"
-                  filterOption={(input, option) =>
-                    (option?.children as unknown as string).toLowerCase().includes(input.toLowerCase())
-                  }
-                >
-                  {departments.map((dept) => (
-                    <Option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            )}
 
             <Form.Item>
               <Button type="primary" htmlType="submit" loading={loading} block>
