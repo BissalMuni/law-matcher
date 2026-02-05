@@ -235,6 +235,11 @@ export const departmentApi = {
     return data
   },
 
+  getTree: async () => {
+    const { data } = await api.get('/departments/tree')
+    return data
+  },
+
   getById: async (id: number) => {
     const { data } = await api.get(`/departments/${id}`)
     return data
@@ -250,6 +255,9 @@ export const departmentApi = {
     name: string
     parent_code?: string
     phone?: string
+    manager_name?: string
+    department_type?: string
+    sort_order?: number
   }) => {
     const { data } = await api.post('/departments', departmentData)
     return data
@@ -259,6 +267,9 @@ export const departmentApi = {
     name?: string
     parent_code?: string
     phone?: string
+    manager_name?: string
+    department_type?: string
+    sort_order?: number
   }) => {
     const { data } = await api.patch(`/departments/${id}`, updateData)
     return data

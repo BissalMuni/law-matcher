@@ -7,7 +7,7 @@ import {
   AlertOutlined,
   // CheckSquareOutlined,
   SyncOutlined,
-  // TeamOutlined,
+  TeamOutlined,
   BarChartOutlined,
   BookOutlined,
 } from '@ant-design/icons'
@@ -35,11 +35,11 @@ const menuItems = [
   //   icon: <CheckSquareOutlined />,
   //   label: '개정 검토',
   // },
-  // {
-  //   key: '/departments',
-  //   icon: <TeamOutlined />,
-  //   label: '부서별관리',
-  // },
+  {
+    key: '/departments',
+    icon: <TeamOutlined />,
+    label: '부서관리',
+  },
   {
     key: '/statistics',
     icon: <BarChartOutlined />,

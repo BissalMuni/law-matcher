@@ -305,3 +305,91 @@ class DepartmentService:
 
         output.seek(0)
         return output.getvalue()
+
+    async def get_tree(self) -> dict:
+        """Get departments as hierarchical tree grouped by type"""
+        # Fetch all departments ordered by sort_order
+        result = await self.db.execute(
+            select(Department).order_by(Department.sort_order)
+        )
+        all_depts = result.scalars().all()
+
+        # Separate by type
+        bureaus_and_specials = [d for d in all_depts if d.department_type in ('bureau', 'special')]
+        zones = [d for d in all_depts if d.department_type == 'zone']
+        departments = [d for d in all_depts if d.department_type == 'department']
+        neighborhoods = [d for d in all_depts if d.department_type == 'neighborhood']
+
+        # Build bureau tree with children
+        bureau_tree = []
+        for parent in bureaus_and_specials:
+            # Get children for this bureau
+            children_depts = [d for d in departments if d.parent_code == parent.code]
+
+            # Build children nodes with ordinance counts
+            children_nodes = []
+            for child in children_depts:
+                ordinance_count = await self.db.scalar(
+                    select(func.count()).where(Ordinance.department_id == child.id)
+                ) or 0
+
+                children_nodes.append({
+                    "id": child.id,
+                    "code": child.code,
+                    "name": child.name,
+                    "department_type": child.department_type,
+                    "manager_name": child.manager_name,
+                    "phone": child.phone,
+                    "sort_order": child.sort_order,
+                    "ordinance_count": ordinance_count,
+                    "children": []
+                })
+
+            # Parent ordinance count is sum of children
+            parent_ordinance_count = sum(c["ordinance_count"] for c in children_nodes)
+
+            bureau_tree.append({
+                "id": parent.id,
+                "code": parent.code,
+                "name": parent.name,
+                "department_type": parent.department_type,
+                "manager_name": parent.manager_name,
+                "phone": parent.phone,
+                "sort_order": parent.sort_order,
+                "ordinance_count": parent_ordinance_count,
+                "children": children_nodes
+            })
+
+        # Build zone tree
+        zone_tree = []
+        for zone in zones:
+            # Get neighborhood children
+            children_neighborhoods = [d for d in neighborhoods if d.parent_code == zone.code]
+
+            children_nodes = []
+            for child in children_neighborhoods:
+                children_nodes.append({
+                    "id": child.id,
+                    "code": child.code,
+                    "name": child.name,
+                    "department_type": child.department_type,
+                    "manager_name": child.manager_name,
+                    "phone": child.phone,
+                    "sort_order": child.sort_order,
+                    "ordinance_count": 0,  # Neighborhoods don't have ordinances
+                    "children": []
+                })
+
+            zone_tree.append({
+                "id": zone.id,
+                "code": zone.code,
+                "name": zone.name,
+                "department_type": zone.department_type,
+                "manager_name": zone.manager_name,
+                "phone": zone.phone,
+                "sort_order": zone.sort_order,
+                "ordinance_count": 0,
+                "children": children_nodes
+            })
+
+        return {"bureaus": bureau_tree, "zones": zone_tree}

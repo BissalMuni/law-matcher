@@ -96,6 +96,12 @@ export default function DepartmentDetail() {
               <Descriptions.Item label="부서명">
                 {department?.name}
               </Descriptions.Item>
+              <Descriptions.Item label="부서유형">
+                {department?.department_type || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="서무주임">
+                {department?.manager_name || '-'}
+              </Descriptions.Item>
               <Descriptions.Item label="연락처">
                 {department?.phone || '-'}
               </Descriptions.Item>
