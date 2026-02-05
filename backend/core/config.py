@@ -30,6 +30,18 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-change-this-in-production-min-32-chars"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes
+
+    # Email (SMTP)
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "자치법규 정비 시스템"
+
+    # Frontend URL (for password reset link)
+    FRONTEND_URL: str = "http://localhost:5173"
 
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]

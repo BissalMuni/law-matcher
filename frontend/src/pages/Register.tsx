@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Form, Input, Button, Card, Typography, message, Layout, Select } from 'antd'
-import { UserOutlined, LockOutlined, MailOutlined, UserAddOutlined, ArrowLeftOutlined, IdcardOutlined } from '@ant-design/icons'
+import { UserOutlined, LockOutlined, MailOutlined, UserAddOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import { departmentApi } from '../services/api'
 
@@ -42,7 +42,6 @@ const Register = () => {
         email: values.email,
         username: values.username,
         password: values.password,
-        full_name: values.full_name,
         user_type: 'DEPARTMENT' as const,
         department_id: values.department_id,
       }
@@ -80,16 +79,6 @@ const Register = () => {
 
           <Form form={form} name="register" onFinish={onFinish} layout="vertical" size="large">
             <Form.Item
-              name="email"
-              rules={[
-                { required: true, message: '이메일을 입력하세요' },
-                { type: 'email', message: '올바른 이메일 형식이 아닙니다' },
-              ]}
-            >
-              <Input prefix={<MailOutlined />} placeholder="이메일" autoComplete="email" />
-            </Form.Item>
-
-            <Form.Item
               name="username"
               rules={[
                 { required: true, message: '사용자명을 입력하세요' },
@@ -101,12 +90,13 @@ const Register = () => {
             </Form.Item>
 
             <Form.Item
-              name="full_name"
+              name="email"
               rules={[
-                { max: 100, message: '이름은 최대 100자까지 가능합니다' },
+                { required: true, message: '이메일을 입력하세요' },
+                { type: 'email', message: '올바른 이메일 형식이 아닙니다' },
               ]}
             >
-              <Input prefix={<IdcardOutlined />} placeholder="이름 (선택)" autoComplete="name" />
+              <Input prefix={<MailOutlined />} placeholder="이메일" autoComplete="email" />
             </Form.Item>
 
             <Form.Item

@@ -79,6 +79,12 @@ const Login = () => {
                 로그인
               </Button>
             </Form.Item>
+
+            <div style={{ textAlign: 'right', marginTop: '-10px', marginBottom: '10px' }}>
+              <Link to="/forgot-password" style={{ color: '#8c8c8c', fontSize: '14px' }}>
+                비밀번호를 잊으셨나요?
+              </Link>
+            </div>
           </Form>
 
           <div style={{ textAlign: 'center', marginTop: '20px' }}>

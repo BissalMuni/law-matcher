@@ -1,11 +1,14 @@
 """
 Authentication Service
 """
+import secrets
+from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
+import redis.asyncio as redis
 
 from backend.models.user import User
 from backend.core.security import (
@@ -14,6 +17,7 @@ from backend.core.security import (
     create_access_token,
 )
 from backend.core.exceptions import NotFoundError
+from backend.core.config import settings
 
 
 class AuthService:
@@ -190,3 +194,96 @@ class AuthService:
             "user_type": user.user_type,
         }
         return create_access_token(token_data)
+
+    async def create_password_reset_token(self, email: str) -> Optional[str]:
+        """
+        Create password reset token and store in Redis
+
+        Args:
+            email: User email
+
+        Returns:
+            Reset token if user exists, None otherwise
+        """
+        user = await self.get_by_email(email)
+        if not user:
+            return None
+
+        # Generate secure token
+        token = secrets.token_urlsafe(32)
+
+        # Store token in Redis with expiration
+        redis_client = redis.from_url(settings.REDIS_URL)
+        try:
+            key = f"password_reset:{token}"
+            await redis_client.setex(
+                key,
+                settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES * 60,
+                str(user.id)
+            )
+        finally:
+            await redis_client.close()
+
+        return token
+
+    async def verify_password_reset_token(self, token: str) -> Optional[int]:
+        """
+        Verify password reset token
+
+        Args:
+            token: Reset token
+
+        Returns:
+            User ID if token is valid, None otherwise
+        """
+        redis_client = redis.from_url(settings.REDIS_URL)
+        try:
+            key = f"password_reset:{token}"
+            user_id = await redis_client.get(key)
+            if user_id:
+                return int(user_id)
+            return None
+        finally:
+            await redis_client.close()
+
+    async def reset_password(self, token: str, new_password: str) -> User:
+        """
+        Reset user password using token
+
+        Args:
+            token: Password reset token
+            new_password: New password
+
+        Returns:
+            Updated user object
+
+        Raises:
+            HTTPException: If token is invalid or expired
+        """
+        user_id = await self.verify_password_reset_token(token)
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="유효하지 않거나 만료된 토큰입니다"
+            )
+
+        user = await self.get_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="사용자를 찾을 수 없습니다"
+            )
+
+        # Update password
+        user.hashed_password = get_password_hash(new_password)
+        await self.db.flush()
+        await self.db.refresh(user)
+
+        # Delete used token from Redis
+        redis_client = redis.from_url(settings.REDIS_URL)
+        try:
+            await redis_client.delete(f"password_reset:{token}")
+        finally:
+            await redis_client.close()
+
+        return user

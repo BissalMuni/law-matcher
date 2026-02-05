@@ -81,3 +81,34 @@ class PasswordChangeRequest(BaseModel):
                 "new_password": "NewSecurePass456!"
             }
         }
+
+
+class PasswordResetRequest(BaseModel):
+    """Password reset request (forgot password)"""
+    email: EmailStr
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "user@example.com"
+            }
+        }
+
+
+class PasswordResetConfirm(BaseModel):
+    """Password reset confirmation"""
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8, max_length=100)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "reset-token-string",
+                "new_password": "NewSecurePass456!"
+            }
+        }
+
+
+class MessageResponse(BaseModel):
+    """Simple message response"""
+    message: str

@@ -10,10 +10,14 @@ from backend.schemas.auth import (
     LoginRequest,
     TokenResponse,
     PasswordChangeRequest,
+    PasswordResetRequest,
+    PasswordResetConfirm,
+    MessageResponse,
 )
 from backend.schemas.user import UserResponse, UserWithDepartmentResponse
 from backend.services.auth_service import AuthService
 from backend.models.user import User
+from backend.utils.email import send_password_reset_email
 
 router = APIRouter()
 
@@ -145,3 +149,50 @@ async def change_password(
     await db.commit()
 
     return UserResponse.model_validate(user)
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+async def forgot_password(
+    data: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Request password reset email
+
+    - **email**: User email address
+
+    Sends a password reset link to the email if account exists.
+    Always returns success to prevent email enumeration.
+    """
+    service = AuthService(db)
+
+    # Create reset token
+    token = await service.create_password_reset_token(data.email)
+
+    # Send email if user exists
+    if token:
+        await send_password_reset_email(data.email, token)
+
+    # Always return success to prevent email enumeration
+    return MessageResponse(
+        message="비밀번호 재설정 링크가 이메일로 전송되었습니다. 이메일을 확인해주세요."
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    data: PasswordResetConfirm,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Reset password using token
+
+    - **token**: Password reset token from email
+    - **new_password**: New password (minimum 8 characters)
+    """
+    service = AuthService(db)
+
+    await service.reset_password(data.token, data.new_password)
+    await db.commit()
+
+    return MessageResponse(message="비밀번호가 성공적으로 변경되었습니다.")
