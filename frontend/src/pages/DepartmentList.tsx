@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Table,
   Input,
@@ -14,6 +13,8 @@ import {
   Form,
   message,
   Popconfirm,
+  Tabs,
+  Select,
 } from 'antd'
 import {
   PlusOutlined,
@@ -28,33 +29,34 @@ import { departmentApi } from '../services/api'
 const { Title } = Typography
 const { Search } = Input
 
-interface Department {
+interface DepartmentTreeNode {
   id: number
   code: string
   name: string
-  parent_code?: string
+  department_type?: string
+  manager_name?: string
   phone?: string
-  ordinance_count?: number
-  pending_review_count?: number
+  sort_order: number
+  ordinance_count: number
+  children: DepartmentTreeNode[]
+}
+
+interface DepartmentTreeResponse {
+  bureaus: DepartmentTreeNode[]
+  zones: DepartmentTreeNode[]
 }
 
 export default function DepartmentList() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingDepartment, setEditingDepartment] = useState<Department | null>(null)
+  const [editingDepartment, setEditingDepartment] = useState<DepartmentTreeNode | null>(null)
+  const [activeTab, setActiveTab] = useState('bureaus')
   const [form] = Form.useForm()
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['departments', page, search],
-    queryFn: () =>
-      departmentApi.getList({
-        page,
-        size: 20,
-        search: search || undefined,
-      }),
+  const { data: treeData, isLoading } = useQuery<DepartmentTreeResponse>({
+    queryKey: ['departments-tree'],
+    queryFn: () => departmentApi.getTree(),
   })
 
   const { data: summary } = useQuery({
@@ -66,7 +68,7 @@ export default function DepartmentList() {
     mutationFn: departmentApi.create,
     onSuccess: () => {
       message.success('부서가 추가되었습니다.')
-      queryClient.invalidateQueries({ queryKey: ['departments'] })
+      queryClient.invalidateQueries({ queryKey: ['departments-tree'] })
       queryClient.invalidateQueries({ queryKey: ['departments-summary'] })
       handleModalClose()
     },
@@ -80,7 +82,7 @@ export default function DepartmentList() {
       departmentApi.update(id, data),
     onSuccess: () => {
       message.success('부서 정보가 수정되었습니다.')
-      queryClient.invalidateQueries({ queryKey: ['departments'] })
+      queryClient.invalidateQueries({ queryKey: ['departments-tree'] })
       handleModalClose()
     },
     onError: () => {
@@ -92,7 +94,7 @@ export default function DepartmentList() {
     mutationFn: departmentApi.delete,
     onSuccess: () => {
       message.success('부서가 삭제되었습니다.')
-      queryClient.invalidateQueries({ queryKey: ['departments'] })
+      queryClient.invalidateQueries({ queryKey: ['departments-tree'] })
       queryClient.invalidateQueries({ queryKey: ['departments-summary'] })
     },
     onError: () => {
@@ -106,7 +108,7 @@ export default function DepartmentList() {
     form.resetFields()
   }
 
-  const handleEdit = (department: Department) => {
+  const handleEdit = (department: DepartmentTreeNode) => {
     setEditingDepartment(department)
     form.setFieldsValue(department)
     setIsModalOpen(true)
@@ -121,41 +123,84 @@ export default function DepartmentList() {
   }
 
   const totalOrdinances = summary?.reduce(
-    (sum: number, d: Department) => sum + (d.ordinance_count || 0),
+    (sum: number, d: any) => sum + (d.ordinance_count || 0),
     0
   ) || 0
 
   const totalPendingReviews = summary?.reduce(
-    (sum: number, d: Department) => sum + (d.pending_review_count || 0),
+    (sum: number, d: any) => sum + (d.pending_review_count || 0),
     0
   ) || 0
 
-  const columns = [
+  // Filter tree based on search
+  const filterTree = (nodes: DepartmentTreeNode[]): DepartmentTreeNode[] => {
+    if (!search) return nodes
+
+    return nodes.map(node => {
+      const matchesSearch = node.name.toLowerCase().includes(search.toLowerCase()) ||
+                           (node.manager_name && node.manager_name.toLowerCase().includes(search.toLowerCase()))
+      const filteredChildren = node.children.filter(child =>
+        child.name.toLowerCase().includes(search.toLowerCase()) ||
+        (child.manager_name && child.manager_name.toLowerCase().includes(search.toLowerCase()))
+      )
+
+      if (matchesSearch || filteredChildren.length > 0) {
+        return { ...node, children: filteredChildren }
+      }
+      return null
+    }).filter(Boolean) as DepartmentTreeNode[]
+  }
+
+  const filteredBureaus = filterTree(treeData?.bureaus || [])
+  const filteredZones = filterTree(treeData?.zones || [])
+
+  // Get parent departments for dropdown
+  const parentBureaus = treeData?.bureaus || []
+  const parentZones = treeData?.zones || []
+
+  // Bureau/Department columns
+  let bureauRowIndex = 0
+  const bureauColumns = [
     {
-      title: '부서코드',
-      dataIndex: 'code',
-      key: 'code',
-      width: 120,
+      title: '연번',
+      key: 'index',
+      width: 80,
+      align: 'center' as const,
+      render: (_: any, record: DepartmentTreeNode) => {
+        if (record.department_type === 'bureau') return ''
+        bureauRowIndex++
+        return bureauRowIndex
+      },
     },
     {
       title: '부서명',
       dataIndex: 'name',
       key: 'name',
-      render: (text: string, record: Department) => (
-        <a onClick={() => navigate(`/departments/${record.id}`)}>{text}</a>
+      render: (text: string, record: DepartmentTreeNode) => (
+        <span style={{ fontWeight: record.department_type === 'bureau' ? 'bold' : 'normal' }}>
+          {text}
+        </span>
       ),
+    },
+    {
+      title: '서무주임',
+      dataIndex: 'manager_name',
+      key: 'manager_name',
+      width: 120,
+      render: (text: string) => text || '-',
     },
     {
       title: '연락처',
       dataIndex: 'phone',
       key: 'phone',
       width: 150,
+      render: (text: string) => text || '-',
     },
     {
-      title: '소관 자치법규',
+      title: '소관법규',
       dataIndex: 'ordinance_count',
       key: 'ordinance_count',
-      width: 120,
+      width: 100,
       align: 'center' as const,
       render: (count: number) => count || 0,
     },
@@ -163,7 +208,7 @@ export default function DepartmentList() {
       title: '작업',
       key: 'action',
       width: 120,
-      render: (_: any, record: Department) => (
+      render: (_: any, record: DepartmentTreeNode) => (
         <Space>
           <Button
             type="text"
@@ -184,16 +229,83 @@ export default function DepartmentList() {
     },
   ]
 
+  // Zone/Neighborhood columns
+  let zoneRowIndex = 0
+  const zoneColumns = [
+    {
+      title: '연번',
+      key: 'index',
+      width: 80,
+      align: 'center' as const,
+      render: (_: any, record: DepartmentTreeNode) => {
+        if (record.department_type === 'zone') return ''
+        zoneRowIndex++
+        return zoneRowIndex
+      },
+    },
+    {
+      title: '동명',
+      dataIndex: 'name',
+      key: 'name',
+      render: (text: string, record: DepartmentTreeNode) => (
+        <span style={{ fontWeight: record.department_type === 'zone' ? 'bold' : 'normal' }}>
+          {text}
+        </span>
+      ),
+    },
+    {
+      title: '서무주임',
+      dataIndex: 'manager_name',
+      key: 'manager_name',
+      width: 120,
+      render: (text: string) => text || '-',
+    },
+    {
+      title: '연락처',
+      dataIndex: 'phone',
+      key: 'phone',
+      width: 150,
+      render: (text: string) => text || '-',
+    },
+    {
+      title: '작업',
+      key: 'action',
+      width: 120,
+      render: (_: any, record: DepartmentTreeNode) => (
+        <Space>
+          <Button
+            type="text"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          />
+          <Popconfirm
+            title="동 삭제"
+            description="이 동을 삭제하시겠습니까?"
+            onConfirm={() => deleteMutation.mutate(record.id)}
+            okText="삭제"
+            cancelText="취소"
+          >
+            <Button type="text" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
+
+  // Reset row counters when rendering
+  bureauRowIndex = 0
+  zoneRowIndex = 0
+
   return (
     <div>
-      <Title level={4}>부서별관리</Title>
+      <Title level={4}>부서(동) 서무주임 현황</Title>
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={8}>
           <Card>
             <Statistic
               title="전체 부서"
-              value={data?.total || 0}
+              value={summary?.length || 0}
               suffix="개"
             />
           </Card>
@@ -223,8 +335,9 @@ export default function DepartmentList() {
 
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
         <Search
-          placeholder="부서명 검색"
+          placeholder="부서명 또는 서무주임 검색"
           onSearch={setSearch}
+          onChange={(e) => setSearch(e.target.value)}
           style={{ width: 300 }}
           allowClear
         />
@@ -237,18 +350,49 @@ export default function DepartmentList() {
         </Button>
       </Space>
 
-      <Table
-        columns={columns}
-        dataSource={data?.items || []}
-        rowKey="id"
-        loading={isLoading}
-        pagination={{
-          current: page,
-          total: data?.total || 0,
-          pageSize: 20,
-          onChange: setPage,
-          showTotal: (total) => `총 ${total}건`,
-        }}
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          {
+            key: 'bureaus',
+            label: '국/과',
+            children: (
+              <Table
+                columns={bureauColumns}
+                dataSource={filteredBureaus}
+                rowKey="id"
+                loading={isLoading}
+                pagination={false}
+                expandable={{
+                  defaultExpandAllRows: true,
+                }}
+                rowClassName={(record) =>
+                  record.department_type === 'bureau' ? 'group-header-row' : ''
+                }
+              />
+            ),
+          },
+          {
+            key: 'zones',
+            label: '권역/동',
+            children: (
+              <Table
+                columns={zoneColumns}
+                dataSource={filteredZones}
+                rowKey="id"
+                loading={isLoading}
+                pagination={false}
+                expandable={{
+                  defaultExpandAllRows: true,
+                }}
+                rowClassName={(record) =>
+                  record.department_type === 'zone' ? 'group-header-row' : ''
+                }
+              />
+            ),
+          },
+        ]}
       />
 
       <Modal
@@ -257,6 +401,7 @@ export default function DepartmentList() {
         onCancel={handleModalClose}
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending || updateMutation.isPending}
+        width={600}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item
@@ -273,14 +418,53 @@ export default function DepartmentList() {
           >
             <Input />
           </Form.Item>
-          <Form.Item name="parent_code" label="상위부서코드">
-            <Input />
+          <Form.Item name="parent_code" label="상위부서">
+            <Select placeholder="상위부서 선택" allowClear>
+              <Select.OptGroup label="국/단/소">
+                {parentBureaus.map((b) => (
+                  <Select.Option key={b.code} value={b.code}>
+                    {b.name}
+                  </Select.Option>
+                ))}
+              </Select.OptGroup>
+              <Select.OptGroup label="권역">
+                {parentZones.map((z) => (
+                  <Select.Option key={z.code} value={z.code}>
+                    {z.name}
+                  </Select.Option>
+                ))}
+              </Select.OptGroup>
+            </Select>
+          </Form.Item>
+          <Form.Item name="department_type" label="부서유형">
+            <Select placeholder="부서유형 선택">
+              <Select.Option value="bureau">국/단/소</Select.Option>
+              <Select.Option value="department">과</Select.Option>
+              <Select.Option value="zone">권역</Select.Option>
+              <Select.Option value="neighborhood">동</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="manager_name" label="서무주임 성명">
+            <Input placeholder="성명 입력" />
           </Form.Item>
           <Form.Item name="phone" label="연락처">
-            <Input />
+            <Input placeholder="연락처 입력" />
+          </Form.Item>
+          <Form.Item name="sort_order" label="정렬순서">
+            <Input type="number" placeholder="10, 20, 30..." />
           </Form.Item>
         </Form>
       </Modal>
+
+      <style>{`
+        .group-header-row {
+          background-color: #fafafa;
+          font-weight: bold;
+        }
+        .group-header-row:hover {
+          background-color: #f0f0f0 !important;
+        }
+      `}</style>
     </div>
   )
 }

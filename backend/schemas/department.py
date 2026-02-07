@@ -12,6 +12,9 @@ class DepartmentBase(BaseModel):
     name: str
     parent_code: Optional[str] = None
     phone: Optional[str] = None
+    manager_name: Optional[str] = None
+    department_type: Optional[str] = None
+    sort_order: Optional[int] = 0
 
 
 class DepartmentCreate(DepartmentBase):
@@ -24,6 +27,9 @@ class DepartmentUpdate(BaseModel):
     name: Optional[str] = None
     parent_code: Optional[str] = None
     phone: Optional[str] = None
+    manager_name: Optional[str] = None
+    department_type: Optional[str] = None
+    sort_order: Optional[int] = None
 
 
 class DepartmentResponse(DepartmentBase):
@@ -77,3 +83,25 @@ class DepartmentInputStatsResponse(BaseModel):
     total_without_laws: int
     overall_progress_rate: float
     departments: List[DepartmentInputStats]
+
+
+class DepartmentTreeNode(BaseModel):
+    """Department node in tree structure"""
+    id: int
+    code: str
+    name: str
+    department_type: Optional[str] = None
+    manager_name: Optional[str] = None
+    phone: Optional[str] = None
+    sort_order: int = 0
+    ordinance_count: int = 0
+    children: List["DepartmentTreeNode"] = []
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentTreeResponse(BaseModel):
+    """Grouped tree response for hierarchical department view"""
+    bureaus: List[DepartmentTreeNode]  # 국/과 hierarchy
+    zones: List[DepartmentTreeNode]    # 권역/동 hierarchy

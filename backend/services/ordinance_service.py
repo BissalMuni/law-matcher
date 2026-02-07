@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.models.ordinance import Ordinance
+from backend.models.department import Department
 from backend.models.law import Law
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.models.ordinance_review import OrdinanceReview
@@ -253,17 +254,19 @@ class OrdinanceService:
             return {"success": True, "message": "상위법령 없음 설정이 해제되었습니다."}
 
     async def get_departments(self) -> List[dict]:
-        """Get unique department list with count"""
+        """Get unique department list with count, ordered by sort_order"""
         result = await self.db.execute(
             select(
                 Ordinance.department,
-                func.count(Ordinance.id).label('count')
+                func.count(Ordinance.id).label('count'),
+                func.coalesce(Department.sort_order, 9999).label('sort_order')
             )
+            .outerjoin(Department, Ordinance.department == Department.name)
             .where(Ordinance.status == "ACTIVE")
             .where(Ordinance.department.isnot(None))
             .where(Ordinance.department != '')
-            .group_by(Ordinance.department)
-            .order_by(Ordinance.department)
+            .group_by(Ordinance.department, Department.sort_order)
+            .order_by(func.coalesce(Department.sort_order, 9999), Ordinance.department)
         )
         rows = result.all()
         return [{"name": row[0], "count": row[1]} for row in rows]
@@ -521,6 +524,9 @@ class OrdinanceService:
                     pass
 
             if existing:
+                # EXCLUDED 상태인 조례는 스킵
+                if existing.status == "EXCLUDED":
+                    continue
                 # 업데이트
                 existing.name = ordin_data.get('자치법규명', existing.name)
                 existing.category = ordin_data.get('자치법규종류', existing.category)
@@ -627,6 +633,7 @@ class OrdinanceService:
 
         updated = 0
         not_found = 0
+        excluded = 0
 
         for _, row in df.iterrows():
             name = normalize_text(str(row.get('법규명', '')))
@@ -649,18 +656,24 @@ class OrdinanceService:
 
             if ordinance:
                 ordinance.department = department
+                # 의회사무국 소속 조례는 자동 EXCLUDED 처리
+                if department == "의회사무국":
+                    ordinance.status = "EXCLUDED"
+                    excluded += 1
                 updated += 1
             else:
                 not_found += 1
 
         await self.db.commit()
 
+        excluded_msg = f", {excluded}건 제외(의회사무국)" if excluded else ""
         return {
             "success": True,
             "total_rows": len(df),
             "updated": updated,
             "not_found": not_found,
-            "message": f"엑셀 업로드 완료: {updated}건 업데이트, {not_found}건 미발견",
+            "excluded": excluded,
+            "message": f"엑셀 업로드 완료: {updated}건 업데이트, {not_found}건 미발견{excluded_msg}",
         }
 
     # ========== 조례-법령 매핑 CRUD (새 구조) ==========

@@ -35,6 +35,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   ArrowLeftOutlined,
+  SearchOutlined,
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { lawChangesApi, lawSearchApi, lawsApi, ordinanceApi } from '../services/api'
@@ -996,12 +997,22 @@ export default function LawChangeList() {
                 label: `${d.sync_date} (${d.pending}/${d.total})`,
               })) || []}
             />
-            <Input.Search
-              placeholder="법령명 검색"
-              style={{ width: 200 }}
-              allowClear
-              onSearch={setSearch}
-            />
+            <Space.Compact>
+              <Input
+                placeholder="법령명 검색"
+                style={{ width: 200 }}
+                allowClear
+                onPressEnter={(e) => setSearch((e.target as HTMLInputElement).value)}
+                onChange={(e) => !e.target.value && setSearch('')}
+              />
+              <Button
+                icon={<SearchOutlined />}
+                onClick={() => {
+                  const input = document.querySelector('input[placeholder="법령명 검색"]') as HTMLInputElement
+                  if (input) setSearch(input.value)
+                }}
+              />
+            </Space.Compact>
             <Select
               placeholder="처리 상태"
               style={{ width: 120 }}

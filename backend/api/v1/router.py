@@ -60,3 +60,9 @@ api_router.include_router(
     prefix="/law-changes",
     tags=["law-changes"]
 )
+
+api_router.include_router(
+    admin.router,
+    prefix="/admin",
+    tags=["admin"]
+)

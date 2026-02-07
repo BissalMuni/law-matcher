@@ -319,13 +319,17 @@ export default function OrdinanceDetail() {
       key: 'law_name',
       render: (text: string, record: ParentLaw) => (
         <Space>
-          <a onClick={() => handleLawNameClick(record)}>{text}</a>
           <a
             href={`https://www.law.go.kr/법령/${encodeURIComponent(record.law_name)}`}
             target="_blank"
             rel="noopener noreferrer"
             title="법제처에서 보기"
-            onClick={(e) => e.stopPropagation()}
+          >
+            {text}
+          </a>
+          <a
+            onClick={() => handleLawNameClick(record)}
+            title="연계 자치법규 보기"
           >
             <LinkOutlined style={{ color: '#1890ff' }} />
           </a>

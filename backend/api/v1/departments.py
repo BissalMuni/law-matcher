@@ -16,6 +16,7 @@ from backend.schemas.department import (
     DepartmentUpdate,
     DepartmentSummary,
     DepartmentInputStatsResponse,
+    DepartmentTreeResponse,
 )
 from backend.schemas.ordinance import OrdinanceListResponse
 from backend.services.department_service import DepartmentService
@@ -60,6 +61,15 @@ async def get_input_statistics(
     """Get department-wise parent law input statistics"""
     service = DepartmentService(db)
     return await service.get_input_statistics()
+
+
+@router.get("/tree", response_model=DepartmentTreeResponse)
+async def get_department_tree(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get departments as hierarchical tree (bureaus/zones with children)"""
+    service = DepartmentService(db)
+    return await service.get_tree()
 
 
 @router.get("/{department_id}", response_model=DepartmentResponse)
