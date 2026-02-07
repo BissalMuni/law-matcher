@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { RevisionNeededListResponse } from '../types/api'
+import { LoginRequest, RegisterRequest, TokenResponse, User, PasswordChangeRequest } from '../types/auth'
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -7,6 +8,76 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+// JWT Token Interceptor
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('law_matcher_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// Response Interceptor for handling 401 errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear auth data and redirect to login
+      localStorage.removeItem('law_matcher_token')
+      localStorage.removeItem('law_matcher_user')
+
+      // Only redirect if not already on login/register page
+      if (!window.location.pathname.startsWith('/login') &&
+          !window.location.pathname.startsWith('/register') &&
+          !window.location.pathname.startsWith('/landing')) {
+        window.location.href = '/login'
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
+// Auth API
+export const authApi = {
+  login: async (data: LoginRequest): Promise<TokenResponse> => {
+    const response = await api.post('/auth/login', data)
+    return response.data
+  },
+
+  register: async (data: RegisterRequest): Promise<TokenResponse> => {
+    const response = await api.post('/auth/register', data)
+    return response.data
+  },
+
+  me: async (): Promise<User> => {
+    const response = await api.get('/auth/me')
+    return response.data
+  },
+
+  changePassword: async (data: PasswordChangeRequest): Promise<User> => {
+    const response = await api.post('/auth/change-password', data)
+    return response.data
+  },
+
+  forgotPassword: async (email: string): Promise<{ message: string }> => {
+    const response = await api.post('/auth/forgot-password', { email })
+    return response.data
+  },
+
+  resetPassword: async (token: string, newPassword: string): Promise<{ message: string }> => {
+    const response = await api.post('/auth/reset-password', {
+      token,
+      new_password: newPassword,
+    })
+    return response.data
+  },
+}
 
 // Ordinance API
 export const ordinanceApi = {

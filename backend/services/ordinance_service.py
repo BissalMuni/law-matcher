@@ -11,6 +11,7 @@ from typing import Optional, List
 from fastapi import UploadFile
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.models.ordinance import Ordinance
 from backend.models.department import Department
@@ -1060,6 +1061,10 @@ class OrdinanceService:
 
         stmt = (
             select(OrdinanceReview)
+            .options(
+                selectinload(OrdinanceReview.created_by),
+                selectinload(OrdinanceReview.updated_by),
+            )
             .where(OrdinanceReview.ordinance_id == ordinance_id)
             .order_by(OrdinanceReview.created_at.desc())
         )
@@ -1070,6 +1075,7 @@ class OrdinanceService:
         self,
         ordinance_id: int,
         data: OrdinanceReviewCreate,
+        user_id: int,
     ) -> OrdinanceReview:
         """조례 검토이력 추가"""
         await self.get_by_id(ordinance_id)  # 조례 존재 확인
@@ -1081,6 +1087,7 @@ class OrdinanceService:
             reviewer_department=data.reviewer_department,
             review_content=data.review_content,
             review_result=data.review_result,
+            created_by_id=user_id,
         )
         self.db.add(review)
         await self.db.commit()
@@ -1091,6 +1098,7 @@ class OrdinanceService:
         self,
         review_id: int,
         data: OrdinanceReviewUpdate,
+        user_id: int,
     ) -> OrdinanceReview:
         """조례 검토이력 수정"""
         result = await self.db.execute(
@@ -1108,6 +1116,9 @@ class OrdinanceService:
             review.review_content = data.review_content
         if data.review_result is not None:
             review.review_result = data.review_result
+
+        # Set updated_by_id
+        review.updated_by_id = user_id
 
         await self.db.commit()
         await self.db.refresh(review)

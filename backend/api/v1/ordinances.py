@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_db, verify_admin_password
+from backend.api.deps import get_db, verify_admin_password, get_current_user
+from backend.models.user import User
 from backend.schemas.ordinance import (
     OrdinanceResponse,
     OrdinanceListResponse,
@@ -559,11 +560,12 @@ async def create_ordinance_review(
     ordinance_id: int,
     data: OrdinanceReviewCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """조례 검토이력 추가"""
     service = OrdinanceService(db)
     try:
-        review = await service.create_review(ordinance_id, data)
+        review = await service.create_review(ordinance_id, data, current_user.id)
         return review
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -574,11 +576,26 @@ async def update_ordinance_review(
     review_id: int,
     data: OrdinanceReviewUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """조례 검토이력 수정"""
+    """조례 검토이력 수정 (본인 작성 의견만 수정 가능)"""
+    from sqlalchemy import select
+    from backend.models.ordinance_review import OrdinanceReview
+
+    # Check if review exists and user is the owner
+    result = await db.execute(
+        select(OrdinanceReview).where(OrdinanceReview.id == review_id)
+    )
+    review = result.scalar_one_or_none()
+    if not review:
+        raise HTTPException(status_code=404, detail="검토이력을 찾을 수 없습니다.")
+
+    if review.created_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인이 작성한 검토이력만 수정할 수 있습니다.")
+
     service = OrdinanceService(db)
     try:
-        review = await service.update_review(review_id, data)
+        review = await service.update_review(review_id, data, current_user.id)
         return review
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -588,8 +605,23 @@ async def update_ordinance_review(
 async def delete_ordinance_review(
     review_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """조례 검토이력 삭제"""
+    """조례 검토이력 삭제 (본인 작성 의견만 삭제 가능)"""
+    from sqlalchemy import select
+    from backend.models.ordinance_review import OrdinanceReview
+
+    # Check if review exists and user is the owner
+    result = await db.execute(
+        select(OrdinanceReview).where(OrdinanceReview.id == review_id)
+    )
+    review = result.scalar_one_or_none()
+    if not review:
+        raise HTTPException(status_code=404, detail="검토이력을 찾을 수 없습니다.")
+
+    if review.created_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인이 작성한 검토이력만 삭제할 수 있습니다.")
+
     service = OrdinanceService(db)
     try:
         await service.delete_review(review_id)

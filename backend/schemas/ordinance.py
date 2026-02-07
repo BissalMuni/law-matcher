@@ -5,6 +5,8 @@ from typing import Optional, List
 from datetime import date, datetime
 from pydantic import BaseModel
 
+from backend.schemas.user import UserBriefResponse
+
 
 class OrdinanceBase(BaseModel):
     """Ordinance base schema"""
@@ -384,6 +386,8 @@ class OrdinanceReviewResponse(OrdinanceReviewBase):
     """자치법규 검토이력 응답"""
     id: int
     ordinance_id: int
+    created_by: Optional[UserBriefResponse] = None
+    updated_by: Optional[UserBriefResponse] = None
     created_at: datetime
     updated_at: datetime
 

@@ -10,6 +10,7 @@ from backend.core.database import Base
 
 if TYPE_CHECKING:
     from backend.models.ordinance import Ordinance
+    from backend.models.user import User
 
 
 class OrdinanceReview(Base):
@@ -30,6 +31,14 @@ class OrdinanceReview(Base):
     review_content: Mapped[str] = mapped_column(Text, nullable=False)  # 검토의견
     review_result: Mapped[Optional[str]] = mapped_column(String(50))  # 검토결과: 개정필요/개정불필요/검토중/보류
 
+    # 작성자 및 수정자 추적 (User FK)
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    updated_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL")
+    )
+
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -38,6 +47,12 @@ class OrdinanceReview(Base):
 
     # Relationships
     ordinance: Mapped["Ordinance"] = relationship(back_populates="ordinance_reviews")
+    created_by: Mapped[Optional["User"]] = relationship(
+        back_populates="created_reviews", foreign_keys=[created_by_id]
+    )
+    updated_by: Mapped[Optional["User"]] = relationship(
+        back_populates="updated_reviews", foreign_keys=[updated_by_id]
+    )
 
     def __repr__(self) -> str:
         return f"<OrdinanceReview(id={self.id}, ordinance_id={self.ordinance_id}, reviewer_type={self.reviewer_type})>"
