@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
     class Config:
-        env_file = ".env", "../.env"  # backend/.env 또는 루트/.env
+        env_file = "../.env"  # 루트/.env 사용
         case_sensitive = True
         extra = "ignore"  # VITE_ 등 정의되지 않은 변수 무시
 
