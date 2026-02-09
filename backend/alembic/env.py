@@ -6,8 +6,8 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-# Add backend directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add project root to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from backend.core.config import settings
 from backend.core.database import Base
