@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { Button, Typography, Layout, Row, Col } from 'antd'
-import { LoginOutlined, UserAddOutlined } from '@ant-design/icons'
+import { CrownOutlined, TeamOutlined } from '@ant-design/icons'
 import logo from '../assets/logo.svg'
 
 const { Title, Paragraph } = Typography
@@ -37,8 +37,8 @@ const Landing = () => {
               <Button
                 type="primary"
                 size="large"
-                icon={<LoginOutlined />}
-                onClick={() => navigate('/login')}
+                icon={<TeamOutlined />}
+                onClick={() => navigate('/login?type=user')}
                 style={{
                   height: '50px',
                   fontSize: '18px',
@@ -48,25 +48,24 @@ const Landing = () => {
                   border: 'none',
                 }}
               >
-                로그인
+                부서 로그인
               </Button>
             </Col>
             <Col>
               <Button
                 size="large"
-                icon={<UserAddOutlined />}
-                onClick={() => navigate('/register')}
+                icon={<CrownOutlined />}
+                onClick={() => navigate('/login?type=admin')}
                 style={{
                   height: '50px',
                   fontSize: '18px',
                   padding: '0 40px',
-                  background: 'transparent',
-                  color: '#52c41a',
-                  borderColor: '#52c41a',
-                  borderWidth: '2px',
+                  background: '#722ed1',
+                  color: '#fff',
+                  border: 'none',
                 }}
               >
-                회원가입
+                관리자 로그인
               </Button>
             </Col>
           </Row>

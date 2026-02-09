@@ -18,7 +18,7 @@ import {
   Tag,
   Timeline,
 } from 'antd'
-import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, LinkOutlined, UserOutlined, BankOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, LinkOutlined, UserOutlined, BankOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ordinanceApi, lawsApi } from '../services/api'
 import dayjs from 'dayjs'
@@ -55,6 +55,10 @@ interface OrdinanceReview {
   review_result?: string
   created_by?: UserBrief | null
   updated_by?: UserBrief | null
+  approval_status?: string  // "pending" | "approved" | "rejected"
+  approved_by?: UserBrief | null
+  approved_at?: string
+  approval_note?: string
   created_at: string
   updated_at: string
 }
@@ -225,6 +229,22 @@ export default function OrdinanceDetail() {
     },
   })
 
+  // 검토의견 승인/반려 mutation
+  const approveReviewMutation = useMutation({
+    mutationFn: ({ reviewId, approval_status, approval_note }: {
+      reviewId: number
+      approval_status: string
+      approval_note?: string
+    }) => ordinanceApi.approveReview(reviewId, { approval_status, approval_note }),
+    onSuccess: (_, variables) => {
+      message.success(variables.approval_status === 'approved' ? '승인되었습니다.' : '반려되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id, 'reviews'] })
+    },
+    onError: () => {
+      message.error('처리에 실패했습니다.')
+    },
+  })
+
   const handleModalClose = () => {
     setIsModalOpen(false)
     setEditingParentLaw(null)
@@ -280,9 +300,10 @@ export default function OrdinanceDetail() {
     reviewForm.resetFields()
 
     // 로그인한 사용자 정보로 자동 입력
+    // ADMIN -> GENERAL (구청 총괄), USER -> DEPARTMENT (부서 담당자)
     if (user) {
       reviewForm.setFieldsValue({
-        reviewer_type: user.user_type,
+        reviewer_type: user.user_type === 'ADMIN' ? 'GENERAL' : 'DEPARTMENT',
         reviewer_name: user.full_name || user.username,
         reviewer_department: user.department_name || undefined,
       })
@@ -479,7 +500,7 @@ export default function OrdinanceDetail() {
               children: (
                 <div key={review.id}>
                   <div style={{ marginBottom: 8 }}>
-                    <Space>
+                    <Space wrap>
                       <Tag color={review.reviewer_type === 'GENERAL' ? 'blue' : 'green'}>
                         {review.reviewer_type === 'GENERAL' ? '구청 총괄' : '부서 담당자'}
                       </Tag>
@@ -487,6 +508,15 @@ export default function OrdinanceDetail() {
                         <Tag color={reviewResultColor[review.review_result] || 'default'}>
                           {review.review_result}
                         </Tag>
+                      )}
+                      {review.approval_status === 'approved' && (
+                        <Tag color="success" icon={<CheckCircleOutlined />}>승인됨</Tag>
+                      )}
+                      {review.approval_status === 'rejected' && (
+                        <Tag color="error" icon={<CloseCircleOutlined />}>반려됨</Tag>
+                      )}
+                      {(!review.approval_status || review.approval_status === 'pending') && (
+                        <Tag color="warning">승인대기</Tag>
                       )}
                       <span style={{ color: '#666', fontSize: 13 }}>
                         <UserOutlined style={{ marginRight: 4 }} />
@@ -504,7 +534,17 @@ export default function OrdinanceDetail() {
                     </Space>
                   </div>
                   <div style={{ marginBottom: 8 }}>{review.review_content}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  {review.approval_note && (
+                    <div style={{ marginBottom: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: 12 }}>
+                      <strong>{review.approval_status === 'approved' ? '승인' : '반려'} 사유:</strong> {review.approval_note}
+                      {review.approved_by && (
+                        <span style={{ marginLeft: 8, color: '#999' }}>
+                          ({review.approved_by.full_name || review.approved_by.username}, {review.approved_at && new Date(review.approved_at).toLocaleString()})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                     <span style={{ color: '#999', fontSize: 12 }}>
                       작성: {new Date(review.created_at).toLocaleString()}
                       {review.updated_at !== review.created_at && review.updated_by && (
@@ -514,21 +554,56 @@ export default function OrdinanceDetail() {
                         </span>
                       )}
                     </span>
-                    {/* 본인 작성 의견만 수정/삭제 가능 */}
-                    {user && review.created_by?.id === user.id && (
-                      <Space size="small">
-                        <Button type="text" size="small" icon={<EditOutlined />} onClick={() => handleEditReview(review)} />
-                        <Popconfirm
-                          title="삭제 확인"
-                          description="이 검토의견을 삭제하시겠습니까?"
-                          onConfirm={() => deleteReviewMutation.mutate(review.id)}
-                          okText="삭제"
-                          cancelText="취소"
-                        >
-                          <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-                        </Popconfirm>
-                      </Space>
-                    )}
+                    <Space size="small">
+                      {user?.user_type === 'ADMIN' && (!review.approval_status || review.approval_status === 'pending') && (
+                        <>
+                          <Popconfirm
+                            title="검토의견 승인"
+                            description="이 검토의견을 승인하시겠습니까?"
+                            onConfirm={() => approveReviewMutation.mutate({
+                              reviewId: review.id,
+                              approval_status: 'approved',
+                            })}
+                            okText="승인"
+                            cancelText="취소"
+                          >
+                            <Button type="primary" size="small" icon={<CheckCircleOutlined />}>
+                              승인
+                            </Button>
+                          </Popconfirm>
+                          <Popconfirm
+                            title="검토의견 반려"
+                            description="이 검토의견을 반려하시겠습니까?"
+                            onConfirm={() => approveReviewMutation.mutate({
+                              reviewId: review.id,
+                              approval_status: 'rejected',
+                            })}
+                            okText="반려"
+                            cancelText="취소"
+                            okButtonProps={{ danger: true }}
+                          >
+                            <Button danger size="small" icon={<CloseCircleOutlined />}>
+                              반려
+                            </Button>
+                          </Popconfirm>
+                        </>
+                      )}
+                      {/* 본인 작성 의견만 수정/삭제 가능 */}
+                      {user && review.created_by?.id === user.id && (
+                        <>
+                          <Button type="text" size="small" icon={<EditOutlined />} onClick={() => handleEditReview(review)} />
+                          <Popconfirm
+                            title="삭제 확인"
+                            description="이 검토의견을 삭제하시겠습니까?"
+                            onConfirm={() => deleteReviewMutation.mutate(review.id)}
+                            okText="삭제"
+                            cancelText="취소"
+                          >
+                            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                          </Popconfirm>
+                        </>
+                      )}
+                    </Space>
                   </div>
                 </div>
               ),
@@ -568,7 +643,7 @@ export default function OrdinanceDetail() {
             <Input placeholder="예: 홍길동" disabled={!editingReview} />
           </Form.Item>
           <Form.Item name="reviewer_department" label="소속부서">
-            <Input placeholder="예: 법무담당관" />
+            <Input placeholder="예: 법무담당관" disabled />
           </Form.Item>
           <Form.Item
             name="review_content"

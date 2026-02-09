@@ -4,6 +4,7 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  envDir: '..',  // 루트 폴더의 .env 파일 읽기
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

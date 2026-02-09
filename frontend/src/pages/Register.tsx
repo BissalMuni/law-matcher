@@ -13,6 +13,8 @@ interface Department {
   id: number
   code: string
   name: string
+  parent_name?: string
+  sort_order: number
 }
 
 const Register = () => {
@@ -150,7 +152,7 @@ const Register = () => {
               >
                 {departments.map((dept: Department) => (
                   <Option key={dept.id} value={dept.id}>
-                    {dept.name}
+                    {dept.parent_name ? `${dept.parent_name} - ${dept.name}` : dept.name}
                   </Option>
                 ))}
               </Select>
@@ -179,6 +181,14 @@ const Register = () => {
           </div>
         </Card>
       </Content>
+
+      <style>{`
+        .ant-input::placeholder,
+        .ant-input-password input::placeholder,
+        .ant-select-selection-placeholder {
+          color: rgba(255, 255, 255, 0.65) !important;
+        }
+      `}</style>
     </Layout>
   )
 }

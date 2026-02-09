@@ -6,8 +6,6 @@ import {
   DashboardOutlined,
   FileTextOutlined,
   AlertOutlined,
-  // CheckSquareOutlined,
-  SyncOutlined,
   TeamOutlined,
   BarChartOutlined,
   BookOutlined,
@@ -19,7 +17,8 @@ import { useAuth } from '../../contexts/AuthContext'
 
 const { Header, Sider, Content } = Layout
 
-const menuItems = [
+// Menu items for admin users (all tabs)
+const adminMenuItems = [
   {
     key: '/ordinances',
     icon: <FileTextOutlined />,
@@ -35,11 +34,6 @@ const menuItems = [
     icon: <AlertOutlined />,
     label: '개정법령',
   },
-  // {
-  //   key: '/reviews',
-  //   icon: <CheckSquareOutlined />,
-  //   label: '개정 검토',
-  // },
   {
     key: '/departments',
     icon: <TeamOutlined />,
@@ -54,6 +48,15 @@ const menuItems = [
     key: '/dashboard',
     icon: <DashboardOutlined />,
     label: '대시보드',
+  },
+]
+
+// Menu items for regular users (only 자치법규)
+const regularUserMenuItems = [
+  {
+    key: '/ordinances',
+    icon: <FileTextOutlined />,
+    label: '자치법규',
   },
 ]
 
@@ -75,7 +78,7 @@ export default function MainLayout() {
     navigate('/landing')
   }
 
-  const userMenuItems: MenuProps['items'] = [
+  const userDropdownItems: MenuProps['items'] = [
     {
       key: 'profile',
       icon: <UserOutlined />,
@@ -92,6 +95,9 @@ export default function MainLayout() {
       onClick: handleLogout,
     },
   ]
+
+  // Select menu items based on user type
+  const sidebarMenuItems = user?.user_type === 'ADMIN' ? adminMenuItems : regularUserMenuItems
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -117,7 +123,7 @@ export default function MainLayout() {
         <Menu
           mode="inline"
           selectedKeys={[location.pathname]}
-          items={menuItems}
+          items={sidebarMenuItems}
           onClick={handleMenuClick}
         />
       </Sider>
@@ -134,7 +140,7 @@ export default function MainLayout() {
         >
           <h2 style={{ margin: 0 }}>OLM 자치법규 개정 검토 시스템</h2>
 
-          <Dropdown menu={{ items: userMenuItems }} trigger={['click']}>
+          <Dropdown menu={{ items: userDropdownItems }} trigger={['click']}>
             <Space style={{ cursor: 'pointer' }}>
               <Avatar
                 size="small"
@@ -142,12 +148,9 @@ export default function MainLayout() {
                 style={{ backgroundColor: '#667eea' }}
               />
               <span>
-                {user?.full_name || user?.username}
-                {user?.user_type === 'DEPARTMENT' && user?.department_name && (
-                  <span style={{ color: '#888', fontSize: '13px' }}> ({user.department_name})</span>
-                )}
-                {user?.user_type === 'DEPARTMENT' && !user?.department_name && (
-                  <span style={{ color: '#888', fontSize: '13px' }}> (부서)</span>
+                {user?.username}
+                {user?.user_type === 'ADMIN' && (
+                  <span style={{ color: '#667eea', fontSize: '13px', fontWeight: 500 }}> (관리자)</span>
                 )}
               </span>
               <DownOutlined style={{ fontSize: 12 }} />

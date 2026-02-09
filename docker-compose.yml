@@ -66,7 +66,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://backend:8000
+      - VITE_DEV_BYPASS_AUTH=false
+      - VITE_ADMIN_PASSWORD=${VITE_ADMIN_PASSWORD:-admin1234}
+      - VITE_USER_PASSWORD=${VITE_USER_PASSWORD:-user1234}
     depends_on:
       - backend
     volumes:

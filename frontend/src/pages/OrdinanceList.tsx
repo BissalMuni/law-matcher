@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Table, Input, Select, Space, Typography, Button, message, Upload, Card, Modal, Form, Spin, List, Tabs, DatePicker, Checkbox, Menu } from 'antd'
-import { SyncOutlined, SearchOutlined, UploadOutlined, PlusOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons'
+import { Table, Input, Select, Space, Typography, Button, message, Upload, Card, Modal, Form, Spin, List, Tabs, DatePicker, Checkbox, Tree } from 'antd'
+import { SyncOutlined, SearchOutlined, UploadOutlined, PlusOutlined, ReloadOutlined, DownloadOutlined, ApartmentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ordinanceApi, ordinanceManagementApi } from '../services/api'
-import type { UploadProps } from 'antd'
+import { ordinanceApi, ordinanceManagementApi, departmentApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
+import type { UploadProps, TreeDataNode } from 'antd'
 
 interface OrdinanceSearchResultItem {
   serial_no: string
@@ -27,10 +28,30 @@ interface DepartmentItem {
   count: number
 }
 
+interface DepartmentTreeNode {
+  id: number
+  code: string
+  name: string
+  parent_name: string | null
+  sort_order: number
+  ordinance_count: number
+  children: DepartmentTreeNode[]
+}
+
+interface DepartmentTreeResponse {
+  bureaus: DepartmentTreeNode[]
+  zones: DepartmentTreeNode[]
+}
+
 export default function OrdinanceList() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+
+  // 일반 사용자는 자신의 부서만 볼 수 있음
+  const isAdmin = user?.user_type === 'ADMIN'
+  const userDepartment = user?.department_name
 
   // URL 쿼리 파라미터에서 초기값 읽기
   const [page, setPage] = useState(() => {
@@ -64,6 +85,8 @@ export default function OrdinanceList() {
   const [manualForm] = Form.useForm()
   const [sidebarWidth, setSidebarWidth] = useState(220)
   const isResizing = useRef(false)
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([])
+  const [treeInitialized, setTreeInitialized] = useState(false)
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     isResizing.current = true
@@ -91,11 +114,96 @@ export default function OrdinanceList() {
     document.addEventListener('mouseup', handleMouseUp)
   }, [sidebarWidth])
 
-  // 소관부서 목록 조회
-  const { data: departments } = useQuery({
-    queryKey: ['ordinance-departments'],
-    queryFn: () => ordinanceApi.getDepartments(),
+  // 소관부서 트리 조회
+  const { data: departmentTree } = useQuery<DepartmentTreeResponse>({
+    queryKey: ['department-tree'],
+    queryFn: () => departmentApi.getTree(),
   })
+
+  // 트리 데이터 변환
+  const treeData: TreeDataNode[] = useMemo(() => {
+    if (!departmentTree?.bureaus) return []
+
+    const totalCount = departmentTree.bureaus.reduce((sum, b) => sum + b.ordinance_count, 0)
+
+    const buildChildren = (nodes: DepartmentTreeNode[]): TreeDataNode[] => {
+      return nodes.map(node => ({
+        title: `${node.name} (${node.ordinance_count})`,
+        key: node.name,
+        children: node.children.length > 0 ? buildChildren(node.children) : undefined,
+      }))
+    }
+
+    return [
+      {
+        title: `전체 (${totalCount})`,
+        key: '__all__',
+        icon: <ApartmentOutlined />,
+        children: buildChildren(departmentTree.bureaus),
+      },
+    ]
+  }, [departmentTree])
+
+  // 드롭다운용 부서 목록 (평면화)
+  const departments = useMemo(() => {
+    if (!departmentTree?.bureaus) return []
+    const result: DepartmentItem[] = []
+    const flatten = (nodes: DepartmentTreeNode[]) => {
+      for (const node of nodes) {
+        result.push({ name: node.name, count: node.ordinance_count })
+        if (node.children.length > 0) {
+          flatten(node.children)
+        }
+      }
+    }
+    flatten(departmentTree.bureaus)
+    return result
+  }, [departmentTree])
+
+  const onTreeSelect = (selectedKeys: React.Key[]) => {
+    const key = selectedKeys[0] as string
+    if (key === '__all__') {
+      setSelectedDepartment(undefined)
+    } else if (!key) {
+      setSelectedDepartment(undefined)
+    } else {
+      setSelectedDepartment(key)
+    }
+    setPage(1)
+  }
+
+  const onTreeExpand = (keys: React.Key[]) => {
+    setExpandedKeys(keys)
+  }
+
+  // 트리 초기 로드 시 모든 노드 펼치기
+  useEffect(() => {
+    if (departmentTree?.bureaus && !treeInitialized) {
+      const allKeys: React.Key[] = ['__all__']
+      const collectKeys = (nodes: DepartmentTreeNode[]) => {
+        for (const node of nodes) {
+          allKeys.push(node.name)
+          if (node.children.length > 0) {
+            collectKeys(node.children)
+          }
+        }
+      }
+      collectKeys(departmentTree.bureaus)
+      setExpandedKeys(allKeys)
+      setTreeInitialized(true)
+    }
+  }, [departmentTree, treeInitialized])
+
+  // 일반 사용자는 자동으로 자신의 부서로 필터링
+  useEffect(() => {
+    if (!isAdmin && userDepartment) {
+      // 부서명에서 "상위부서 - 하위부서" 형태인 경우 하위부서만 추출
+      const deptName = userDepartment.includes(' - ')
+        ? userDepartment.split(' - ').pop()
+        : userDepartment
+      setSelectedDepartment(deptName)
+    }
+  }, [isAdmin, userDepartment])
 
   // 제개정구분 목록 조회
   const { data: revisionTypes } = useQuery({
@@ -399,7 +507,8 @@ export default function OrdinanceList() {
       <Title level={4}>자치법규 목록</Title>
 
       <div style={{ display: 'flex', gap: 16 }}>
-        {/* 소관부서 사이드 네비 */}
+        {/* 소관부서 사이드 네비 - 관리자만 표시 */}
+        {isAdmin ? (
         <div style={{ width: sidebarWidth, flexShrink: 0, position: 'relative' }}>
           <Card
             size="small"
@@ -407,29 +516,13 @@ export default function OrdinanceList() {
             style={{ position: 'sticky', top: 16 }}
             bodyStyle={{ maxHeight: 'calc(100vh - 200px)', overflow: 'auto', padding: 0 }}
           >
-            <Menu
-              mode="inline"
+            <Tree
+              showIcon
+              expandedKeys={expandedKeys}
+              onExpand={onTreeExpand}
+              treeData={treeData}
+              onSelect={onTreeSelect}
               selectedKeys={selectedDepartment ? [selectedDepartment] : ['__all__']}
-              onClick={({ key }) => {
-                if (key === '__all__') {
-                  setSelectedDepartment(undefined)
-                  setPage(1)
-                } else {
-                  setSelectedDepartment(key)
-                  setPage(1)
-                }
-              }}
-              items={[
-                {
-                  key: '__all__',
-                  label: `전체 (${departments?.reduce((sum: number, d: DepartmentItem) => sum + d.count, 0) || 0})`,
-                },
-                ...(departments?.map((dept: DepartmentItem) => ({
-                  key: dept.name,
-                  label: `${dept.name} (${dept.count})`,
-                })) || []),
-              ]}
-              style={{ border: 'none' }}
             />
           </Card>
           {/* 리사이즈 핸들 */}
@@ -446,6 +539,21 @@ export default function OrdinanceList() {
             }}
           />
         </div>
+        ) : (
+          /* 일반 사용자는 자신의 부서만 표시 */
+          <div style={{ width: 200, flexShrink: 0 }}>
+            <Card
+              size="small"
+              title="담당부서"
+              style={{ position: 'sticky', top: 16 }}
+            >
+              <div style={{ padding: '8px 12px', fontWeight: 500, color: '#1890ff' }}>
+                <ApartmentOutlined style={{ marginRight: 8 }} />
+                {userDepartment || '부서 미지정'}
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* 메인 콘텐츠 */}
         <div style={{ flex: 1, minWidth: 0 }}>

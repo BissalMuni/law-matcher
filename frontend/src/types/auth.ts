@@ -4,30 +4,16 @@
 
 export interface User {
   id: number
-  email: string
   username: string
-  full_name: string | null
-  user_type: 'DEPARTMENT' | 'GENERAL'
-  department_id: number | null
-  department_name?: string | null
-  department_code?: string | null
-  is_active: boolean
-  created_at: string
-  updated_at: string
+  user_type: 'ADMIN' | 'USER'
+  full_name?: string
+  department_name?: string
 }
 
 export interface LoginRequest {
   username: string
   password: string
-}
-
-export interface RegisterRequest {
-  email: string
-  username: string
-  password: string
-  full_name?: string
-  user_type: 'DEPARTMENT' | 'GENERAL'
-  department_id?: number
+  department_name?: string
 }
 
 export interface TokenResponse {
@@ -36,16 +22,11 @@ export interface TokenResponse {
   user: User
 }
 
-export interface PasswordChangeRequest {
-  current_password: string
-  new_password: string
-}
-
 export interface AuthContextType {
   user: User | null
   token: string | null
-  login: (username: string, password: string) => Promise<void>
-  register: (data: RegisterRequest) => Promise<void>
+  login: (username: string, password: string, departmentName?: string) => Promise<void>
+  loginSimple: (role: 'admin' | 'user', name: string, departmentName?: string) => void
   logout: () => void
   isAuthenticated: boolean
   isLoading: boolean

@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { RevisionNeededListResponse } from '../types/api'
-import { LoginRequest, RegisterRequest, TokenResponse, User, PasswordChangeRequest } from '../types/auth'
+import { LoginRequest, TokenResponse, User } from '../types/auth'
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -32,9 +32,8 @@ api.interceptors.response.use(
       localStorage.removeItem('law_matcher_token')
       localStorage.removeItem('law_matcher_user')
 
-      // Only redirect if not already on login/register page
+      // Only redirect if not already on login page
       if (!window.location.pathname.startsWith('/login') &&
-          !window.location.pathname.startsWith('/register') &&
           !window.location.pathname.startsWith('/landing')) {
         window.location.href = '/login'
       }
@@ -50,31 +49,8 @@ export const authApi = {
     return response.data
   },
 
-  register: async (data: RegisterRequest): Promise<TokenResponse> => {
-    const response = await api.post('/auth/register', data)
-    return response.data
-  },
-
   me: async (): Promise<User> => {
     const response = await api.get('/auth/me')
-    return response.data
-  },
-
-  changePassword: async (data: PasswordChangeRequest): Promise<User> => {
-    const response = await api.post('/auth/change-password', data)
-    return response.data
-  },
-
-  forgotPassword: async (email: string): Promise<{ message: string }> => {
-    const response = await api.post('/auth/forgot-password', { email })
-    return response.data
-  },
-
-  resetPassword: async (token: string, newPassword: string): Promise<{ message: string }> => {
-    const response = await api.post('/auth/reset-password', {
-      token,
-      new_password: newPassword,
-    })
     return response.data
   },
 }
@@ -201,6 +177,14 @@ export const ordinanceApi = {
     return data
   },
 
+  approveReview: async (reviewId: number, approvalData: {
+    approval_status: string  // "approved" | "rejected"
+    approval_note?: string
+  }) => {
+    const { data } = await api.post(`/ordinances/reviews/${reviewId}/approve`, approvalData)
+    return data
+  },
+
   syncFromMoleg: async (params?: { org?: string; sborg?: string; password?: string }) => {
     const headers = params?.password ? { 'X-Admin-Password': params.password } : {}
     const { data } = await api.post('/ordinances/sync', params || {}, { headers })
@@ -322,12 +306,9 @@ export const departmentApi = {
   },
 
   create: async (departmentData: {
-    code: string
+    code?: string
     name: string
-    parent_code?: string
-    phone?: string
-    manager_name?: string
-    department_type?: string
+    parent_name?: string
     sort_order?: number
   }) => {
     const { data } = await api.post('/departments', departmentData)
@@ -336,10 +317,7 @@ export const departmentApi = {
 
   update: async (id: number, updateData: {
     name?: string
-    parent_code?: string
-    phone?: string
-    manager_name?: string
-    department_type?: string
+    parent_name?: string
     sort_order?: number
   }) => {
     const { data } = await api.patch(`/departments/${id}`, updateData)
@@ -353,6 +331,31 @@ export const departmentApi = {
 
   getInputStatistics: async () => {
     const { data } = await api.get('/departments/input-statistics')
+    return data
+  },
+
+  downloadTemplate: async () => {
+    const response = await api.get('/departments/template/download', {
+      responseType: 'blob',
+    })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', '부서_업로드_템플릿.xlsx')
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  },
+
+  upload: async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const { data } = await api.post('/departments/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
     return data
   },
 }

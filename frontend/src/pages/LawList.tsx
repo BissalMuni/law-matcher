@@ -1,16 +1,26 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Table, Input, Select, Space, Typography, Button, Tree, Row, Col, Card, Modal, List, Popconfirm, message } from 'antd'
-import { SearchOutlined, ApartmentOutlined, LeftOutlined, RightOutlined, DeleteOutlined } from '@ant-design/icons'
+import { Table, Input, Select, Space, Typography, Button, Tree, Card, Modal, List, Popconfirm, message } from 'antd'
+import { SearchOutlined, ApartmentOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { lawsApi } from '../services/api'
+import { lawsApi, departmentApi } from '../services/api'
 import type { TreeDataNode } from 'antd'
 
 const { Title } = Typography
 
-interface DepartmentItem {
+interface DepartmentTreeNode {
+  id: number
+  code: string
   name: string
-  count: number
+  parent_name: string | null
+  sort_order: number
+  ordinance_count: number
+  children: DepartmentTreeNode[]
+}
+
+interface DepartmentTreeResponse {
+  bureaus: DepartmentTreeNode[]
+  zones: DepartmentTreeNode[]
 }
 
 interface LawItem {
@@ -48,18 +58,69 @@ export default function LawList() {
   const [lawType, setLawType] = useState<string | undefined>(() => searchParams.get('lawType') || undefined)
   const [selectedDepartment, setSelectedDepartment] = useState<string | undefined>(() => searchParams.get('dept') || undefined)
   const [initialLoaded, setInitialLoaded] = useState(false)
-  const [treeCollapsed, setTreeCollapsed] = useState(false)
-  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>(['all'])
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>(['__all__'])
+  const [sidebarWidth, setSidebarWidth] = useState(220)
+  const isResizing = useRef(false)
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    isResizing.current = true
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = sidebarWidth
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return
+      const newWidth = Math.max(150, Math.min(400, startWidth + e.clientX - startX))
+      setSidebarWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      isResizing.current = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [sidebarWidth])
 
   // 연계 자치법규 모달
   const [ordinanceModalOpen, setOrdinanceModalOpen] = useState(false)
   const [selectedLaw, setSelectedLaw] = useState<LawItem | null>(null)
 
-  // 소관부처 목록 조회
-  const { data: departments } = useQuery({
-    queryKey: ['law-departments'],
-    queryFn: () => lawsApi.getDepartments(),
+  // 소관부서 트리 조회
+  const { data: departmentTree } = useQuery<DepartmentTreeResponse>({
+    queryKey: ['department-tree'],
+    queryFn: () => departmentApi.getTree(),
   })
+
+  // 트리 데이터 변환
+  const treeData: TreeDataNode[] = useMemo(() => {
+    if (!departmentTree?.bureaus) return []
+
+    const totalCount = departmentTree.bureaus.reduce((sum, b) => sum + b.ordinance_count, 0)
+
+    const buildChildren = (nodes: DepartmentTreeNode[]): TreeDataNode[] => {
+      return nodes.map(node => ({
+        title: `${node.name} (${node.ordinance_count})`,
+        key: node.name,
+        children: node.children.length > 0 ? buildChildren(node.children) : undefined,
+      }))
+    }
+
+    return [
+      {
+        title: `전체 (${totalCount})`,
+        key: '__all__',
+        icon: <ApartmentOutlined />,
+        children: buildChildren(departmentTree.bureaus),
+      },
+    ]
+  }, [departmentTree])
 
   // 법령 유형 목록 조회
   const { data: lawTypes } = useQuery({
@@ -128,25 +189,9 @@ export default function LawList() {
     setSearchParams(params, { replace: true })
   }, [page, search, lawType, selectedDepartment, setSearchParams])
 
-  // 트리 데이터 생성
-  const treeData: TreeDataNode[] = [
-    {
-      title: `전체 (${departments?.reduce((sum: number, d: DepartmentItem) => sum + d.count, 0) || 0})`,
-      key: 'all',
-      icon: <ApartmentOutlined />,
-      children: departments?.map((dept: DepartmentItem) => ({
-        title: `${dept.name} (${dept.count})`,
-        key: dept.name,
-      })) || [],
-    },
-  ]
-
   const onTreeSelect = (selectedKeys: React.Key[]) => {
     const key = selectedKeys[0] as string
-    if (key === 'all') {
-      setExpandedKeys(prev =>
-        prev.includes('all') ? [] : ['all']
-      )
+    if (key === '__all__') {
       setSelectedDepartment(undefined)
     } else if (!key) {
       setSelectedDepartment(undefined)
@@ -216,21 +261,14 @@ export default function LawList() {
     <div>
       <Title level={4}>상위법령 목록</Title>
 
-      <Row gutter={16}>
-        <Col style={{ width: treeCollapsed ? 105 : 'calc((100% - 48px) * 5 / 24)', transition: 'width 0.3s ease', flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 16 }}>
+        {/* 담당부서 사이드 네비 */}
+        <div style={{ width: sidebarWidth, flexShrink: 0, position: 'relative' }}>
           <Card
             size="small"
-            title={
-              <div
-                onClick={() => setTreeCollapsed(!treeCollapsed)}
-                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 4 }}
-              >
-                {treeCollapsed ? <RightOutlined /> : <LeftOutlined />}
-                담당부서
-              </div>
-            }
-            style={{ height: 'calc(100vh - 220px)', overflow: 'auto' }}
-            styles={{ body: { display: treeCollapsed ? 'none' : 'block' } }}
+            title="담당부서"
+            style={{ position: 'sticky', top: 16 }}
+            bodyStyle={{ maxHeight: 'calc(100vh - 200px)', overflow: 'auto' }}
           >
             <Tree
               showIcon
@@ -238,11 +276,26 @@ export default function LawList() {
               onExpand={onTreeExpand}
               treeData={treeData}
               onSelect={onTreeSelect}
-              selectedKeys={selectedDepartment ? [selectedDepartment] : ['all']}
+              selectedKeys={selectedDepartment ? [selectedDepartment] : ['__all__']}
             />
           </Card>
-        </Col>
-        <Col style={{ flex: 1, transition: 'all 0.3s ease' }}>
+          {/* 리사이즈 핸들 */}
+          <div
+            onMouseDown={handleMouseDown}
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: -4,
+              width: 8,
+              height: '100%',
+              cursor: 'col-resize',
+              zIndex: 10,
+            }}
+          />
+        </div>
+
+        {/* 메인 콘텐츠 */}
+        <div style={{ flex: 1, minWidth: 0 }}>
           <Space style={{ marginBottom: 16 }} wrap>
             <Input
               placeholder="법령명 검색"
@@ -295,8 +348,8 @@ export default function LawList() {
               showTotal: (total) => `총 ${total}건`,
             }}
           />
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       <Modal
         title={`연계 자치법규 - ${selectedLaw?.law_name || ''}`}

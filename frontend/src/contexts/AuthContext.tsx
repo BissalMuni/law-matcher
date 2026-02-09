@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { User, AuthContextType, RegisterRequest } from '../types/auth'
+import { User, AuthContextType } from '../types/auth'
 import { authApi } from '../services/api'
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -16,12 +16,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // 개발 모드 체크: 환경변수 또는 쿼리 파라미터
+  // 환경변수만 체크하도록 변경
   const isDevBypass = () => {
-    const envBypass = import.meta.env.VITE_DEV_BYPASS_AUTH === 'true'
-    const urlParams = new URLSearchParams(window.location.search)
-    const queryBypass = urlParams.get('dev') === 'true'
-    return envBypass || queryBypass
+    return import.meta.env.VITE_DEV_BYPASS_AUTH === 'true'
   }
 
   // Initialize auth state from localStorage
@@ -31,18 +28,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const storedUser = localStorage.getItem(USER_KEY)
 
       if (storedToken && storedUser) {
-        try {
+        // Simple login인 경우 API 검증 건너뛰기
+        if (storedToken.startsWith('simple_')) {
           setToken(storedToken)
           setUser(JSON.parse(storedUser))
+        } else {
+          try {
+            setToken(storedToken)
+            setUser(JSON.parse(storedUser))
 
-          // Verify token is still valid by fetching current user
-          const currentUser = await authApi.me()
-          setUser(currentUser)
-          localStorage.setItem(USER_KEY, JSON.stringify(currentUser))
-        } catch (error) {
-          // Token is invalid, clear auth state
-          console.error('Token validation failed:', error)
-          logout()
+            // Verify token is still valid by fetching current user
+            const currentUser = await authApi.me()
+            setUser(currentUser)
+            localStorage.setItem(USER_KEY, JSON.stringify(currentUser))
+          } catch (error) {
+            // Token is invalid, clear auth state
+            console.error('Token validation failed:', error)
+            logout()
+          }
         }
       }
 
@@ -52,9 +55,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth()
   }, [])
 
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string, departmentName?: string) => {
     try {
-      const response = await authApi.login({ username, password })
+      const response = await authApi.login({ username, password, department_name: departmentName })
       const { access_token, user: userData } = response
 
       setToken(access_token)
@@ -69,21 +72,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
-  const register = async (data: RegisterRequest) => {
-    try {
-      const response = await authApi.register(data)
-      const { access_token, user: userData } = response
-
-      setToken(access_token)
-      setUser(userData)
-
-      // Store in localStorage
-      localStorage.setItem(TOKEN_KEY, access_token)
-      localStorage.setItem(USER_KEY, JSON.stringify(userData))
-    } catch (error) {
-      console.error('Registration failed:', error)
-      throw error
+  const loginSimple = (role: 'admin' | 'user', name: string, departmentName?: string) => {
+    const simpleUser: User = {
+      id: role === 'admin' ? 0 : 1,
+      username: name,
+      user_type: role === 'admin' ? 'ADMIN' : 'USER',
+      full_name: name,
+      department_name: departmentName,
     }
+    const simpleToken = `simple_${role}_${Date.now()}`
+
+    setToken(simpleToken)
+    setUser(simpleUser)
+
+    localStorage.setItem(TOKEN_KEY, simpleToken)
+    localStorage.setItem(USER_KEY, JSON.stringify(simpleUser))
   }
 
   const logout = () => {
@@ -97,7 +100,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     token,
     login,
-    register,
+    loginSimple,
     logout,
     isAuthenticated: isDevBypass() || (!!user && !!token),
     isLoading,
