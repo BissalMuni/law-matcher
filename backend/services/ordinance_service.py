@@ -49,7 +49,11 @@ class OrdinanceService:
         if category:
             query = query.where(Ordinance.category == category)
         if department:
-            query = query.where(Ordinance.department == department)
+            # 부서명이 정확히 일치하거나, "상위부서 하위부서" 형태에서 하위부서가 일치하는 경우
+            query = query.where(
+                (Ordinance.department == department) |
+                (Ordinance.department.like(f"% {department}"))
+            )
         if search:
             query = query.where(Ordinance.name.ilike(f"%{search}%"))
         if revision_type:
@@ -1089,10 +1093,20 @@ class OrdinanceService:
             review_result=data.review_result,
             created_by_id=user_id,
         )
+
         self.db.add(review)
         await self.db.commit()
-        await self.db.refresh(review)
-        return review
+
+        # 관계 로딩을 위해 다시 조회
+        result = await self.db.execute(
+            select(OrdinanceReview)
+            .where(OrdinanceReview.id == review.id)
+            .options(
+                selectinload(OrdinanceReview.created_by),
+                selectinload(OrdinanceReview.updated_by),
+            )
+        )
+        return result.scalar_one()
 
     async def update_review(
         self,
@@ -1121,8 +1135,51 @@ class OrdinanceService:
         review.updated_by_id = user_id
 
         await self.db.commit()
-        await self.db.refresh(review)
-        return review
+
+        # 관계 로딩을 위해 다시 조회
+        result = await self.db.execute(
+            select(OrdinanceReview)
+            .where(OrdinanceReview.id == review_id)
+            .options(
+                selectinload(OrdinanceReview.created_by),
+                selectinload(OrdinanceReview.updated_by),
+            )
+        )
+        return result.scalar_one()
+
+    async def approve_review(
+        self,
+        review_id: int,
+        approval_status: str,
+        user_id: int,
+        approval_note: Optional[str] = None,
+    ) -> OrdinanceReview:
+        """검토의견 승인/반려 (관리자 전용)"""
+        result = await self.db.execute(
+            select(OrdinanceReview).where(OrdinanceReview.id == review_id)
+        )
+        review = result.scalar_one_or_none()
+        if not review:
+            raise NotFoundError(f"Review {review_id} not found")
+
+        review.approval_status = approval_status
+        review.approved_by_id = user_id
+        review.approved_at = datetime.utcnow()
+        review.approval_note = approval_note
+
+        await self.db.commit()
+
+        # Reload with relationships
+        result = await self.db.execute(
+            select(OrdinanceReview)
+            .where(OrdinanceReview.id == review_id)
+            .options(
+                selectinload(OrdinanceReview.created_by),
+                selectinload(OrdinanceReview.updated_by),
+                selectinload(OrdinanceReview.approved_by),
+            )
+        )
+        return result.scalar_one()
 
     async def delete_review(self, review_id: int) -> bool:
         """조례 검토이력 삭제"""

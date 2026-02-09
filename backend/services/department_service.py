@@ -53,8 +53,8 @@ class DepartmentService:
                 "id": dept.id,
                 "code": dept.code,
                 "name": dept.name,
-                "parent_code": dept.parent_code,
-                "phone": dept.phone,
+                "parent_name": dept.parent_name,
+                "sort_order": dept.sort_order,
                 "created_at": dept.created_at,
                 "updated_at": dept.updated_at,
                 "ordinance_count": ordinance_count,
@@ -68,9 +68,9 @@ class DepartmentService:
         }
 
     async def get_all(self) -> List[Department]:
-        """Get all departments (for dropdown)"""
+        """Get all departments (for dropdown, sorted by sort_order)"""
         result = await self.db.execute(
-            select(Department).order_by(Department.name)
+            select(Department).order_by(Department.sort_order)
         )
         return result.scalars().all()
 
@@ -307,39 +307,43 @@ class DepartmentService:
         return output.getvalue()
 
     async def get_tree(self) -> dict:
-        """Get departments as hierarchical tree grouped by type"""
+        """Get departments as hierarchical tree based on parent_name"""
         # Fetch all departments ordered by sort_order
         result = await self.db.execute(
             select(Department).order_by(Department.sort_order)
         )
         all_depts = result.scalars().all()
 
-        # Separate by type
-        bureaus_and_specials = [d for d in all_depts if d.department_type in ('bureau', 'special')]
-        zones = [d for d in all_depts if d.department_type == 'zone']
-        departments = [d for d in all_depts if d.department_type == 'department']
-        neighborhoods = [d for d in all_depts if d.department_type == 'neighborhood']
+        # Get all parent names that exist
+        parent_names = {d.name for d in all_depts if not d.parent_name}
 
-        # Build bureau tree with children
-        bureau_tree = []
-        for parent in bureaus_and_specials:
-            # Get children for this bureau
-            children_depts = [d for d in departments if d.parent_code == parent.code]
+        # Separate parents (no parent_name) and children (have parent_name with existing parent)
+        parents = [d for d in all_depts if not d.parent_name]
+        children = [d for d in all_depts if d.parent_name and d.parent_name in parent_names]
+        # Orphans: have parent_name but parent doesn't exist - treat as top-level
+        orphans = [d for d in all_depts if d.parent_name and d.parent_name not in parent_names]
 
-            # Build children nodes with ordinance counts
+        # Build tree
+        dept_tree = []
+        for parent in parents:
+            # Get children for this parent
+            parent_children = [d for d in children if d.parent_name == parent.name]
+
+            # Build children nodes with ordinance counts (use department name for matching)
             children_nodes = []
-            for child in children_depts:
+            for child in parent_children:
                 ordinance_count = await self.db.scalar(
-                    select(func.count()).where(Ordinance.department_id == child.id)
+                    select(func.count()).where(
+                        Ordinance.department == child.name,
+                        Ordinance.status == "ACTIVE"
+                    )
                 ) or 0
 
                 children_nodes.append({
                     "id": child.id,
                     "code": child.code,
                     "name": child.name,
-                    "department_type": child.department_type,
-                    "manager_name": child.manager_name,
-                    "phone": child.phone,
+                    "parent_name": child.parent_name,
                     "sort_order": child.sort_order,
                     "ordinance_count": ordinance_count,
                     "children": []
@@ -348,48 +352,106 @@ class DepartmentService:
             # Parent ordinance count is sum of children
             parent_ordinance_count = sum(c["ordinance_count"] for c in children_nodes)
 
-            bureau_tree.append({
+            dept_tree.append({
                 "id": parent.id,
                 "code": parent.code,
                 "name": parent.name,
-                "department_type": parent.department_type,
-                "manager_name": parent.manager_name,
-                "phone": parent.phone,
+                "parent_name": parent.parent_name,
                 "sort_order": parent.sort_order,
                 "ordinance_count": parent_ordinance_count,
                 "children": children_nodes
             })
 
-        # Build zone tree
-        zone_tree = []
-        for zone in zones:
-            # Get neighborhood children
-            children_neighborhoods = [d for d in neighborhoods if d.parent_code == zone.code]
+        # Add orphan departments as top-level items
+        for orphan in orphans:
+            ordinance_count = await self.db.scalar(
+                select(func.count()).where(
+                    Ordinance.department == orphan.name,
+                    Ordinance.status == "ACTIVE"
+                )
+            ) or 0
 
-            children_nodes = []
-            for child in children_neighborhoods:
-                children_nodes.append({
-                    "id": child.id,
-                    "code": child.code,
-                    "name": child.name,
-                    "department_type": child.department_type,
-                    "manager_name": child.manager_name,
-                    "phone": child.phone,
-                    "sort_order": child.sort_order,
-                    "ordinance_count": 0,  # Neighborhoods don't have ordinances
-                    "children": []
-                })
-
-            zone_tree.append({
-                "id": zone.id,
-                "code": zone.code,
-                "name": zone.name,
-                "department_type": zone.department_type,
-                "manager_name": zone.manager_name,
-                "phone": zone.phone,
-                "sort_order": zone.sort_order,
-                "ordinance_count": 0,
-                "children": children_nodes
+            dept_tree.append({
+                "id": orphan.id,
+                "code": orphan.code,
+                "name": orphan.name,
+                "parent_name": orphan.parent_name,
+                "sort_order": orphan.sort_order,
+                "ordinance_count": ordinance_count,
+                "children": []
             })
 
-        return {"bureaus": bureau_tree, "zones": zone_tree}
+        # Sort by sort_order
+        dept_tree.sort(key=lambda x: x["sort_order"])
+
+        return {"bureaus": dept_tree, "zones": []}
+
+    async def get_template(self) -> bytes:
+        """Generate Excel template for department bulk upload"""
+        template_data = [
+            {"직제순": 1, "국": "", "부서": "기획경제국"},
+            {"직제순": 2, "국": "기획경제국", "부서": "기획예산과"},
+            {"직제순": 3, "국": "기획경제국", "부서": "세무관리과"},
+        ]
+
+        df = pd.DataFrame(template_data, columns=["직제순", "국", "부서"])
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='부서목록')
+
+            worksheet = writer.sheets['부서목록']
+            worksheet.column_dimensions['A'].width = 10
+            worksheet.column_dimensions['B'].width = 25
+            worksheet.column_dimensions['C'].width = 25
+
+        output.seek(0)
+        return output.getvalue()
+
+    async def bulk_upload(self, file_content: bytes) -> dict:
+        """Bulk upload departments from Excel file (overwrites existing data)"""
+        # Read Excel file
+        df = pd.read_excel(BytesIO(file_content))
+
+        # Validate required columns (support both old and new column names)
+        name_col = '부서' if '부서' in df.columns else '부서명'
+        parent_col = '국' if '국' in df.columns else '상위부서명'
+
+        required_columns = ['직제순', name_col]
+        for col in required_columns:
+            if col not in df.columns:
+                raise ValueError(f"필수 컬럼이 없습니다: {col}")
+
+        # Delete all existing departments
+        await self.db.execute(
+            Department.__table__.delete()
+        )
+
+        # Insert new departments
+        created_count = 0
+        for idx, row in df.iterrows():
+            sort_order = int(row['직제순']) if pd.notna(row['직제순']) else idx + 1
+            name = str(row[name_col]).strip() if pd.notna(row[name_col]) else None
+            parent_name = str(row[parent_col]).strip() if parent_col in df.columns and pd.notna(row.get(parent_col)) else None
+
+            if not name:
+                continue
+
+            # Generate code automatically
+            code = f"DEPT_{sort_order:03d}"
+
+            department = Department(
+                code=code,
+                name=name,
+                parent_name=parent_name if parent_name else None,
+                sort_order=sort_order,
+            )
+            self.db.add(department)
+            created_count += 1
+
+        await self.db.flush()
+
+        return {
+            "message": f"{created_count}개 부서가 등록되었습니다.",
+            "created_count": created_count
+        }

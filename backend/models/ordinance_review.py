@@ -39,6 +39,16 @@ class OrdinanceReview(Base):
         Integer, ForeignKey("users.id", ondelete="SET NULL")
     )
 
+    # 관리자 승인
+    approval_status: Mapped[Optional[str]] = mapped_column(
+        String(20), default="pending"  # pending, approved, rejected
+    )
+    approved_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    approval_note: Mapped[Optional[str]] = mapped_column(Text)  # 승인/반려 사유
+
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -52,6 +62,9 @@ class OrdinanceReview(Base):
     )
     updated_by: Mapped[Optional["User"]] = relationship(
         back_populates="updated_reviews", foreign_keys=[updated_by_id]
+    )
+    approved_by: Mapped[Optional["User"]] = relationship(
+        foreign_keys=[approved_by_id]
     )
 
     def __repr__(self) -> str:

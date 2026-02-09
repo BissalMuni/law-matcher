@@ -10,10 +10,7 @@ class DepartmentBase(BaseModel):
     """Department base schema"""
     code: str
     name: str
-    parent_code: Optional[str] = None
-    phone: Optional[str] = None
-    manager_name: Optional[str] = None
-    department_type: Optional[str] = None
+    parent_name: Optional[str] = None
     sort_order: Optional[int] = 0
 
 
@@ -25,10 +22,7 @@ class DepartmentCreate(DepartmentBase):
 class DepartmentUpdate(BaseModel):
     """Department update schema"""
     name: Optional[str] = None
-    parent_code: Optional[str] = None
-    phone: Optional[str] = None
-    manager_name: Optional[str] = None
-    department_type: Optional[str] = None
+    parent_name: Optional[str] = None
     sort_order: Optional[int] = None
 
 
@@ -90,9 +84,7 @@ class DepartmentTreeNode(BaseModel):
     id: int
     code: str
     name: str
-    department_type: Optional[str] = None
-    manager_name: Optional[str] = None
-    phone: Optional[str] = None
+    parent_name: Optional[str] = None
     sort_order: int = 0
     ordinance_count: int = 0
     children: List["DepartmentTreeNode"] = []

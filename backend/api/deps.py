@@ -97,10 +97,17 @@ async def get_current_user(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
+        # 간단한 로그인(auth.py)에서 생성된 토큰인 경우 가상 사용자 생성
+        username = payload.get("username", "")
+        user_type = payload.get("user_type", "USER")
+
+        # 가상 사용자 생성 (DB에 저장하지 않음)
+        user = User(
+            id=user_id,
+            username=username,
+            full_name="관리자" if user_type == "ADMIN" else username,
+            user_type="GENERAL" if user_type == "ADMIN" else "DEPARTMENT",
+            is_active=True,
         )
 
     if not user.is_active:

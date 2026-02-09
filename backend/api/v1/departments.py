@@ -2,7 +2,7 @@
 Department API endpoints
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 import io
@@ -72,6 +72,46 @@ async def get_department_tree(
     return await service.get_tree()
 
 
+@router.get("/export/uninput-ordinances")
+async def export_uninput_ordinances(
+    db: AsyncSession = Depends(get_db),
+):
+    """Export department-wise uninput ordinances to Excel"""
+    service = DepartmentService(db)
+    excel_file = await service.export_uninput_ordinances()
+
+    filename = "미입력_자치법규_목록.xlsx"
+    encoded_filename = quote(filename)
+
+    return StreamingResponse(
+        io.BytesIO(excel_file),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        }
+    )
+
+
+@router.get("/template/download")
+async def download_department_template(
+    db: AsyncSession = Depends(get_db),
+):
+    """Download Excel template for department bulk upload"""
+    service = DepartmentService(db)
+    excel_file = await service.get_template()
+
+    filename = "부서_업로드_템플릿.xlsx"
+    encoded_filename = quote(filename)
+
+    return StreamingResponse(
+        io.BytesIO(excel_file),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        }
+    )
+
+
 @router.get("/{department_id}", response_model=DepartmentResponse)
 async def get_department(
     department_id: int,
@@ -126,21 +166,24 @@ async def get_department_ordinances(
     return await service.get_ordinances(department_id, page=page, size=size)
 
 
-@router.get("/export/uninput-ordinances")
-async def export_uninput_ordinances(
+@router.post("/upload")
+async def upload_departments(
+    file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Export department-wise uninput ordinances to Excel"""
+    """Bulk upload departments from Excel file (overwrites existing data)"""
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Excel 파일만 업로드 가능합니다.")
+
+    content = await file.read()
     service = DepartmentService(db)
-    excel_file = await service.export_uninput_ordinances()
 
-    filename = "미입력_자치법규_목록.xlsx"
-    encoded_filename = quote(filename)
-
-    return StreamingResponse(
-        io.BytesIO(excel_file),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
-        }
-    )
+    try:
+        result = await service.bulk_upload(content)
+        await db.commit()
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"업로드 실패: {str(e)}")

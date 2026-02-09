@@ -388,11 +388,21 @@ class OrdinanceReviewResponse(OrdinanceReviewBase):
     ordinance_id: int
     created_by: Optional[UserBriefResponse] = None
     updated_by: Optional[UserBriefResponse] = None
+    approval_status: Optional[str] = "pending"  # pending, approved, rejected
+    approved_by: Optional[UserBriefResponse] = None
+    approved_at: Optional[datetime] = None
+    approval_note: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class OrdinanceReviewApprovalRequest(BaseModel):
+    """검토의견 승인/반려 요청"""
+    approval_status: str  # "approved" | "rejected"
+    approval_note: Optional[str] = None
 
 
 class OrdinanceReviewListResponse(BaseModel):

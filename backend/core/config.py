@@ -23,8 +23,9 @@ class Settings(BaseSettings):
     MOLEG_API_KEY: str = ""
     MOLEG_API_BASE_URL: str = "https://www.law.go.kr/DRF"
 
-    # Admin
-    ADMIN_PASSWORD: str = "admin123"  # 기본 비밀번호 (반드시 .env에서 변경하세요)
+    # Login passwords (set via environment variables)
+    ADMIN_PASSWORD: str = "admin123"  # 관리자 비밀번호
+    USER_PASSWORD: str = "user123"    # 일반 사용자 비밀번호
 
     # JWT Authentication
     SECRET_KEY: str = "your-secret-key-change-this-in-production-min-32-chars"
@@ -51,8 +52,9 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
     class Config:
-        env_file = ".env"
+        env_file = ".env", "../.env"  # backend/.env 또는 루트/.env
         case_sensitive = True
+        extra = "ignore"  # VITE_ 등 정의되지 않은 변수 무시
 
 
 settings = Settings()

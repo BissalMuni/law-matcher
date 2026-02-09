@@ -30,6 +30,7 @@ from backend.schemas.ordinance import (
     OrdinanceReviewUpdate,
     OrdinanceReviewResponse,
     OrdinanceReviewListResponse,
+    OrdinanceReviewApprovalRequest,
 )
 from backend.services.ordinance_service import OrdinanceService
 from backend.core.exceptions import NotFoundError
@@ -626,5 +627,33 @@ async def delete_ordinance_review(
     try:
         await service.delete_review(review_id)
         return {"success": True, "message": "삭제되었습니다."}
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/reviews/{review_id}/approve", response_model=OrdinanceReviewResponse)
+async def approve_ordinance_review(
+    review_id: int,
+    data: OrdinanceReviewApprovalRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """검토의견 승인/반려 (관리자 전용)"""
+    # 관리자 권한 확인
+    if current_user.user_type != "GENERAL":
+        raise HTTPException(status_code=403, detail="관리자만 승인/반려할 수 있습니다.")
+
+    if data.approval_status not in ["approved", "rejected"]:
+        raise HTTPException(status_code=400, detail="유효하지 않은 승인 상태입니다.")
+
+    service = OrdinanceService(db)
+    try:
+        review = await service.approve_review(
+            review_id=review_id,
+            approval_status=data.approval_status,
+            user_id=current_user.id,
+            approval_note=data.approval_note,
+        )
+        return review
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
