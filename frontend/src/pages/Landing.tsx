@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Button, Typography, Layout, Row, Col } from 'antd'
 import { CrownOutlined, TeamOutlined } from '@ant-design/icons'
+import mainLogo from '../assets/img_main_logo_new.png'
 import logo from '../assets/logo.svg'
 
 const { Title, Paragraph } = Typography
@@ -10,26 +11,36 @@ const Landing = () => {
   const navigate = useNavigate()
 
   return (
-    <Layout style={{ minHeight: '100vh', background: '#000' }}>
+    <Layout style={{ minHeight: '100vh', background: '#fff', position: 'relative' }}>
+      <div style={{ position: 'absolute', top: '50px', left: '100px' }}>
+        <img
+          src={mainLogo}
+          alt="Main Logo"
+          style={{
+            height: '60px'
+          }}
+        />
+      </div>
       <Content style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '50px' }}>
-        <div style={{ textAlign: 'center', maxWidth: '800px' }}>
-          <img
-            src={logo}
-            alt="OLM Logo"
-            style={{
-              width: '400px',
-              maxWidth: '90%',
-              marginBottom: '30px',
-              filter: 'drop-shadow(0 0 20px rgba(24, 144, 255, 0.3))'
-            }}
-          />
+        <div style={{ textAlign: 'center', maxWidth: '1200px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            {/* <img
+              src={logo}
+              alt="OLM Logo"
+              style={{
+                width: '100px',
+                marginBottom: '10px',
+                filter: 'drop-shadow(0 0 20px rgba(24, 144, 255, 0.3))'
+              }}
+            /> */}
+            <Title level={1} style={{ fontSize: '72px', marginBottom: '20px', textAlign: 'center', width: '100%' }}>
+              <span style={{ color: '#063B94' }}>강남구</span>
+              <span style={{ color: '#000' }}> 자치법규 스마트 정비시스템</span>
+            </Title>
+          </div>
 
-          <Title level={1} style={{ color: '#fff', fontSize: '48px', marginBottom: '20px' }}>
-            자치법규 정비 시스템
-          </Title>
+          <Paragraph style={{ color: '#666', fontSize: '20px', marginBottom: '40px' }}>
 
-          <Paragraph style={{ color: '#f0f0f0', fontSize: '20px', marginBottom: '40px' }}>
-            상위법령 변경 추적 및 자치법규 검토 관리 시스템
           </Paragraph>
 
           <Row gutter={16} justify="center">
@@ -70,37 +81,42 @@ const Landing = () => {
             </Col>
           </Row>
 
-          <div style={{ marginTop: '60px', color: '#f0f0f0' }}>
-            <Title level={4} style={{ color: '#fff' }}>
+          <div style={{ marginTop: '60px', color: '#333' }}>
+            <Row style={{ marginTop: '20px', fontWeight: 'bold' }}>
               주요 기능
-            </Title>
-            <Row gutter={24} style={{ marginTop: '20px' }}>
-              <Col span={8}>
-                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <Title level={5} style={{ color: '#fff' }}>
+            </Row>
+
+            <Row style={{ marginTop: '20px' }}>
+              <Col span={24}>
+                <div style={{ padding: '20px', background: '#f5f5f5', borderRadius: '8px', border: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  <Title level={5} style={{ color: '#000', margin: 0, whiteSpace: 'nowrap' }}>
                     상위법령 추적
                   </Title>
-                  <Paragraph style={{ color: '#f0f0f0' }}>
+                  <Paragraph style={{ color: '#666', margin: 0 }}>
                     법령 변경사항 자동 감지 및 알림
                   </Paragraph>
                 </div>
               </Col>
-              <Col span={8}>
-                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <Title level={5} style={{ color: '#fff' }}>
+            </Row>
+            <Row style={{ marginTop: '12px' }}>
+              <Col span={24}>
+                <div style={{ padding: '20px', background: '#f5f5f5', borderRadius: '8px', border: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  <Title level={5} style={{ color: '#000', margin: 0, whiteSpace: 'nowrap' }}>
                     검토 의견 관리
                   </Title>
-                  <Paragraph style={{ color: '#f0f0f0' }}>
+                  <Paragraph style={{ color: '#666', margin: 0 }}>
                     부서별 검토 의견 작성 및 추적
                   </Paragraph>
                 </div>
               </Col>
-              <Col span={8}>
-                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <Title level={5} style={{ color: '#fff' }}>
+            </Row>
+            <Row style={{ marginTop: '12px' }}>
+              <Col span={24}>
+                <div style={{ padding: '20px', background: '#f5f5f5', borderRadius: '8px', border: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  <Title level={5} style={{ color: '#000', margin: 0, whiteSpace: 'nowrap' }}>
                     통계 대시보드
                   </Title>
-                  <Paragraph style={{ color: '#f0f0f0' }}>
+                  <Paragraph style={{ color: '#666', margin: 0 }}>
                     정비 현황 실시간 모니터링
                   </Paragraph>
                 </div>

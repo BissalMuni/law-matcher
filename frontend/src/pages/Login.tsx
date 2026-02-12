@@ -72,16 +72,16 @@ const Login = () => {
   const isAdmin = loginType === 'admin'
 
   return (
-    <Layout style={{ minHeight: '100vh', background: '#000' }}>
+    <Layout style={{ minHeight: '100vh', background: '#fff' }}>
       <Content style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '50px' }}>
         <Card
           style={{
             width: '100%',
             maxWidth: '450px',
-            boxShadow: '0 4px 20px rgba(255,255,255,0.1)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
             borderRadius: '12px',
-            background: '#1a1a1a',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: '#fff',
+            border: '1px solid #e8e8e8',
           }}
         >
           <div style={{ textAlign: 'center', marginBottom: '30px' }}>
@@ -90,10 +90,10 @@ const Login = () => {
             ) : (
               <TeamOutlined style={{ fontSize: '48px', color: '#1890ff', marginBottom: '16px' }} />
             )}
-            <Title level={2} style={{ marginBottom: '8px', color: '#fff' }}>
+            <Title level={2} style={{ marginBottom: '8px', color: '#000' }}>
               {isAdmin ? '관리자 로그인' : '부서 로그인'}
             </Title>
-            <Text style={{ color: '#bfbfbf' }}>자치법규 정비 시스템</Text>
+            <Text style={{ color: '#666' }}>자치법규 정비 시스템</Text>
           </div>
 
           {isAdmin ? (
@@ -175,18 +175,6 @@ const Login = () => {
         </Card>
       </Content>
 
-      <style>{`
-        .ant-input::placeholder,
-        .ant-input-password input::placeholder {
-          color: rgba(255, 255, 255, 0.65) !important;
-        }
-        .ant-select-selector {
-          background: transparent !important;
-        }
-        .ant-select-selection-placeholder {
-          color: rgba(255, 255, 255, 0.65) !important;
-        }
-      `}</style>
     </Layout>
   )
 }
