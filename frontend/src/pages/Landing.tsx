@@ -82,42 +82,38 @@ const Landing = () => {
           </Row>
 
           <div style={{ marginTop: '60px', color: '#333' }}>
-            <Row style={{ marginTop: '20px', fontWeight: 'bold' }}>
-              주요 기능
-            </Row>
+            <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '22px', marginBottom: '30px' }}>
+              주요기능
+            </div>
 
-            <Row style={{ marginTop: '20px' }}>
-              <Col span={24}>
-                <div style={{ padding: '20px', background: '#f5f5f5', borderRadius: '8px', border: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  <Title level={5} style={{ color: '#000', margin: 0, whiteSpace: 'nowrap' }}>
+            <Row gutter={24} justify="center">
+              <Col span={8}>
+                <div className="feature-box" style={{ padding: '30px 20px', background: '#f5f5f5', borderRadius: '20px', border: '1px solid #e8e8e8', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+                  <Title level={5} style={{ color: '#000', margin: 0, marginBottom: '10px' }}>
                     상위법령 추적
                   </Title>
-                  <Paragraph style={{ color: '#666', margin: 0 }}>
-                    법령 변경사항 자동 감지 및 알림
+                  <Paragraph style={{ color: '#666', margin: 0, fontSize: '18px' }}>
+                    법령 변경사항 자동감지 및 알림
                   </Paragraph>
                 </div>
               </Col>
-            </Row>
-            <Row style={{ marginTop: '12px' }}>
-              <Col span={24}>
-                <div style={{ padding: '20px', background: '#f5f5f5', borderRadius: '8px', border: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  <Title level={5} style={{ color: '#000', margin: 0, whiteSpace: 'nowrap' }}>
-                    검토 의견 관리
+              <Col span={8}>
+                <div className="feature-box" style={{ padding: '30px 20px', background: '#f5f5f5', borderRadius: '20px', border: '1px solid #e8e8e8', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+                  <Title level={5} style={{ color: '#000', margin: 0, marginBottom: '10px' }}>
+                    검토의견 관리
                   </Title>
-                  <Paragraph style={{ color: '#666', margin: 0 }}>
-                    부서별 검토 의견 작성 및 추적
+                  <Paragraph style={{ color: '#666', margin: 0, fontSize: '18px' }}>
+                    부서별 검토의견 작성 및 추적
                   </Paragraph>
                 </div>
               </Col>
-            </Row>
-            <Row style={{ marginTop: '12px' }}>
-              <Col span={24}>
-                <div style={{ padding: '20px', background: '#f5f5f5', borderRadius: '8px', border: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  <Title level={5} style={{ color: '#000', margin: 0, whiteSpace: 'nowrap' }}>
+              <Col span={8}>
+                <div className="feature-box" style={{ padding: '30px 20px', background: '#f5f5f5', borderRadius: '20px', border: '1px solid #e8e8e8', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+                  <Title level={5} style={{ color: '#000', margin: 0, marginBottom: '10px' }}>
                     통계 대시보드
                   </Title>
-                  <Paragraph style={{ color: '#666', margin: 0 }}>
-                    정비 현황 실시간 모니터링
+                  <Paragraph style={{ color: '#666', margin: 0, fontSize: '18px' }}>
+                    정비현황 실시간 모니터링
                   </Paragraph>
                 </div>
               </Col>
@@ -125,6 +121,34 @@ const Landing = () => {
           </div>
         </div>
       </Content>
+
+      <style>{`
+        @keyframes shimmer {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
+        }
+
+        .feature-box::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(
+            120deg,
+            transparent 30%,
+            rgba(255, 255, 255, 0.6) 50%,
+            transparent 70%
+          );
+          
+          animation: shimmer 5s ease-in-out infinite;
+        }
+      `}</style>
     </Layout>
   )
 }
