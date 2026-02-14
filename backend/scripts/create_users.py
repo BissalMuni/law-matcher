@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from sqlalchemy import select
 from backend.core.database import async_session
 from backend.core.security import get_password_hash
+from backend.core.config import settings
 from backend.models.user import User
 
 
@@ -26,17 +27,17 @@ async def create_users():
             admin = User(
                 email="admin@localhost",
                 username="admin",
-                hashed_password=get_password_hash("admin12123456"),
+                hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
                 full_name="관리자",
                 user_type="GENERAL",  # GENERAL = 관리자
                 is_active=True,
             )
             db.add(admin)
-            print("관리자 계정 생성됨: admin / admin12123456")
+            print(f"관리자 계정 생성됨: admin / {settings.ADMIN_PASSWORD}")
         else:
             # Update password if exists
-            admin.hashed_password = get_password_hash("admin12123456")
-            print("관리자 계정 비밀번호 업데이트됨: admin / admin12123456")
+            admin.hashed_password = get_password_hash(settings.ADMIN_PASSWORD)
+            print(f"관리자 계정 비밀번호 업데이트됨: admin / {settings.ADMIN_PASSWORD}")
 
         # Check if default user exists
         result = await db.execute(select(User).where(User.username == "user"))
@@ -46,17 +47,17 @@ async def create_users():
             user = User(
                 email="user@localhost",
                 username="user",
-                hashed_password=get_password_hash("user1212"),
+                hashed_password=get_password_hash(settings.USER_PASSWORD),
                 full_name="사용자",
                 user_type="DEPARTMENT",  # DEPARTMENT = 부서 사용자
                 is_active=True,
             )
             db.add(user)
-            print("사용자 계정 생성됨: user / user1212")
+            print(f"사용자 계정 생성됨: user / {settings.USER_PASSWORD}")
         else:
             # Update password if exists
-            user.hashed_password = get_password_hash("user1212")
-            print("사용자 계정 비밀번호 업데이트됨: user / user1212")
+            user.hashed_password = get_password_hash(settings.USER_PASSWORD)
+            print(f"사용자 계정 비밀번호 업데이트됨: user / {settings.USER_PASSWORD}")
 
         await db.commit()
         print("\n완료!")
