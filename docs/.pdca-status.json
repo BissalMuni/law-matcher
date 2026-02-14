@@ -1,0 +1,177 @@
+{
+  "version": "2.0",
+  "lastUpdated": "2026-02-14T04:40:47.973Z",
+  "activeFeatures": [
+    "조문-조회-및-변경-감지-기능",
+    "versions",
+    "backend",
+    "schemas"
+  ],
+  "primaryFeature": "조문-조회-및-변경-감지-기능",
+  "features": {
+    "조문-조회-및-변경-감지-기능": {
+      "featureId": "article-tracking",
+      "featureName": "조문 조회 및 변경 감지 기능",
+      "phase": "design",
+      "matchRate": null,
+      "iterationCount": 0,
+      "startedAt": "2026-02-14T10:30:00.000Z",
+      "lastUpdated": "2026-02-14T12:00:00.000Z",
+      "planDocument": "docs/01-plan/features/조문-조회-및-변경-감지-기능.plan.md",
+      "designDocument": "docs/02-design/features/조문-조회-및-변경-감지-기능.design.md",
+      "analysisDocument": null,
+      "reportDocument": null,
+      "tasks": {
+        "plan": "Task #1",
+        "design": "Task #2"
+      }
+    },
+    "versions": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-14T04:20:51.576Z",
+        "lastUpdated": "2026-02-14T04:38:29.926Z"
+      },
+      "lastFile": "/home/jinkui/law-matcher/backend/alembic/versions/add_articles_tables.py"
+    },
+    "backend": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-14T04:21:12.041Z",
+        "lastUpdated": "2026-02-14T04:40:47.973Z"
+      },
+      "lastFile": "/home/jinkui/law-matcher/backend/check_tables.py"
+    },
+    "schemas": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-14T04:22:30.946Z",
+        "lastUpdated": "2026-02-14T04:22:30.946Z"
+      },
+      "lastFile": "/home/jinkui/law-matcher/backend/schemas/article.py"
+    }
+  },
+  "pipeline": {
+    "currentPhase": 1,
+    "level": "Dynamic",
+    "phaseHistory": []
+  },
+  "session": {
+    "startedAt": "2026-02-14T01:17:31.503Z",
+    "onboardingCompleted": false,
+    "lastActivity": "2026-02-14T04:40:47.973Z"
+  },
+  "history": [
+    {
+      "timestamp": "2026-02-14T10:30:00.000Z",
+      "action": "plan_created",
+      "feature": "조문-조회-및-변경-감지-기능",
+      "details": "Plan document created for article tracking feature"
+    },
+    {
+      "timestamp": "2026-02-14T11:00:00.000Z",
+      "action": "design_created",
+      "feature": "조문-조회-및-변경-감지-기능",
+      "details": "Design document created with detailed architecture, API specs, and database schema"
+    },
+    {
+      "timestamp": "2026-02-14T04:20:51.576Z",
+      "feature": "versions",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:21:12.041Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:21:19.199Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:21:23.966Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:21:38.741Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:21:44.991Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:21:47.265Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:21:50.841Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:21:55.174Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:22:30.946Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:27:39.772Z",
+      "feature": "versions",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:38:29.926Z",
+      "feature": "versions",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:38:55.767Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T04:40:47.973Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    }
+  ]
+}

@@ -11,7 +11,9 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'add_ordinance_reviews'
-down_revision = None  # 실제 환경에서는 마지막 revision ID로 수정 필요
+# 기존에 주석으로 적혀 있던 것처럼 이전 리비전은 add_law_changes 를 따라야 한다.
+# 그래야 ordinances 관련 테이블이 먼저 생성된 뒤 본 migration 이 실행된다.
+down_revision = 'add_law_changes'
 branch_labels = None
 depends_on = None
 

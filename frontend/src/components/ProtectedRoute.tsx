@@ -16,7 +16,9 @@ const ProtectedRoute = () => {
   if (isLoading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-        <Spin size="large" tip="인증 확인 중..." />
+        <Spin size="large" tip="인증 확인 중...">
+          <div style={{ width: 120, height: 40 }} />
+        </Spin>
       </div>
     )
   }
