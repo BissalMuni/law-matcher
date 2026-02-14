@@ -92,16 +92,17 @@ class MolegClient:
 
         data = response.json()
         law_data = data.get("법령", {})
+        basic_info = law_data.get("기본정보", {})
 
         return LawDetail(
-            law_id=law_data.get("법령ID", ""),
+            law_id=basic_info.get("법령ID", ""),
             law_mst=law_mst,
-            law_name=law_data.get("법령명_한글", ""),
-            law_type=law_data.get("법령종류", ""),
-            proclaimed_date=law_data.get("공포일자"),
-            enforced_date=law_data.get("시행일자"),
-            revision_type=law_data.get("제개정구분"),
-            articles=self._parse_articles(law_data.get("조문", [])),
+            law_name=basic_info.get("법령명_한글", ""),
+            law_type=basic_info.get("법종구분", {}).get("content", "") if isinstance(basic_info.get("법종구분"), dict) else basic_info.get("법종구분", ""),
+            proclaimed_date=basic_info.get("공포일자"),
+            enforced_date=basic_info.get("시행일자"),
+            revision_type=basic_info.get("제개정구분"),
+            articles=self._parse_articles(law_data.get("조문", {}).get("조문단위", [])),
         )
 
     async def get_law_history(self, law_id: str) -> List[Dict[str, Any]]:
@@ -130,9 +131,24 @@ class MolegClient:
                 article_no=art.get("조문번호", ""),
                 article_title=art.get("조문제목"),
                 article_content=art.get("조문내용", ""),
-                paragraphs=art.get("항", []),
+                paragraphs=self._parse_paragraphs(art),
             ))
         return articles
+
+    def _parse_paragraphs(self, article_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        법제처 API 응답의 항/호/목 구조 파싱
+
+        Args:
+            article_data: 조문 데이터 (법제처 API 응답)
+
+        Returns:
+            파싱된 paragraphs 리스트 (JSONB 저장용)
+        """
+        # TODO: 법제처 API의 복잡한 항/호/목 구조 파싱
+        # 현재는 단순화하여 빈 리스트 반환
+        # 추후 실제 API 응답 구조에 맞게 파싱 로직 구현 필요
+        return []
 
     async def get_linked_ordinances(
         self,

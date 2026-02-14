@@ -11,6 +11,9 @@ import DepartmentList from './pages/DepartmentList'
 import DepartmentDetail from './pages/DepartmentDetail'
 import OrdinanceList from './pages/OrdinanceList'
 import OrdinanceDetail from './pages/OrdinanceDetail'
+import ArticleList from './pages/ArticleList'
+import ArticleDetail from './pages/ArticleDetail'
+import RevisionNeededList from './pages/RevisionNeededList'
 import LawList from './pages/LawList'
 import LawChangeList from './pages/LawChangeList'
 import ReviewList from './pages/ReviewList'
@@ -34,6 +37,9 @@ function App() {
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="ordinances" element={<OrdinanceList />} />
                 <Route path="ordinances/:id" element={<OrdinanceDetail />} />
+                <Route path="articles" element={<ArticleList />} />
+                <Route path="articles/:id" element={<ArticleDetail />} />
+                <Route path="revision-needed" element={<RevisionNeededList />} />
                 <Route path="laws" element={<LawList />} />
                 <Route path="departments" element={<DepartmentList />} />
                 <Route path="departments/:id" element={<DepartmentDetail />} />

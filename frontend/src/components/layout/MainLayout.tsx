@@ -9,9 +9,11 @@ import {
   TeamOutlined,
   BarChartOutlined,
   BookOutlined,
+  FileSearchOutlined,
   UserOutlined,
   LogoutOutlined,
   DownOutlined,
+  WarningOutlined,
 } from '@ant-design/icons'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -23,6 +25,16 @@ const adminMenuItems = [
     key: '/ordinances',
     icon: <FileTextOutlined />,
     label: '자치법규',
+  },
+  {
+    key: '/articles',
+    icon: <FileSearchOutlined />,
+    label: '조문조회',
+  },
+  {
+    key: '/revision-needed',
+    icon: <WarningOutlined />,
+    label: '개정검토필요',
   },
   {
     key: '/laws',
