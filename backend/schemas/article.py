@@ -198,3 +198,68 @@ class ArticleCountParams(BaseModel):
     law_id: Optional[int] = None
     has_ordinance: Optional[bool] = None
     changed_since: Optional[date] = None
+
+
+# ============================================================================
+# Phase 4: 추가 API Schemas
+# ============================================================================
+
+class BulkMappingRequest(BaseModel):
+    """대량 매핑 요청"""
+    mappings: List[Dict[str, int]]  # [{"article_id": 1, "ordinance_id": 2}, ...]
+    mapping_reason: Optional[str] = None  # notes -> mapping_reason
+
+
+class BulkMappingResponse(BaseModel):
+    """대량 매핑 응답"""
+    success: bool
+    created_count: int
+    failed_count: int
+    message: str
+    failed_items: Optional[List[Dict[str, Any]]] = None
+
+
+class RevisionNeededOrdinanceItem(BaseModel):
+    """개정 검토 필요 조례 항목"""
+    ordinance_id: int
+    ordinance_name: str
+    ordinance_category: str
+    department: str
+    article_id: int
+    article_no: str
+    article_title: Optional[str] = None
+    law_name: str
+    change_date: date
+    detected_at: datetime
+    change_type: str
+    diff_html: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RevisionNeededOrdinanceListResponse(BaseModel):
+    """개정 검토 필요 조례 목록 응답"""
+    items: List[RevisionNeededOrdinanceItem]
+    total: int
+    page: int
+    size: int
+
+
+class AutoMappingRecommendation(BaseModel):
+    """자동 매핑 추천 항목"""
+    article_id: int
+    article_no: str
+    article_title: Optional[str] = None
+    article_content: str
+    ordinance_id: int
+    ordinance_name: str
+    ordinance_category: str
+    similarity_score: float  # 0.0 ~ 1.0
+    reason: str  # 추천 이유
+
+
+class AutoMappingRecommendationResponse(BaseModel):
+    """자동 매핑 추천 응답"""
+    recommendations: List[AutoMappingRecommendation]
+    total: int
