@@ -1,0 +1,200 @@
+"""
+Article (조문) schemas
+"""
+from typing import Optional, List, Dict, Any
+from datetime import date, datetime
+from pydantic import BaseModel
+
+
+# ============================================================================
+# Article Schemas
+# ============================================================================
+
+class ArticleBase(BaseModel):
+    """Article base schema"""
+    article_no: str
+    article_title: Optional[str] = None
+    article_content: str
+
+
+class ArticleCreate(ArticleBase):
+    """Article creation schema"""
+    law_id: int
+    paragraphs: Optional[Dict[str, Any]] = None
+    content_hash: str
+    mst_seq: Optional[int] = None
+    jo_seq: Optional[int] = None
+
+
+class ArticleUpdate(BaseModel):
+    """Article update schema"""
+    article_title: Optional[str] = None
+    article_content: Optional[str] = None
+    paragraphs: Optional[Dict[str, Any]] = None
+    content_hash: Optional[str] = None
+
+
+class ArticleResponse(ArticleBase):
+    """Article response schema"""
+    id: int
+    law_id: int
+    law_name: Optional[str] = None  # Join from Law
+    law_type: Optional[str] = None  # Join from Law
+    paragraphs: Optional[Dict[str, Any]] = None
+    content_hash: str
+    mst_seq: Optional[int] = None
+    jo_seq: Optional[int] = None
+    ordinance_count: Optional[int] = None  # 연계된 조례 개수
+    change_count: Optional[int] = None  # 변경 이력 개수
+    last_changed_date: Optional[date] = None  # 최근 변경일
+    has_recent_change: Optional[bool] = None  # 30일 이내 변경 여부
+    last_synced_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ArticleDetailResponse(ArticleResponse):
+    """Article detail response (with full info)"""
+    pass
+
+
+class ArticleListResponse(BaseModel):
+    """Article list response with pagination"""
+    items: List[ArticleResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+# ============================================================================
+# OrdinanceArticleMapping Schemas
+# ============================================================================
+
+class OrdinanceArticleMappingBase(BaseModel):
+    """OrdinanceArticleMapping base schema"""
+    mapping_reason: Optional[str] = None
+    related_article_nos: Optional[str] = None
+
+
+class OrdinanceArticleMappingCreate(OrdinanceArticleMappingBase):
+    """OrdinanceArticleMapping creation schema"""
+    ordinance_id: int
+    article_id: int
+
+
+class OrdinanceArticleMappingUpdate(OrdinanceArticleMappingBase):
+    """OrdinanceArticleMapping update schema"""
+    pass
+
+
+class OrdinanceArticleMappingResponse(OrdinanceArticleMappingBase):
+    """OrdinanceArticleMapping response schema"""
+    id: int
+    ordinance_id: int
+    article_id: int
+    ordinance_name: Optional[str] = None  # Join from Ordinance
+    ordinance_category: Optional[str] = None  # Join from Ordinance
+    department: Optional[str] = None  # Join from Ordinance
+    article_no: Optional[str] = None  # Join from Article
+    article_title: Optional[str] = None  # Join from Article
+    created_by: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OrdinanceArticleMappingListResponse(BaseModel):
+    """OrdinanceArticleMapping list response"""
+    items: List[OrdinanceArticleMappingResponse]
+    total: int
+
+
+# ============================================================================
+# ArticleChange Schemas
+# ============================================================================
+
+class ArticleChangeBase(BaseModel):
+    """ArticleChange base schema"""
+    change_date: date
+    change_type: str  # 'created', 'updated', 'deleted'
+
+
+class ArticleChangeCreate(ArticleChangeBase):
+    """ArticleChange creation schema"""
+    article_id: int
+    old_content: Optional[str] = None
+    new_content: Optional[str] = None
+    old_hash: Optional[str] = None
+    new_hash: Optional[str] = None
+    diff_html: Optional[str] = None
+
+
+class ArticleChangeResponse(ArticleChangeBase):
+    """ArticleChange response schema"""
+    id: int
+    article_id: int
+    old_content: Optional[str] = None
+    new_content: Optional[str] = None
+    old_hash: Optional[str] = None
+    new_hash: Optional[str] = None
+    diff_html: Optional[str] = None
+    detected_at: datetime
+    notified: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ArticleChangeListResponse(BaseModel):
+    """ArticleChange list response"""
+    items: List[ArticleChangeResponse]
+    total: int
+
+
+# ============================================================================
+# Sync Schemas
+# ============================================================================
+
+class ArticleSyncRequest(BaseModel):
+    """Article sync request schema"""
+    law_ids: Optional[List[int]] = None  # 특정 법령만 동기화 (optional)
+    force: bool = False  # 강제 동기화 여부
+
+
+class ArticleSyncResponse(BaseModel):
+    """Article sync response schema"""
+    success: bool
+    synced_articles: int
+    created: int
+    updated: int
+    deleted: int
+    changes_detected: int
+    message: str
+
+
+# ============================================================================
+# Query Schemas
+# ============================================================================
+
+class ArticleListParams(BaseModel):
+    """Article list query parameters"""
+    page: int = 1
+    size: int = 20
+    law_id: Optional[int] = None  # 법령 ID 필터
+    search: Optional[str] = None  # 조문번호 또는 제목 검색
+    has_ordinance: Optional[bool] = None  # 연계 조례 존재 여부
+    changed_since: Optional[date] = None  # 특정 일자 이후 변경된 조문
+
+
+class ArticleCountParams(BaseModel):
+    """Article count query parameters"""
+    law_id: Optional[int] = None
+    has_ordinance: Optional[bool] = None
+    changed_since: Optional[date] = None

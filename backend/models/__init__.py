@@ -11,6 +11,9 @@ from backend.models.amendment import LawAmendment
 from backend.models.review import AmendmentReview
 from backend.models.law_change import LawChange, ChangeStatus, ApiStatus
 from backend.models.ordinance_review import OrdinanceReview
+from backend.models.article import Article
+from backend.models.ordinance_article_mapping import OrdinanceArticleMapping
+from backend.models.article_change import ArticleChange
 
 __all__ = [
     "User",
@@ -25,4 +28,7 @@ __all__ = [
     "ChangeStatus",
     "ApiStatus",
     "OrdinanceReview",
+    "Article",
+    "OrdinanceArticleMapping",
+    "ArticleChange",
 ]
