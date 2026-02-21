@@ -1,61 +1,121 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Table, Tag, Typography, Space, Select, Button } from 'antd'
-import { DownloadOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
-import { reviewApi } from '../services/api'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  Table,
+  Tag,
+  Typography,
+  Space,
+  Select,
+  Button,
+  Modal,
+  Form,
+  Input,
+  message,
+  Tooltip,
+} from 'antd'
+import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { ordinanceApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 import dayjs from 'dayjs'
 
 const { Title } = Typography
+const { TextArea } = Input
+
+interface ReviewItem {
+  id: number
+  ordinance_id: number
+  ordinance_name?: string
+  ordinance_department?: string
+  reviewer_type: string
+  reviewer_name?: string
+  reviewer_department?: string
+  review_content: string
+  review_result?: string
+  approval_status?: string
+  approved_by?: { username: string; full_name: string | null } | null
+  approved_at?: string
+  approval_note?: string
+  created_by?: { username: string; full_name: string | null } | null
+  created_at: string
+}
+
+const REVIEW_RESULT_COLOR: Record<string, string> = {
+  '개정필요': 'red',
+  '개정불필요': 'green',
+  '검토중': 'orange',
+  '보류': 'default',
+}
+
+const APPROVAL_COLOR: Record<string, string> = {
+  pending: 'orange',
+  approved: 'green',
+  rejected: 'red',
+}
+
+const APPROVAL_LABEL: Record<string, string> = {
+  pending: '승인대기',
+  approved: '승인됨',
+  rejected: '반려됨',
+}
 
 export default function ReviewList() {
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const isAdmin = user?.user_type === 'GENERAL' || user?.user_type === 'ADMIN'
 
-  // URL 쿼리 파라미터에서 초기값 읽기
-  const [page, setPage] = useState(() => {
-    const p = searchParams.get('page')
-    return p ? parseInt(p, 10) : 1
-  })
-  const [needRevision, setNeedRevision] = useState<boolean | undefined>(() => {
-    const v = searchParams.get('needRevision')
-    return v ? v === 'true' : undefined
-  })
-  const [status, setStatus] = useState<string | undefined>(() => searchParams.get('status') || undefined)
-  const [urgency, setUrgency] = useState<string | undefined>(() => searchParams.get('urgency') || undefined)
+  const [page, setPage] = useState(1)
+  const [approvalStatus, setApprovalStatus] = useState<string | undefined>('pending')
+  const [reviewResult, setReviewResult] = useState<string | undefined>()
+  const [reviewerType, setReviewerType] = useState<string | undefined>()
 
-  // 필터 상태 변경 시 URL 쿼리 파라미터 업데이트
-  useEffect(() => {
-    const params = new URLSearchParams()
-    if (page > 1) params.set('page', String(page))
-    if (needRevision !== undefined) params.set('needRevision', String(needRevision))
-    if (status) params.set('status', status)
-    if (urgency) params.set('urgency', urgency)
-    setSearchParams(params, { replace: true })
-  }, [page, needRevision, status, urgency, setSearchParams])
+  // 승인/반려 모달 상태
+  const [approveModal, setApproveModal] = useState<{
+    open: boolean
+    reviewId: number | null
+    action: 'approved' | 'rejected' | null
+  }>({ open: false, reviewId: null, action: null })
+  const [approveForm] = Form.useForm()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['reviews', page, needRevision, status, urgency],
+    queryKey: ['all-reviews', page, approvalStatus, reviewResult, reviewerType],
     queryFn: () =>
-      reviewApi.getList({
+      ordinanceApi.getAllReviews({
         page,
         size: 20,
-        need_revision: needRevision,
-        status,
-        urgency,
+        approval_status: approvalStatus,
+        review_result: reviewResult,
+        reviewer_type: reviewerType,
       }),
   })
 
-  const urgencyColor: Record<string, string> = {
-    HIGH: 'red',
-    MEDIUM: 'orange',
-    LOW: 'blue',
+  const approveMutation = useMutation({
+    mutationFn: ({ reviewId, status, note }: { reviewId: number; status: string; note?: string }) =>
+      ordinanceApi.approveReview(reviewId, { approval_status: status, approval_note: note }),
+    onSuccess: () => {
+      message.success(approveModal.action === 'approved' ? '승인되었습니다.' : '반려되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['all-reviews'] })
+      setApproveModal({ open: false, reviewId: null, action: null })
+      approveForm.resetFields()
+    },
+    onError: () => {
+      message.error('처리 중 오류가 발생했습니다.')
+    },
+  })
+
+  const handleApproveClick = (review: ReviewItem, action: 'approved' | 'rejected') => {
+    setApproveModal({ open: true, reviewId: review.id, action })
   }
 
-  const statusColor: Record<string, string> = {
-    PENDING: 'orange',
-    REVIEWED: 'blue',
-    COMPLETED: 'green',
+  const handleApproveSubmit = async () => {
+    const values = await approveForm.validateFields()
+    if (!approveModal.reviewId || !approveModal.action) return
+    approveMutation.mutate({
+      reviewId: approveModal.reviewId,
+      status: approveModal.action,
+      note: values.approval_note,
+    })
   }
 
   const columns = [
@@ -63,88 +123,151 @@ export default function ReviewList() {
       title: '자치법규',
       dataIndex: 'ordinance_name',
       key: 'ordinance_name',
-      render: (text: string, record: any) => (
-        <a onClick={() => navigate(`/reviews/${record.id}`)}>{text || `조례 #${record.ordinance_id}`}</a>
+      ellipsis: true,
+      render: (text: string, record: ReviewItem) => (
+        <a onClick={() => navigate(`/ordinances/${record.ordinance_id}`)}>
+          {text || `조례 #${record.ordinance_id}`}
+        </a>
       ),
     },
     {
-      title: '상위법령',
-      dataIndex: 'law_name',
-      key: 'law_name',
+      title: '소관부서',
+      dataIndex: 'ordinance_department',
+      key: 'ordinance_department',
+      width: 130,
+      ellipsis: true,
     },
     {
-      title: '개정필요',
-      dataIndex: 'need_revision',
-      key: 'need_revision',
-      width: 100,
-      render: (need: boolean) => (
-        <Tag color={need ? 'red' : 'green'}>{need ? '필요' : '불필요'}</Tag>
+      title: '검토자',
+      key: 'reviewer',
+      width: 140,
+      render: (_: unknown, record: ReviewItem) => (
+        <div>
+          <div>{record.reviewer_name || record.created_by?.full_name || record.created_by?.username}</div>
+          <div style={{ fontSize: 11, color: '#888' }}>
+            {record.reviewer_department || record.reviewer_type}
+          </div>
+        </div>
       ),
     },
     {
-      title: '긴급도',
-      dataIndex: 'revision_urgency',
-      key: 'revision_urgency',
-      width: 80,
-      render: (urgency: string) =>
-        urgency ? <Tag color={urgencyColor[urgency]}>{urgency}</Tag> : '-',
+      title: '검토의견',
+      dataIndex: 'review_content',
+      key: 'review_content',
+      ellipsis: true,
+      render: (text: string) => (
+        <Tooltip title={text}>
+          <span>{text}</span>
+        </Tooltip>
+      ),
     },
     {
-      title: '상태',
-      dataIndex: 'status',
-      key: 'status',
+      title: '검토결과',
+      dataIndex: 'review_result',
+      key: 'review_result',
+      width: 110,
+      render: (result: string) =>
+        result ? (
+          <Tag color={REVIEW_RESULT_COLOR[result] || 'default'}>{result}</Tag>
+        ) : (
+          <span style={{ color: '#ccc' }}>-</span>
+        ),
+    },
+    {
+      title: '승인상태',
+      dataIndex: 'approval_status',
+      key: 'approval_status',
       width: 100,
       render: (status: string) => (
-        <Tag color={statusColor[status]}>{status}</Tag>
+        <Tag color={APPROVAL_COLOR[status] || 'default'}>
+          {APPROVAL_LABEL[status] || status}
+        </Tag>
       ),
     },
     {
-      title: '생성일',
+      title: '작성일',
       dataIndex: 'created_at',
       key: 'created_at',
-      width: 120,
-      render: (date: string) => dayjs(date).format('YYYY-MM-DD'),
+      width: 110,
+      render: (d: string) => dayjs(d).format('YYYY-MM-DD'),
     },
+    ...(isAdmin
+      ? [
+          {
+            title: '처리',
+            key: 'action',
+            width: 110,
+            render: (_: unknown, record: ReviewItem) =>
+              record.approval_status === 'pending' ? (
+                <Space size={4}>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => handleApproveClick(record, 'approved')}
+                  >
+                    승인
+                  </Button>
+                  <Button
+                    size="small"
+                    danger
+                    icon={<CloseCircleOutlined />}
+                    onClick={() => handleApproveClick(record, 'rejected')}
+                  >
+                    반려
+                  </Button>
+                </Space>
+              ) : (
+                <span style={{ fontSize: 12, color: '#888' }}>
+                  {record.approved_by?.full_name || record.approved_by?.username || '-'}
+                </span>
+              ),
+          },
+        ]
+      : []),
   ]
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Title level={4}>개정 검토 목록</Title>
-        <Button icon={<DownloadOutlined />}>리포트 다운로드</Button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Title level={4} style={{ margin: 0 }}>검토의견 관리</Title>
       </div>
 
-      <Space style={{ marginBottom: 16 }}>
+      <Space style={{ marginBottom: 16 }} wrap>
         <Select
-          placeholder="개정필요"
+          placeholder="승인상태"
           style={{ width: 120 }}
           allowClear
-          onChange={setNeedRevision}
+          value={approvalStatus}
+          onChange={(v) => { setApprovalStatus(v); setPage(1) }}
           options={[
-            { value: true, label: '필요' },
-            { value: false, label: '불필요' },
+            { value: 'pending', label: '승인대기' },
+            { value: 'approved', label: '승인됨' },
+            { value: 'rejected', label: '반려됨' },
           ]}
         />
         <Select
-          placeholder="상태"
-          style={{ width: 120 }}
+          placeholder="검토결과"
+          style={{ width: 130 }}
           allowClear
-          onChange={setStatus}
+          value={reviewResult}
+          onChange={(v) => { setReviewResult(v); setPage(1) }}
           options={[
-            { value: 'PENDING', label: 'PENDING' },
-            { value: 'REVIEWED', label: 'REVIEWED' },
-            { value: 'COMPLETED', label: 'COMPLETED' },
+            { value: '개정필요', label: '개정필요' },
+            { value: '개정불필요', label: '개정불필요' },
+            { value: '검토중', label: '검토중' },
+            { value: '보류', label: '보류' },
           ]}
         />
         <Select
-          placeholder="긴급도"
-          style={{ width: 120 }}
+          placeholder="검토자유형"
+          style={{ width: 130 }}
           allowClear
-          onChange={setUrgency}
+          value={reviewerType}
+          onChange={(v) => { setReviewerType(v); setPage(1) }}
           options={[
-            { value: 'HIGH', label: 'HIGH' },
-            { value: 'MEDIUM', label: 'MEDIUM' },
-            { value: 'LOW', label: 'LOW' },
+            { value: 'DEPARTMENT', label: '부서담당자' },
+            { value: 'GENERAL', label: '총괄담당자' },
           ]}
         />
       </Space>
@@ -154,6 +277,7 @@ export default function ReviewList() {
         dataSource={data?.items || []}
         rowKey="id"
         loading={isLoading}
+        size="small"
         pagination={{
           current: page,
           total: data?.total || 0,
@@ -162,6 +286,36 @@ export default function ReviewList() {
           showTotal: (total) => `총 ${total}건`,
         }}
       />
+
+      {/* 승인/반려 모달 */}
+      <Modal
+        title={approveModal.action === 'approved' ? '검토의견 승인' : '검토의견 반려'}
+        open={approveModal.open}
+        onOk={handleApproveSubmit}
+        onCancel={() => {
+          setApproveModal({ open: false, reviewId: null, action: null })
+          approveForm.resetFields()
+        }}
+        okText={approveModal.action === 'approved' ? '승인' : '반려'}
+        okButtonProps={{
+          danger: approveModal.action === 'rejected',
+          loading: approveMutation.isPending,
+        }}
+      >
+        <Form form={approveForm} layout="vertical">
+          <Form.Item
+            name="approval_note"
+            label={approveModal.action === 'approved' ? '승인 코멘트 (선택)' : '반려 사유'}
+            rules={
+              approveModal.action === 'rejected'
+                ? [{ required: true, message: '반려 사유를 입력해주세요.' }]
+                : []
+            }
+          >
+            <TextArea rows={4} placeholder="코멘트를 입력하세요..." />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

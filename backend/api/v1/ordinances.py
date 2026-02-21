@@ -31,6 +31,8 @@ from backend.schemas.ordinance import (
     OrdinanceReviewResponse,
     OrdinanceReviewListResponse,
     OrdinanceReviewApprovalRequest,
+    AllOrdinanceReviewsResponse,
+    OrdinanceReviewWithOrdinance,
 )
 from backend.services.ordinance_service import OrdinanceService
 from backend.core.exceptions import NotFoundError
@@ -364,6 +366,63 @@ async def export_ordinances(
     )
 
 
+@router.get("/reviews-all", response_model=AllOrdinanceReviewsResponse)
+async def get_all_ordinance_reviews(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    approval_status: Optional[str] = None,   # pending | approved | rejected
+    review_result: Optional[str] = None,      # 개정필요 | 개정불필요 | 검토중 | 보류
+    reviewer_type: Optional[str] = None,      # DEPARTMENT | GENERAL
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    전체 검토의견 목록 조회 (관리자 승인 대시보드)
+
+    approval_status=pending 으로 필터하면 승인 대기 목록을 볼 수 있습니다.
+    """
+    from sqlalchemy import select, func
+    from sqlalchemy.orm import selectinload
+    from backend.models.ordinance_review import OrdinanceReview
+    from backend.models.ordinance import Ordinance
+
+    stmt = (
+        select(OrdinanceReview)
+        .options(
+            selectinload(OrdinanceReview.created_by),
+            selectinload(OrdinanceReview.updated_by),
+            selectinload(OrdinanceReview.approved_by),
+            selectinload(OrdinanceReview.ordinance),
+        )
+    )
+
+    if approval_status:
+        stmt = stmt.where(OrdinanceReview.approval_status == approval_status)
+    if review_result:
+        stmt = stmt.where(OrdinanceReview.review_result == review_result)
+    if reviewer_type:
+        stmt = stmt.where(OrdinanceReview.reviewer_type == reviewer_type)
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = await db.scalar(count_stmt) or 0
+
+    stmt = stmt.order_by(OrdinanceReview.created_at.desc())
+    stmt = stmt.offset((page - 1) * size).limit(size)
+
+    result = await db.execute(stmt)
+    reviews = result.scalars().all()
+
+    items = []
+    for review in reviews:
+        item = OrdinanceReviewWithOrdinance.model_validate(review)
+        if review.ordinance:
+            item.ordinance_name = review.ordinance.name
+            item.ordinance_department = review.ordinance.department
+        items.append(item)
+
+    return AllOrdinanceReviewsResponse(total=total, page=page, size=size, items=items)
+
+
 @router.get("/{ordinance_id}", response_model=OrdinanceResponse)
 async def get_ordinance(
     ordinance_id: int,
@@ -639,8 +698,8 @@ async def approve_ordinance_review(
     current_user: User = Depends(get_current_user),
 ):
     """검토의견 승인/반려 (관리자 전용)"""
-    # 관리자 권한 확인
-    if current_user.user_type != "GENERAL":
+    # 관리자 권한 확인 (ADMIN 또는 GENERAL 허용)
+    if current_user.user_type not in ("ADMIN", "GENERAL"):
         raise HTTPException(status_code=403, detail="관리자만 승인/반려할 수 있습니다.")
 
     if data.approval_status not in ["approved", "rejected"]:

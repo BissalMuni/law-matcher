@@ -185,6 +185,17 @@ export const ordinanceApi = {
     return data
   },
 
+  getAllReviews: async (params: {
+    page?: number
+    size?: number
+    approval_status?: string   // pending | approved | rejected
+    review_result?: string     // 개정필요 | 개정불필요 | 검토중 | 보류
+    reviewer_type?: string     // DEPARTMENT | GENERAL
+  }) => {
+    const { data } = await api.get('/ordinances/reviews-all', { params })
+    return data
+  },
+
   syncFromMoleg: async (params?: { org?: string; sborg?: string; password?: string }) => {
     const headers = params?.password ? { 'X-Admin-Password': params.password } : {}
     const { data } = await api.post('/ordinances/sync', params || {}, { headers })

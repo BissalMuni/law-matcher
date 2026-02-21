@@ -515,7 +515,7 @@ class ArticleService:
 
         # 2. needs_revision 업데이트
         for ordinance in ordinances:
-            ordinance.needs_revision = 1
+            ordinance.needs_revision = True
 
         # Commit은 호출자에서 처리
 

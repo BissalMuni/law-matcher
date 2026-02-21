@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-02-20T07:49:09.045Z",
+  "lastUpdated": "2026-02-21T08:57:24.073Z",
   "activeFeatures": [
     "조문-조회-및-변경-감지-기능",
     "versions",
@@ -48,9 +48,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T04:20:51.576Z",
-        "lastUpdated": "2026-02-20T07:46:01.671Z"
+        "lastUpdated": "2026-02-21T08:50:22.974Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/backend/alembic/versions/20260220_164554_add_unique_constraints.py"
+      "lastFile": "/home/jinkui/law-matcher/backend/alembic/versions/20260221_add_needs_revision_to_ordinances.py"
     },
     "backend": {
       "phase": "do",
@@ -61,9 +61,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T04:21:12.041Z",
-        "lastUpdated": "2026-02-20T07:45:45.245Z"
+        "lastUpdated": "2026-02-21T08:51:09.438Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/backend/models/ordinance_article_mapping.py"
+      "lastFile": "/home/jinkui/law-matcher/backend/tasks.py"
     },
     "schemas": {
       "phase": "do",
@@ -74,9 +74,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T04:22:30.946Z",
-        "lastUpdated": "2026-02-20T07:32:23.355Z"
+        "lastUpdated": "2026-02-21T08:52:09.092Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/backend/schemas/article.py"
+      "lastFile": "/home/jinkui/law-matcher/backend/schemas/ordinance.py"
     },
     "external": {
       "phase": "do",
@@ -100,7 +100,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T08:48:00.764Z",
-        "lastUpdated": "2026-02-20T07:46:24.445Z"
+        "lastUpdated": "2026-02-21T08:50:00.810Z"
       },
       "lastFile": "/home/jinkui/law-matcher/backend/services/article_service.py"
     },
@@ -113,9 +113,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T08:49:01.805Z",
-        "lastUpdated": "2026-02-20T07:48:34.803Z"
+        "lastUpdated": "2026-02-21T08:57:19.581Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/backend/api/v1/laws.py"
+      "lastFile": "/home/jinkui/law-matcher/backend/api/v1/ordinances.py"
     },
     "tests": {
       "phase": "do",
@@ -152,7 +152,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T09:00:43.808Z",
-        "lastUpdated": "2026-02-20T07:49:09.045Z"
+        "lastUpdated": "2026-02-21T08:52:40.396Z"
       },
       "lastFile": "/home/jinkui/law-matcher/frontend/src/services/api.ts"
     },
@@ -165,9 +165,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T09:01:33.886Z",
-        "lastUpdated": "2026-02-20T07:43:14.299Z"
+        "lastUpdated": "2026-02-21T08:57:24.073Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/frontend/src/pages/ArticleDetail.tsx"
+      "lastFile": "/home/jinkui/law-matcher/frontend/src/pages/ReviewList.tsx"
     }
   },
   "pipeline": {
@@ -178,7 +178,7 @@
   "session": {
     "startedAt": "2026-02-14T01:17:31.503Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-02-20T07:49:09.045Z"
+    "lastActivity": "2026-02-21T08:57:24.073Z"
   },
   "history": [
     {
@@ -748,6 +748,72 @@
     {
       "timestamp": "2026-02-20T07:49:09.045Z",
       "feature": "api.ts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:49:45.707Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:50:00.810Z",
+      "feature": "article_service.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:50:22.974Z",
+      "feature": "versions",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:51:09.438Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:52:09.092Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:52:18.136Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:52:29.715Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:52:40.396Z",
+      "feature": "api.ts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:53:24.363Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:57:19.581Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:57:24.073Z",
+      "feature": "frontend",
       "phase": "do",
       "action": "updated"
     }
