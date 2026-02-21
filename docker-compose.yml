@@ -10,6 +10,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://lawmatcher:${POSTGRES_PASSWORD:-lawmatcher}@db:5432/lawmatcher
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - MOLEG_API_KEY=${MOLEG_API_KEY}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
@@ -53,7 +54,32 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app/backend
-    command: celery -A backend.tasks worker -l info
+    command: celery -A backend.celery_app worker -l info
+    restart: unless-stopped
+    networks:
+      - lawmatcher-network
+
+  # Celery Beat Scheduler
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://lawmatcher:${POSTGRES_PASSWORD:-lawmatcher}@db:5432/lawmatcher
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MOLEG_API_KEY=${MOLEG_API_KEY}
+      - CELERY_BEAT_SYNC_HOUR=${CELERY_BEAT_SYNC_HOUR:-9}
+      - CELERY_BEAT_SYNC_MINUTE=${CELERY_BEAT_SYNC_MINUTE:-0}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend
+    command: celery -A backend.celery_app beat -l info
     restart: unless-stopped
     networks:
       - lawmatcher-network

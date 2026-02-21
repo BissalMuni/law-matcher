@@ -517,3 +517,67 @@ async def delete_law(
         "success": True,
         "message": f"법령 '{law_name}' 및 관련 데이터가 삭제되었습니다.",
     }
+
+
+@router.get("/{law_id}/articles")
+async def get_law_articles(
+    law_id: int,
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    특정 법령의 조문 목록 조회
+
+    Args:
+        law_id: 법령 ID
+        page: 페이지 번호
+        size: 페이지 크기
+
+    Returns:
+        조문 목록 (페이지네이션)
+    """
+    from backend.models.article import Article
+    from backend.schemas.article import ArticleResponse, ArticleListResponse
+
+    # Law 존재 확인
+    law_result = await db.execute(
+        select(Law).where(Law.id == law_id)
+    )
+    law = law_result.scalar_one_or_none()
+    if not law:
+        raise HTTPException(status_code=404, detail="Law not found")
+
+    # Total count
+    count_result = await db.execute(
+        select(func.count()).select_from(Article).where(Article.law_id == law_id)
+    )
+    total = count_result.scalar() or 0
+
+    # Articles query
+    articles_result = await db.execute(
+        select(Article)
+        .where(Article.law_id == law_id)
+        .order_by(Article.article_no)
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    articles = articles_result.scalars().all()
+
+    # Build response
+    items = []
+    for article in articles:
+        article_dict = ArticleResponse.model_validate(article).model_dump()
+        article_dict['law_name'] = law.law_name
+        article_dict['law_type'] = law.law_type
+        items.append(ArticleResponse(**article_dict))
+
+    pages = (total + size - 1) // size
+
+    return ArticleListResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=size,
+        pages=pages,
+    )

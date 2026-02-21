@@ -316,8 +316,8 @@ async def delete_article_ordinance_mapping(
             detail={"code": "INVALID_PARAMS", "message": "잘못된 요청입니다."},
         )
 
-    # 권한 체크
-    is_admin = current_user.user_type in {"GENERAL", "ADMIN", "SUPER_ADMIN"}
+    # 권한 체크 (Admin만 모든 매핑 삭제 가능)
+    is_admin = current_user.user_type in {"ADMIN", "SUPER_ADMIN"}
     if not is_admin and mapping.created_by != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -374,12 +374,12 @@ async def sync_articles(
     - **law_ids**: 특정 법령만 동기화 (optional, 없으면 전체)
     - **force**: 강제 동기화 여부 (default: false)
     """
-    # 권한 체크: DEPARTMENT/ADMIN 계정만 허용
-    allowed_user_types = {"DEPARTMENT", "GENERAL", "ADMIN", "SUPER_ADMIN"}
+    # 권한 체크: ADMIN 계정만 허용
+    allowed_user_types = {"ADMIN", "SUPER_ADMIN"}
     if current_user.user_type not in allowed_user_types:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "FORBIDDEN", "message": "부서 계정 이상만 동기화할 수 있습니다."},
+            detail={"code": "FORBIDDEN", "message": "관리자만 동기화할 수 있습니다."},
         )
 
     # 동기화 대상 법령 결정
@@ -555,8 +555,11 @@ async def get_revision_needed_ordinances(
     """
     개정 검토 필요 조례 목록 조회
 
-    최근 변경된 조문과 매핑된 조례들을 조회하여
-    개정 검토가 필요한 조례 목록을 반환합니다.
+    조례의 상위법령에 입력된 related_articles를 파싱하여
+    해당 조문의 변경사항만 표시합니다.
+
+    예: "제13조" → article_no = "13"인 조문의 변경사항 표시
+    예: "제64조~제68조" → article_no = "64", "65", "66", "67", "68"인 조문의 변경사항 표시
 
     - **days**: 최근 N일 이내 감지된 조문 변경 (기본값: 30일)
     - **department**: 담당부서 필터 (선택사항)
@@ -566,84 +569,168 @@ async def get_revision_needed_ordinances(
     from backend.models.law import Law
     from backend.models.ordinance_law_mapping import OrdinanceLawMapping
     from datetime import datetime, timedelta
+    import re
+
+    def parse_article_numbers(related_articles: str) -> list:
+        """
+        related_articles 텍스트를 파싱하여 조문 번호 리스트 반환
+
+        예:
+        - "제13조" → ["13"]
+        - "제64조~제68조" → ["64", "65", "66", "67", "68"]
+        - "제13조, 제20조" → ["13", "20"]
+        """
+        if not related_articles:
+            return []
+
+        numbers = []
+
+        # 범위 표현 (예: "제64조~제68조", "제10조-제15조")
+        range_pattern = r'제?(\d+)조?\s*[~\-]\s*제?(\d+)조?'
+        ranges = re.findall(range_pattern, related_articles)
+        for start, end in ranges:
+            start_num = int(start)
+            end_num = int(end)
+            numbers.extend([str(n) for n in range(start_num, end_num + 1)])
+
+        # 단일 조문 (예: "제13조", "13조")
+        single_pattern = r'제?(\d+)조?'
+        singles = re.findall(single_pattern, related_articles)
+        numbers.extend(singles)
+
+        # 중복 제거 및 정렬
+        return sorted(list(set(numbers)), key=lambda x: int(x))
 
     # 기준 날짜 계산
     cutoff_datetime = datetime.utcnow() - timedelta(days=days)
 
-    # 쿼리 구성
-    from sqlalchemy import select, func
+    from sqlalchemy import select, func, and_, or_
 
-    # 전체 개수 쿼리
-    count_query = (
-        select(func.count())
-        .select_from(ArticleChange)
-        .join(Article, ArticleChange.article_id == Article.id)
-        .join(Law, Article.law_id == Law.id)
-        .join(OrdinanceLawMapping, OrdinanceLawMapping.law_id == Law.id)
-        .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
-        .where(ArticleChange.detected_at >= cutoff_datetime)
-    )
-
-    if department:
-        count_query = count_query.where(Ordinance.department == department)
-
-    # 데이터 쿼리
-    query = (
-        select(
-            Ordinance.id.label("ordinance_id"),
-            Ordinance.name.label("ordinance_name"),
-            Ordinance.category,
-            Ordinance.department,
-            Article.id.label("article_id"),
-            Article.article_no,
-            Article.article_title,
-            Law.law_name,
-            ArticleChange.change_date,
-            ArticleChange.detected_at,
-            ArticleChange.change_type,
-            ArticleChange.diff_html,
-        )
-        .select_from(ArticleChange)
-        .join(Article, ArticleChange.article_id == Article.id)
-        .join(Law, Article.law_id == Law.id)
-        .join(OrdinanceLawMapping, OrdinanceLawMapping.law_id == Law.id)
-        .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
-        .where(ArticleChange.detected_at >= cutoff_datetime)
-    )
+    # Step 1: 조례-법령 매핑 정보 가져오기 (related_articles 포함)
+    olm_query = select(
+        OrdinanceLawMapping.id.label("mapping_id"),
+        OrdinanceLawMapping.ordinance_id,
+        OrdinanceLawMapping.law_id,
+        OrdinanceLawMapping.related_articles,
+        Ordinance.name.label("ordinance_name"),
+        Ordinance.category,
+        Ordinance.department,
+    ).join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
 
     if department:
-        query = query.where(Ordinance.department == department)
+        olm_query = olm_query.where(Ordinance.department == department)
 
-    # Pagination
-    query = query.order_by(ArticleChange.detected_at.desc(), ArticleChange.change_date.desc())
-    query = query.offset((page - 1) * size).limit(size)
+    olm_result = await db.execute(olm_query)
+    mappings = olm_result.all()
 
-    # 쿼리 실행
-    count_result = await db.execute(count_query)
-    total = count_result.scalar() or 0
+    # Step 2: 각 매핑의 related_articles를 파싱하여 조문 번호 추출
+    # {law_id: {ordinance_id: [article_numbers]}}
+    law_article_map = {}
+    ordinance_info = {}  # {ordinance_id: {name, category, department}}
 
-    result = await db.execute(query)
-    rows = result.all()
+    for mapping in mappings:
+        article_numbers = parse_article_numbers(mapping.related_articles)
+        if not article_numbers:
+            # related_articles가 없으면 해당 법령의 모든 조문 포함
+            if mapping.law_id not in law_article_map:
+                law_article_map[mapping.law_id] = {}
+            law_article_map[mapping.law_id][mapping.ordinance_id] = None  # None = 모든 조문
+        else:
+            if mapping.law_id not in law_article_map:
+                law_article_map[mapping.law_id] = {}
+            law_article_map[mapping.law_id][mapping.ordinance_id] = article_numbers
 
-    # 응답 구성
-    items = []
-    for row in rows:
-        items.append(
-            RevisionNeededOrdinanceItem(
-                ordinance_id=row.ordinance_id,
-                ordinance_name=row.ordinance_name,
-                ordinance_category=row.category,  # category 컬럼을 ordinance_category 필드로
-                department=row.department,
-                article_id=row.article_id,
-                article_no=row.article_no,
-                article_title=row.article_title,
-                law_name=row.law_name,
-                change_date=row.change_date,
-                detected_at=row.detected_at,
-                change_type=row.change_type,
-                diff_html=row.diff_html,
+        ordinance_info[mapping.ordinance_id] = {
+            "name": mapping.ordinance_name,
+            "category": mapping.category,
+            "department": mapping.department,
+        }
+
+    # Step 3: 변경된 조문 조회
+    all_results = []
+
+    for law_id, ordinance_articles in law_article_map.items():
+        for ordinance_id, article_numbers in ordinance_articles.items():
+            # 조문 변경사항 쿼리
+            change_query = (
+                select(
+                    Article.id.label("article_id"),
+                    Article.article_no,
+                    Article.article_title,
+                    Law.law_name,
+                    ArticleChange.change_date,
+                    ArticleChange.detected_at,
+                    ArticleChange.change_type,
+                    ArticleChange.diff_html,
+                )
+                .select_from(ArticleChange)
+                .join(Article, ArticleChange.article_id == Article.id)
+                .join(Law, Article.law_id == Law.id)
+                .where(
+                    and_(
+                        Article.law_id == law_id,
+                        ArticleChange.detected_at >= cutoff_datetime,
+                    )
+                )
             )
-        )
+
+            # article_numbers가 지정되어 있으면 해당 조문만
+            if article_numbers is not None:
+                change_query = change_query.where(Article.article_no.in_(article_numbers))
+
+            change_result = await db.execute(change_query)
+            changes = change_result.all()
+
+            # related_articles가 없는 경우: 조례당 1개만 표시
+            if article_numbers is None and len(changes) > 0:
+                # 가장 최근 변경사항 선택
+                sorted_changes = sorted(changes, key=lambda x: (x.detected_at, x.change_date), reverse=True)
+                representative_change = sorted_changes[0]
+
+                all_results.append({
+                    "ordinance_id": ordinance_id,
+                    "ordinance_name": ordinance_info[ordinance_id]["name"],
+                    "ordinance_category": ordinance_info[ordinance_id]["category"],
+                    "department": ordinance_info[ordinance_id]["department"],
+                    "article_id": representative_change.article_id,
+                    "article_no": representative_change.article_no,
+                    "article_title": representative_change.article_title,
+                    "law_name": representative_change.law_name,
+                    "change_date": representative_change.change_date,
+                    "detected_at": representative_change.detected_at,
+                    "change_type": representative_change.change_type,
+                    "diff_html": representative_change.diff_html,
+                    "affected_article_count": len(changes),  # 전체 변경된 조문 개수
+                })
+            else:
+                # related_articles가 있는 경우: 모든 조문 표시
+                for change in changes:
+                    all_results.append({
+                        "ordinance_id": ordinance_id,
+                        "ordinance_name": ordinance_info[ordinance_id]["name"],
+                        "ordinance_category": ordinance_info[ordinance_id]["category"],
+                        "department": ordinance_info[ordinance_id]["department"],
+                        "article_id": change.article_id,
+                        "article_no": change.article_no,
+                        "article_title": change.article_title,
+                        "law_name": change.law_name,
+                        "change_date": change.change_date,
+                        "detected_at": change.detected_at,
+                        "change_type": change.change_type,
+                        "diff_html": change.diff_html,
+                        "affected_article_count": None,  # related_articles가 있으면 None
+                    })
+
+    # Step 4: 정렬 및 페이지네이션
+    all_results.sort(key=lambda x: (x["detected_at"], x["change_date"]), reverse=True)
+
+    total = len(all_results)
+    start = (page - 1) * size
+    end = start + size
+    paginated_results = all_results[start:end]
+
+    # Step 5: 응답 구성
+    items = [RevisionNeededOrdinanceItem(**item) for item in paginated_results]
 
     return RevisionNeededOrdinanceListResponse(
         items=items,

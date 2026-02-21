@@ -3,7 +3,7 @@ OrdinanceArticleMapping (조례-조문 연계) model
 """
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, Text, DateTime, Integer, ForeignKey, Index
+from sqlalchemy import String, Text, DateTime, Integer, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.database import Base
@@ -56,6 +56,7 @@ class OrdinanceArticleMapping(Base):
     creator: Mapped[Optional["User"]] = relationship()
 
     __table_args__ = (
+        UniqueConstraint('ordinance_id', 'article_id', name='uq_ordinance_article_mapping'),
         Index('idx_ordinance_article_mappings_ordinance_id', 'ordinance_id'),
         Index('idx_ordinance_article_mappings_article_id', 'article_id'),
     )

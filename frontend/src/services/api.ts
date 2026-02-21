@@ -200,6 +200,25 @@ export const ordinanceApi = {
     const { data } = await api.get('/ordinances/revision-types')
     return data
   },
+
+  // 근거 조문 매핑 관리
+  getMappedArticles: async (ordinanceId: number) => {
+    const { data } = await api.get(`/ordinances/${ordinanceId}/mapped-articles`)
+    return data
+  },
+
+  getAvailableArticles: async (ordinanceId: number) => {
+    const { data } = await api.get(`/ordinances/${ordinanceId}/available-articles`)
+    return data
+  },
+
+  setMappedArticles: async (ordinanceId: number, articleIds: number[], mappingReason?: string) => {
+    const { data } = await api.post(`/ordinances/${ordinanceId}/mapped-articles/bulk`, {
+      article_ids: articleIds,
+      mapping_reason: mappingReason || '근거 조문',
+    })
+    return data
+  },
 }
 
 // Sync API
@@ -711,6 +730,18 @@ export const articleApi = {
   }) => {
     const { data } = await api.post('/articles/sync', request || {})
     return data
+  },
+
+  // 조문 개수 조회
+  getCount: async (params?: {
+    law_id?: number
+    has_ordinance?: boolean
+    changed_since?: string
+  }) => {
+    const response = await api.get('/articles', {
+      params: { ...params, page: 1, size: 1 }
+    })
+    return response.data.total
   },
 
   // ========================================
