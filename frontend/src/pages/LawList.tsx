@@ -4,6 +4,7 @@ import { Table, Input, Select, Space, Typography, Button, Tree, Card, Modal, Lis
 import { SearchOutlined, ApartmentOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { lawsApi, departmentApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 import type { TreeDataNode } from 'antd'
 
 const { Title } = Typography
@@ -48,6 +49,8 @@ interface OrdinanceMapping {
 export default function LawList() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
+  const { user } = useAuth()
+  const isAdmin = user?.user_type === 'ADMIN'
 
   // URL 쿼리 파라미터에서 초기값 읽기
   const [page, setPage] = useState(() => {
@@ -174,6 +177,19 @@ export default function LawList() {
     },
   })
 
+  // 상위법령 삭제 (관리자 전용)
+  const deleteLawMutation = useMutation({
+    mutationFn: (lawId: number) => lawsApi.delete(lawId),
+    onSuccess: () => {
+      message.success('상위법령이 삭제되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['laws'] })
+      queryClient.invalidateQueries({ queryKey: ['laws-count'] })
+    },
+    onError: (error: any) => {
+      message.error(error?.response?.data?.detail || '상위법령 삭제에 실패했습니다.')
+    },
+  })
+
   // 최초 로딩 시 DB에서 불러오기
   useEffect(() => {
     setInitialLoaded(true)
@@ -255,6 +271,29 @@ export default function LawList() {
         <a onClick={() => handleShowOrdinances(record)}>{count || 0}</a>
       ),
     },
+    ...(isAdmin ? [{
+      title: '작업',
+      key: 'actions',
+      width: 90,
+      align: 'center' as const,
+      render: (_: unknown, record: LawItem) => (
+        <Popconfirm
+          title="상위법령 삭제"
+          description={`'${record.law_name}'을(를) 삭제하시겠습니까?`}
+          okText="삭제"
+          cancelText="취소"
+          onConfirm={() => deleteLawMutation.mutate(record.id)}
+        >
+          <Button
+            type="text"
+            danger
+            size="small"
+            icon={<DeleteOutlined />}
+            loading={deleteLawMutation.isPending}
+          />
+        </Popconfirm>
+      ),
+    }] : []),
   ]
 
   return (

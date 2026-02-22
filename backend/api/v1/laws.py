@@ -9,9 +9,10 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.api.deps import get_db
+from backend.api.deps import get_db, get_current_user
 from backend.models.law import Law
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
+from backend.models.user import User
 from backend.schemas.ordinance import (
     LawResponse,
     LawBriefResponse,
@@ -428,11 +429,15 @@ async def update_all_law_info(
 async def bulk_delete_laws(
     request: dict,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     법령 일괄 삭제 (laws + law_changes + ordinance_law_mappings 모두 삭제)
     """
     from backend.models.law_change import LawChange
+
+    if current_user.user_type not in ("ADMIN", "GENERAL"):
+        raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있습니다.")
 
     law_ids = request.get("law_ids", [])
     if not law_ids:
@@ -479,11 +484,15 @@ async def bulk_delete_laws(
 async def delete_law(
     law_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     법령 삭제 (laws + law_changes + ordinance_law_mappings 모두 삭제)
     """
     from backend.models.law_change import LawChange
+
+    if current_user.user_type not in ("ADMIN", "GENERAL"):
+        raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있습니다.")
 
     # 법령 존재 확인
     law = await db.get(Law, law_id)
