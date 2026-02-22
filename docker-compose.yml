@@ -98,8 +98,6 @@ services:
       - VITE_USER_PASSWORD=${VITE_USER_PASSWORD:-user1234}
     depends_on:
       - backend
-    volumes:
-      - ./frontend/src:/app/src
     command: npm run dev -- --host
     restart: unless-stopped
     networks:

@@ -314,6 +314,54 @@ class DepartmentService:
         )
         all_depts = result.scalars().all()
 
+        # Pre-calculate ordinance counts by department_id (authoritative)
+        count_by_id_result = await self.db.execute(
+            select(
+                Ordinance.department_id,
+                func.count(Ordinance.id).label("count"),
+            )
+            .where(
+                Ordinance.status == "ACTIVE",
+                Ordinance.department_id.isnot(None),
+            )
+            .group_by(Ordinance.department_id)
+        )
+        ordinance_count_by_id = {
+            row.department_id: row.count
+            for row in count_by_id_result
+            if row.department_id is not None
+        }
+
+        # Fallback counts for legacy rows without department_id
+        count_by_name_result = await self.db.execute(
+            select(
+                Ordinance.department,
+                func.count(Ordinance.id).label("count"),
+            )
+            .where(
+                Ordinance.status == "ACTIVE",
+                Ordinance.department_id.is_(None),
+                Ordinance.department.isnot(None),
+                Ordinance.department != "",
+            )
+            .group_by(Ordinance.department)
+        )
+        ordinance_count_by_name = {
+            row.department: row.count
+            for row in count_by_name_result
+            if row.department
+        }
+
+        def resolve_count(dept: Department, parent_name: Optional[str] = None) -> int:
+            """Resolve department ordinance count using id first, then string fallback."""
+            count = ordinance_count_by_id.get(dept.id, 0)
+            name_candidates = {dept.name}
+            if parent_name:
+                name_candidates.add(f"{parent_name} - {dept.name}")
+                name_candidates.add(f"{parent_name} {dept.name}")
+            count += sum(ordinance_count_by_name.get(name, 0) for name in name_candidates)
+            return count
+
         # Get all parent names that exist
         parent_names = {d.name for d in all_depts if not d.parent_name}
 
@@ -329,15 +377,10 @@ class DepartmentService:
             # Get children for this parent
             parent_children = [d for d in children if d.parent_name == parent.name]
 
-            # Build children nodes with ordinance counts (use department name for matching)
+            # Build children nodes with ordinance counts
             children_nodes = []
             for child in parent_children:
-                ordinance_count = await self.db.scalar(
-                    select(func.count()).where(
-                        Ordinance.department == child.name,
-                        Ordinance.status == "ACTIVE"
-                    )
-                ) or 0
+                ordinance_count = resolve_count(child, parent.name)
 
                 children_nodes.append({
                     "id": child.id,
@@ -349,8 +392,9 @@ class DepartmentService:
                     "children": []
                 })
 
-            # Parent ordinance count is sum of children
-            parent_ordinance_count = sum(c["ordinance_count"] for c in children_nodes)
+            # Parent count includes both direct ordinances and child ordinances
+            parent_direct_count = resolve_count(parent)
+            parent_ordinance_count = parent_direct_count + sum(c["ordinance_count"] for c in children_nodes)
 
             dept_tree.append({
                 "id": parent.id,
@@ -364,12 +408,7 @@ class DepartmentService:
 
         # Add orphan departments as top-level items
         for orphan in orphans:
-            ordinance_count = await self.db.scalar(
-                select(func.count()).where(
-                    Ordinance.department == orphan.name,
-                    Ordinance.status == "ACTIVE"
-                )
-            ) or 0
+            ordinance_count = resolve_count(orphan, orphan.parent_name)
 
             dept_tree.append({
                 "id": orphan.id,
