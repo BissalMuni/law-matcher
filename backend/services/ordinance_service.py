@@ -1068,6 +1068,7 @@ class OrdinanceService:
             .options(
                 selectinload(OrdinanceReview.created_by),
                 selectinload(OrdinanceReview.updated_by),
+                selectinload(OrdinanceReview.approved_by),
             )
             .where(OrdinanceReview.ordinance_id == ordinance_id)
             .order_by(OrdinanceReview.created_at.desc())
@@ -1104,6 +1105,7 @@ class OrdinanceService:
             .options(
                 selectinload(OrdinanceReview.created_by),
                 selectinload(OrdinanceReview.updated_by),
+                selectinload(OrdinanceReview.approved_by),
             )
         )
         return result.scalar_one()
@@ -1143,6 +1145,7 @@ class OrdinanceService:
             .options(
                 selectinload(OrdinanceReview.created_by),
                 selectinload(OrdinanceReview.updated_by),
+                selectinload(OrdinanceReview.approved_by),
             )
         )
         return result.scalar_one()

@@ -10,7 +10,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy import select, func, and_, or_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.orm import selectinload, joinedload, aliased
 
 from backend.models.article import Article
 from backend.models.article_change import ArticleChange
@@ -95,19 +95,46 @@ class ArticleService:
         articles = result.scalars().all()
 
         # N+1 쿼리 최적화: 단일 쿼리로 연계 조례 개수 조회
+        # - 직접 조문 매핑(ordinance_article_mappings)
+        # - 동일 법령ID(laws.law_id) 기준 상위법령 매핑(ordinance_law_mappings)
         article_ids = [article.id for article in articles]
+        article_ordinance_sets: Dict[int, set[int]] = {article_id: set() for article_id in article_ids}
 
-        # Subquery for ordinance counts
-        ordinance_counts_query = (
+        # 1) 직접 조문 매핑
+        direct_mapping_query = (
             select(
                 OrdinanceArticleMapping.article_id,
-                func.count().label('ordinance_count')
+                OrdinanceArticleMapping.ordinance_id,
             )
             .where(OrdinanceArticleMapping.article_id.in_(article_ids))
-            .group_by(OrdinanceArticleMapping.article_id)
         )
-        ordinance_counts_result = await self.db.execute(ordinance_counts_query)
-        ordinance_counts = {row.article_id: row.ordinance_count for row in ordinance_counts_result}
+        direct_mapping_result = await self.db.execute(direct_mapping_query)
+        for row in direct_mapping_result:
+            article_ordinance_sets[row.article_id].add(row.ordinance_id)
+
+        # 2) 동일 법령ID(laws.law_id) 기준 상위법령 매핑
+        source_law = aliased(Law)
+        equivalent_law = aliased(Law)
+        from backend.models.ordinance_law_mapping import OrdinanceLawMapping
+
+        parent_law_mapping_query = (
+            select(
+                Article.id.label("article_id"),
+                OrdinanceLawMapping.ordinance_id,
+            )
+            .join(source_law, Article.law_id == source_law.id)
+            .join(equivalent_law, equivalent_law.law_id == source_law.law_id)
+            .join(OrdinanceLawMapping, OrdinanceLawMapping.law_id == equivalent_law.id)
+            .where(Article.id.in_(article_ids))
+        )
+        parent_law_mapping_result = await self.db.execute(parent_law_mapping_query)
+        for row in parent_law_mapping_result:
+            article_ordinance_sets[row.article_id].add(row.ordinance_id)
+
+        ordinance_counts = {
+            article_id: len(ordinance_ids)
+            for article_id, ordinance_ids in article_ordinance_sets.items()
+        }
 
         # Subquery for change counts and last change date
         change_stats_query = (

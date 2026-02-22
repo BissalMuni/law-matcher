@@ -111,11 +111,32 @@ async def get_article_detail(
 
     from sqlalchemy import select, func
 
-    ordinance_count = await db.scalar(
-        select(func.count())
-        .select_from(OrdinanceArticleMapping)
-        .where(OrdinanceArticleMapping.article_id == article_id)
-    ) or 0
+    # 직접 조문 매핑 + 동일 법령ID(laws.law_id) 기반 상위법령 매핑을 합산
+    direct_ordinance_ids = await db.execute(
+        select(OrdinanceArticleMapping.ordinance_id).where(
+            OrdinanceArticleMapping.article_id == article_id
+        )
+    )
+
+    from backend.models.ordinance_law_mapping import OrdinanceLawMapping
+    from backend.models.law import Law
+    from sqlalchemy.orm import aliased
+
+    source_law = aliased(Law)
+    equivalent_law = aliased(Law)
+
+    parent_ordinance_ids = await db.execute(
+        select(OrdinanceLawMapping.ordinance_id)
+        .select_from(Article)
+        .join(source_law, Article.law_id == source_law.id)
+        .join(equivalent_law, equivalent_law.law_id == source_law.law_id)
+        .join(OrdinanceLawMapping, OrdinanceLawMapping.law_id == equivalent_law.id)
+        .where(Article.id == article_id)
+    )
+
+    ordinance_id_set = {row[0] for row in direct_ordinance_ids.all()}
+    ordinance_id_set.update(row[0] for row in parent_ordinance_ids.all())
+    ordinance_count = len(ordinance_id_set)
 
     from backend.models.article_change import ArticleChange
 
@@ -374,8 +395,9 @@ async def sync_articles(
     - **law_ids**: 특정 법령만 동기화 (optional, 없으면 전체)
     - **force**: 강제 동기화 여부 (default: false)
     """
-    # 권한 체크: ADMIN 계정만 허용
-    allowed_user_types = {"ADMIN", "SUPER_ADMIN"}
+    # 권한 체크: 관리자 계정만 허용
+    # 현재 시스템에서 DB 관리자 타입은 GENERAL로 저장됨
+    allowed_user_types = {"ADMIN", "SUPER_ADMIN", "GENERAL"}
     if current_user.user_type not in allowed_user_types:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
