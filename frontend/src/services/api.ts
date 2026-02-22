@@ -185,6 +185,17 @@ export const ordinanceApi = {
     return data
   },
 
+  getAllReviews: async (params: {
+    page?: number
+    size?: number
+    approval_status?: string   // pending | approved | rejected
+    review_result?: string     // 개정필요 | 개정불필요 | 검토중 | 보류
+    reviewer_type?: string     // DEPARTMENT | GENERAL
+  }) => {
+    const { data } = await api.get('/ordinances/reviews-all', { params })
+    return data
+  },
+
   syncFromMoleg: async (params?: { org?: string; sborg?: string; password?: string }) => {
     const headers = params?.password ? { 'X-Admin-Password': params.password } : {}
     const { data } = await api.post('/ordinances/sync', params || {}, { headers })
@@ -198,6 +209,25 @@ export const ordinanceApi = {
 
   getRevisionTypes: async () => {
     const { data } = await api.get('/ordinances/revision-types')
+    return data
+  },
+
+  // 근거 조문 매핑 관리
+  getMappedArticles: async (ordinanceId: number) => {
+    const { data } = await api.get(`/ordinances/${ordinanceId}/mapped-articles`)
+    return data
+  },
+
+  getAvailableArticles: async (ordinanceId: number) => {
+    const { data } = await api.get(`/ordinances/${ordinanceId}/available-articles`)
+    return data
+  },
+
+  setMappedArticles: async (ordinanceId: number, articleIds: number[], mappingReason?: string) => {
+    const { data } = await api.post(`/ordinances/${ordinanceId}/mapped-articles/bulk`, {
+      article_ids: articleIds,
+      mapping_reason: mappingReason || '근거 조문',
+    })
     return data
   },
 }
@@ -711,6 +741,18 @@ export const articleApi = {
   }) => {
     const { data } = await api.post('/articles/sync', request || {})
     return data
+  },
+
+  // 조문 개수 조회
+  getCount: async (params?: {
+    law_id?: number
+    has_ordinance?: boolean
+    changed_since?: string
+  }) => {
+    const response = await api.get('/articles', {
+      params: { ...params, page: 1, size: 1 }
+    })
+    return response.data.total
   },
 
   // ========================================

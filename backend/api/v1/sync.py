@@ -2,7 +2,7 @@
 Law Sync API endpoints
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import get_db
@@ -15,24 +15,22 @@ router = APIRouter()
 @router.post("/laws", response_model=SyncResponse, status_code=202)
 async def sync_laws(
     request: SyncRequest,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """Start law synchronization task"""
     service = SyncService(db)
-    task_id = await service.start_sync(request.law_ids, background_tasks)
+    task_id = await service.start_sync(request.law_ids)
     return SyncResponse(task_id=task_id, status="PENDING")
 
 
 @router.post("/laws/{law_id}", response_model=SyncResponse, status_code=202)
 async def sync_single_law(
     law_id: str,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """Sync a specific law"""
     service = SyncService(db)
-    task_id = await service.start_sync([law_id], background_tasks)
+    task_id = await service.start_sync([law_id])
     return SyncResponse(task_id=task_id, status="PENDING")
 
 

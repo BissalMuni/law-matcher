@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+    CELERY_BEAT_SYNC_HOUR: int = 9
+    CELERY_BEAT_SYNC_MINUTE: int = 0
 
     class Config:
         env_file = str(PROJECT_ROOT / ".env")  # 프로젝트 루트의 .env (절대 경로)

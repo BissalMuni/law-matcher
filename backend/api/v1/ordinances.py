@@ -31,6 +31,8 @@ from backend.schemas.ordinance import (
     OrdinanceReviewResponse,
     OrdinanceReviewListResponse,
     OrdinanceReviewApprovalRequest,
+    AllOrdinanceReviewsResponse,
+    OrdinanceReviewWithOrdinance,
 )
 from backend.services.ordinance_service import OrdinanceService
 from backend.core.exceptions import NotFoundError
@@ -364,6 +366,63 @@ async def export_ordinances(
     )
 
 
+@router.get("/reviews-all", response_model=AllOrdinanceReviewsResponse)
+async def get_all_ordinance_reviews(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    approval_status: Optional[str] = None,   # pending | approved | rejected
+    review_result: Optional[str] = None,      # 개정필요 | 개정불필요 | 검토중 | 보류
+    reviewer_type: Optional[str] = None,      # DEPARTMENT | GENERAL
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    전체 검토의견 목록 조회 (관리자 승인 대시보드)
+
+    approval_status=pending 으로 필터하면 승인 대기 목록을 볼 수 있습니다.
+    """
+    from sqlalchemy import select, func
+    from sqlalchemy.orm import selectinload
+    from backend.models.ordinance_review import OrdinanceReview
+    from backend.models.ordinance import Ordinance
+
+    stmt = (
+        select(OrdinanceReview)
+        .options(
+            selectinload(OrdinanceReview.created_by),
+            selectinload(OrdinanceReview.updated_by),
+            selectinload(OrdinanceReview.approved_by),
+            selectinload(OrdinanceReview.ordinance),
+        )
+    )
+
+    if approval_status:
+        stmt = stmt.where(OrdinanceReview.approval_status == approval_status)
+    if review_result:
+        stmt = stmt.where(OrdinanceReview.review_result == review_result)
+    if reviewer_type:
+        stmt = stmt.where(OrdinanceReview.reviewer_type == reviewer_type)
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = await db.scalar(count_stmt) or 0
+
+    stmt = stmt.order_by(OrdinanceReview.created_at.desc())
+    stmt = stmt.offset((page - 1) * size).limit(size)
+
+    result = await db.execute(stmt)
+    reviews = result.scalars().all()
+
+    items = []
+    for review in reviews:
+        item = OrdinanceReviewWithOrdinance.model_validate(review)
+        if review.ordinance:
+            item.ordinance_name = review.ordinance.name
+            item.ordinance_department = review.ordinance.department
+        items.append(item)
+
+    return AllOrdinanceReviewsResponse(total=total, page=page, size=size, items=items)
+
+
 @router.get("/{ordinance_id}", response_model=OrdinanceResponse)
 async def get_ordinance(
     ordinance_id: int,
@@ -639,8 +698,8 @@ async def approve_ordinance_review(
     current_user: User = Depends(get_current_user),
 ):
     """검토의견 승인/반려 (관리자 전용)"""
-    # 관리자 권한 확인
-    if current_user.user_type != "GENERAL":
+    # 관리자 권한 확인 (ADMIN 또는 GENERAL 허용)
+    if current_user.user_type not in ("ADMIN", "GENERAL"):
         raise HTTPException(status_code=403, detail="관리자만 승인/반려할 수 있습니다.")
 
     if data.approval_status not in ["approved", "rejected"]:
@@ -657,3 +716,219 @@ async def approve_ordinance_review(
         return review
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# =============================================================================
+# 근거 조문 매핑 관리 API
+# =============================================================================
+
+@router.get("/{ordinance_id}/mapped-articles")
+async def get_ordinance_mapped_articles(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    조례에 매핑된 근거 조문 목록 조회
+
+    조례가 실제로 근거하는 법령 조문들의 목록을 반환합니다.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from backend.models.ordinance_article_mapping import OrdinanceArticleMapping
+    from backend.models.article import Article
+    from backend.models.law import Law
+
+    query = (
+        select(OrdinanceArticleMapping)
+        .options(
+            selectinload(OrdinanceArticleMapping.article).selectinload(Article.law),
+            selectinload(OrdinanceArticleMapping.creator),
+        )
+        .where(OrdinanceArticleMapping.ordinance_id == ordinance_id)
+        .order_by(OrdinanceArticleMapping.created_at.desc())
+    )
+
+    result = await db.execute(query)
+    mappings = result.scalars().all()
+
+    items = []
+    for mapping in mappings:
+        if mapping.article:
+            items.append({
+                "mapping_id": mapping.id,
+                "article_id": mapping.article.id,
+                "article_no": mapping.article.article_no,
+                "article_title": mapping.article.article_title,
+                "article_content": mapping.article.article_content,
+                "law_id": mapping.article.law_id,
+                "law_name": mapping.article.law.law_name if mapping.article.law else None,
+                "mapping_reason": mapping.mapping_reason,
+                "related_article_nos": mapping.related_article_nos,
+                "created_at": mapping.created_at,
+                "created_by": mapping.created_by,
+            })
+
+    return {
+        "items": items,
+        "total": len(items),
+    }
+
+
+@router.get("/{ordinance_id}/available-articles")
+async def get_ordinance_available_articles(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    조례에 매핑 가능한 조문 목록 조회 (상위법령 기반)
+
+    조례의 상위법령들에 속한 모든 조문을 반환합니다.
+    이미 매핑된 조문도 포함하여 체크박스 상태 관리를 위해 모두 반환합니다.
+    """
+    from sqlalchemy import select
+    from backend.models.ordinance import Ordinance
+    from backend.models.ordinance_law_mapping import OrdinanceLawMapping
+    from backend.models.article import Article
+    from backend.models.law import Law
+    from backend.models.ordinance_article_mapping import OrdinanceArticleMapping
+
+    # 조례 확인
+    ordinance = await db.get(Ordinance, ordinance_id)
+    if not ordinance:
+        raise HTTPException(status_code=404, detail="조례를 찾을 수 없습니다.")
+
+    # 조례의 상위법령 목록 조회
+    law_mappings = await db.execute(
+        select(OrdinanceLawMapping.law_id)
+        .where(OrdinanceLawMapping.ordinance_id == ordinance_id)
+    )
+    law_ids = [row[0] for row in law_mappings.all()]
+
+    if not law_ids:
+        return {
+            "items": [],
+            "total": 0,
+            "message": "상위법령이 매핑되지 않았습니다. 먼저 상위법령을 추가해주세요.",
+        }
+
+    # 상위법령들의 조문 목록 조회
+    articles_query = (
+        select(Article)
+        .join(Law)
+        .where(Article.law_id.in_(law_ids))
+        .order_by(Law.law_name, Article.article_no)
+    )
+
+    result = await db.execute(articles_query)
+    articles = result.scalars().all()
+
+    # 이미 매핑된 조문 ID 목록 조회
+    mapped_query = await db.execute(
+        select(OrdinanceArticleMapping.article_id)
+        .where(OrdinanceArticleMapping.ordinance_id == ordinance_id)
+    )
+    mapped_article_ids = {row[0] for row in mapped_query.all()}
+
+    items = []
+    for article in articles:
+        items.append({
+            "article_id": article.id,
+            "article_no": article.article_no,
+            "article_title": article.article_title,
+            "article_content": article.article_content[:200] + "..." if len(article.article_content) > 200 else article.article_content,
+            "law_id": article.law_id,
+            "law_name": article.law.law_name if article.law else None,
+            "is_mapped": article.id in mapped_article_ids,
+        })
+
+    return {
+        "items": items,
+        "total": len(items),
+        "mapped_count": len(mapped_article_ids),
+    }
+
+
+@router.post("/{ordinance_id}/mapped-articles/bulk")
+async def set_ordinance_mapped_articles(
+    ordinance_id: int,
+    request: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    조례의 근거 조문 일괄 설정
+
+    기존 매핑을 모두 삭제하고 새로운 조문들을 일괄 매핑합니다.
+
+    Request Body:
+    {
+        "article_ids": [1, 2, 3, ...],
+        "mapping_reason": "근거 조문" (선택)
+    }
+    """
+    from sqlalchemy import select, delete
+    from backend.models.ordinance import Ordinance
+    from backend.models.ordinance_article_mapping import OrdinanceArticleMapping
+    from backend.models.article import Article
+    from datetime import datetime
+
+    article_ids = request.get("article_ids", [])
+    mapping_reason = request.get("mapping_reason", "근거 조문")
+
+    # 조례 확인
+    ordinance = await db.get(Ordinance, ordinance_id)
+    if not ordinance:
+        raise HTTPException(status_code=404, detail="조례를 찾을 수 없습니다.")
+
+    # 권한 체크: 부서 계정 이상만 매핑 가능
+    allowed_user_types = {"DEPARTMENT", "GENERAL", "ADMIN", "SUPER_ADMIN"}
+    if current_user.user_type not in allowed_user_types:
+        raise HTTPException(
+            status_code=403,
+            detail="부서 계정 이상만 근거 조문을 매핑할 수 있습니다.",
+        )
+
+    # 1. 기존 매핑 모두 삭제
+    await db.execute(
+        delete(OrdinanceArticleMapping)
+        .where(OrdinanceArticleMapping.ordinance_id == ordinance_id)
+    )
+
+    # 2. 새로운 매핑 생성
+    created_count = 0
+    failed_articles = []
+
+    for article_id in article_ids:
+        # 조문 존재 확인
+        article = await db.get(Article, article_id)
+        if not article:
+            failed_articles.append({
+                "article_id": article_id,
+                "reason": "조문을 찾을 수 없습니다.",
+            })
+            continue
+
+        # 매핑 생성
+        mapping = OrdinanceArticleMapping(
+            ordinance_id=ordinance_id,
+            article_id=article_id,
+            mapping_reason=mapping_reason,
+            created_by=current_user.id,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(mapping)
+        created_count += 1
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "ordinance_id": ordinance_id,
+        "created_count": created_count,
+        "failed_count": len(failed_articles),
+        "failed_articles": failed_articles if failed_articles else None,
+        "message": f"{created_count}개의 근거 조문이 매핑되었습니다.",
+    }

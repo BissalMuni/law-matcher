@@ -94,30 +94,47 @@ class ArticleService:
         result = await self.db.execute(query)
         articles = result.scalars().all()
 
-        # 연계 조례 개수 추가 조회
+        # N+1 쿼리 최적화: 단일 쿼리로 연계 조례 개수 조회
+        article_ids = [article.id for article in articles]
+
+        # Subquery for ordinance counts
+        ordinance_counts_query = (
+            select(
+                OrdinanceArticleMapping.article_id,
+                func.count().label('ordinance_count')
+            )
+            .where(OrdinanceArticleMapping.article_id.in_(article_ids))
+            .group_by(OrdinanceArticleMapping.article_id)
+        )
+        ordinance_counts_result = await self.db.execute(ordinance_counts_query)
+        ordinance_counts = {row.article_id: row.ordinance_count for row in ordinance_counts_result}
+
+        # Subquery for change counts and last change date
+        change_stats_query = (
+            select(
+                ArticleChange.article_id,
+                func.count().label('change_count'),
+                func.max(ArticleChange.change_date).label('last_change_date')
+            )
+            .where(ArticleChange.article_id.in_(article_ids))
+            .group_by(ArticleChange.article_id)
+        )
+        change_stats_result = await self.db.execute(change_stats_query)
+        change_stats = {
+            row.article_id: {
+                'change_count': row.change_count,
+                'last_change_date': row.last_change_date
+            }
+            for row in change_stats_result
+        }
+
+        # Build response items
         items = []
         for article in articles:
-            # 연계 조례 개수
-            ordinance_count = await self.db.scalar(
-                select(func.count())
-                .select_from(OrdinanceArticleMapping)
-                .where(OrdinanceArticleMapping.article_id == article.id)
-            ) or 0
-
-            # 변경 이력 개수
-            change_count = await self.db.scalar(
-                select(func.count())
-                .select_from(ArticleChange)
-                .where(ArticleChange.article_id == article.id)
-            ) or 0
-
-            # 최근 변경일 조회
-            last_change = await self.db.scalar(
-                select(ArticleChange.change_date)
-                .where(ArticleChange.article_id == article.id)
-                .order_by(ArticleChange.change_date.desc())
-                .limit(1)
-            )
+            ordinance_count = ordinance_counts.get(article.id, 0)
+            stats = change_stats.get(article.id, {'change_count': 0, 'last_change_date': None})
+            change_count = stats['change_count']
+            last_change = stats['last_change_date']
 
             # 30일 이내 변경 여부
             has_recent_change = False
@@ -498,7 +515,7 @@ class ArticleService:
 
         # 2. needs_revision 업데이트
         for ordinance in ordinances:
-            ordinance.needs_revision = 1
+            ordinance.needs_revision = True
 
         # Commit은 호출자에서 처리
 

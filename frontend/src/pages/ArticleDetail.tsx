@@ -22,6 +22,7 @@ import {
   HistoryOutlined,
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import DOMPurify from 'dompurify'
 import { articleApi, ordinanceApi } from '../services/api'
 
 const { TabPane } = Tabs
@@ -374,7 +375,7 @@ export default function ArticleDetail() {
         ]}
       >
         {selectedChange?.diff_html ? (
-          <div dangerouslySetInnerHTML={{ __html: selectedChange.diff_html }} />
+          <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedChange.diff_html) }} />
         ) : (
           <div>
             <div style={{ marginBottom: 16 }}>

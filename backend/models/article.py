@@ -3,7 +3,7 @@ Article (조문) model
 """
 from datetime import datetime, date
 from typing import List, Optional, TYPE_CHECKING
-from sqlalchemy import String, Text, Date, DateTime, Integer, ForeignKey, Index
+from sqlalchemy import String, Text, Date, DateTime, Integer, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -66,6 +66,7 @@ class Article(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint('law_id', 'article_no', name='uq_articles_law_article'),
         Index('idx_articles_law_id', 'law_id'),
         Index('idx_articles_content_hash', 'content_hash'),
         Index('idx_articles_article_no', 'article_no'),

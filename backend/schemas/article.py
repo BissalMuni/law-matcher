@@ -233,6 +233,7 @@ class RevisionNeededOrdinanceItem(BaseModel):
     detected_at: datetime
     change_type: str
     diff_html: Optional[str] = None
+    affected_article_count: Optional[int] = None  # related_articles가 없는 경우 변경된 조문 개수
 
     class Config:
         from_attributes = True

@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-02-14T09:59:08.634Z",
+  "lastUpdated": "2026-02-21T08:57:24.073Z",
   "activeFeatures": [
     "조문-조회-및-변경-감지-기능",
     "versions",
@@ -19,7 +19,7 @@
     "조문-조회-및-변경-감지-기능": {
       "featureId": "article-tracking",
       "featureName": "조문 조회 및 변경 감지 기능",
-      "phase": "design",
+      "phase": "act",
       "matchRate": null,
       "iterationCount": 0,
       "startedAt": "2026-02-14T10:30:00.000Z",
@@ -31,6 +31,12 @@
       "tasks": {
         "plan": "Task #1",
         "design": "Task #2"
+      },
+      "phaseNumber": 5,
+      "previousPhase": "check",
+      "autoAdvanced": true,
+      "timestamps": {
+        "lastUpdated": "2026-02-20T07:40:44.739Z"
       }
     },
     "versions": {
@@ -42,9 +48,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T04:20:51.576Z",
-        "lastUpdated": "2026-02-14T04:38:29.926Z"
+        "lastUpdated": "2026-02-21T08:50:22.974Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/backend/alembic/versions/add_articles_tables.py"
+      "lastFile": "/home/jinkui/law-matcher/backend/alembic/versions/20260221_add_needs_revision_to_ordinances.py"
     },
     "backend": {
       "phase": "do",
@@ -55,9 +61,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T04:21:12.041Z",
-        "lastUpdated": "2026-02-14T09:29:17.753Z"
+        "lastUpdated": "2026-02-21T08:51:09.438Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/backend/sync_single_law.py"
+      "lastFile": "/home/jinkui/law-matcher/backend/tasks.py"
     },
     "schemas": {
       "phase": "do",
@@ -68,9 +74,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T04:22:30.946Z",
-        "lastUpdated": "2026-02-14T09:51:36.660Z"
+        "lastUpdated": "2026-02-21T08:52:09.092Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/backend/schemas/article.py"
+      "lastFile": "/home/jinkui/law-matcher/backend/schemas/ordinance.py"
     },
     "external": {
       "phase": "do",
@@ -81,7 +87,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T08:46:27.271Z",
-        "lastUpdated": "2026-02-14T09:29:46.251Z"
+        "lastUpdated": "2026-02-20T07:47:11.400Z"
       },
       "lastFile": "/home/jinkui/law-matcher/backend/external/moleg_client.py"
     },
@@ -94,7 +100,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T08:48:00.764Z",
-        "lastUpdated": "2026-02-14T09:25:42.108Z"
+        "lastUpdated": "2026-02-21T08:50:00.810Z"
       },
       "lastFile": "/home/jinkui/law-matcher/backend/services/article_service.py"
     },
@@ -107,9 +113,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T08:49:01.805Z",
-        "lastUpdated": "2026-02-14T09:59:08.634Z"
+        "lastUpdated": "2026-02-21T08:57:19.581Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/backend/api/v1/articles.py"
+      "lastFile": "/home/jinkui/law-matcher/backend/api/v1/ordinances.py"
     },
     "tests": {
       "phase": "do",
@@ -146,7 +152,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T09:00:43.808Z",
-        "lastUpdated": "2026-02-14T09:45:38.720Z"
+        "lastUpdated": "2026-02-21T08:52:40.396Z"
       },
       "lastFile": "/home/jinkui/law-matcher/frontend/src/services/api.ts"
     },
@@ -159,9 +165,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T09:01:33.886Z",
-        "lastUpdated": "2026-02-14T09:47:24.550Z"
+        "lastUpdated": "2026-02-21T08:57:24.073Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/frontend/src/App.tsx"
+      "lastFile": "/home/jinkui/law-matcher/frontend/src/pages/ReviewList.tsx"
     }
   },
   "pipeline": {
@@ -172,7 +178,7 @@
   "session": {
     "startedAt": "2026-02-14T01:17:31.503Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-02-14T09:59:08.634Z"
+    "lastActivity": "2026-02-21T08:57:24.073Z"
   },
   "history": [
     {
@@ -538,6 +544,276 @@
     {
       "timestamp": "2026-02-14T09:59:08.634Z",
       "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:29:45.405Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:29:59.756Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:30:12.768Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:30:13.840Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:30:15.429Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:46:04.818Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:46:39.912Z",
+      "feature": "api.ts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:47:33.693Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:48:14.910Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:48:21.142Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:48:31.058Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:48:37.203Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T06:48:40.246Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:07:47.944Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:07:59.669Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:08:04.454Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:32:23.355Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:32:48.336Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:33:01.624Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:33:13.667Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:40:44.739Z",
+      "feature": "조문-조회-및-변경-감지-기능",
+      "phase": "act",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:43:08.261Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:43:14.299Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:43:28.341Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:43:39.977Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:45:29.940Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:45:35.761Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:45:40.517Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:45:45.245Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:46:01.671Z",
+      "feature": "versions",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:46:24.445Z",
+      "feature": "article_service.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:47:11.400Z",
+      "feature": "external",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:48:34.803Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T07:49:09.045Z",
+      "feature": "api.ts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:49:45.707Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:50:00.810Z",
+      "feature": "article_service.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:50:22.974Z",
+      "feature": "versions",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:51:09.438Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:52:09.092Z",
+      "feature": "schemas",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:52:18.136Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:52:29.715Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:52:40.396Z",
+      "feature": "api.ts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:53:24.363Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:57:19.581Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-21T08:57:24.073Z",
+      "feature": "frontend",
       "phase": "do",
       "action": "updated"
     }

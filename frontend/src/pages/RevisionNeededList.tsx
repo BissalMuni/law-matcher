@@ -39,6 +39,7 @@ interface RevisionNeededItem {
   detected_at: string
   change_type: string
   diff_html?: string
+  affected_article_count?: number  // related_articles가 없는 경우 변경된 조문 개수
 }
 
 interface RevisionNeededListResponse {
@@ -107,6 +108,11 @@ export default function RevisionNeededList() {
           <div style={{ fontWeight: 500 }}>{record.law_name}</div>
           <div style={{ fontSize: 12, color: '#666' }}>
             제{record.article_no}조 {record.article_title}
+            {record.affected_article_count && record.affected_article_count > 1 && (
+              <span style={{ color: '#ff4d4f', fontWeight: 500 }}>
+                {' '}외 {record.affected_article_count - 1}개 조문
+              </span>
+            )}
           </div>
         </div>
       ),

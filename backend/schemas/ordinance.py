@@ -409,3 +409,17 @@ class OrdinanceReviewListResponse(BaseModel):
     """자치법규 검토이력 목록 응답"""
     total: int
     items: List[OrdinanceReviewResponse]
+
+
+class OrdinanceReviewWithOrdinance(OrdinanceReviewResponse):
+    """검토이력 + 조례 기본 정보 (관리자 전체 목록용)"""
+    ordinance_name: Optional[str] = None
+    ordinance_department: Optional[str] = None
+
+
+class AllOrdinanceReviewsResponse(BaseModel):
+    """전체 검토이력 목록 (관리자 승인 대시보드용)"""
+    total: int
+    page: int
+    size: int
+    items: List[OrdinanceReviewWithOrdinance]

@@ -145,10 +145,62 @@ class MolegClient:
         Returns:
             파싱된 paragraphs 리스트 (JSONB 저장용)
         """
-        # TODO: 법제처 API의 복잡한 항/호/목 구조 파싱
-        # 현재는 단순화하여 빈 리스트 반환
-        # 추후 실제 API 응답 구조에 맞게 파싱 로직 구현 필요
-        return []
+        paragraphs = []
+
+        # 항 파싱 (법제처 API 응답 구조: article_data.get('항', []))
+        para_list = article_data.get('항', [])
+        if not isinstance(para_list, list):
+            # 단일 항인 경우 리스트로 변환
+            para_list = [para_list] if para_list else []
+
+        for para in para_list:
+            if not para or not isinstance(para, dict):
+                continue
+
+            para_obj = {
+                'type': 'paragraph',
+                'no': str(para.get('항번호', '')),
+                'content': para.get('항내용', ''),
+                'items': []
+            }
+
+            # 호 파싱
+            item_list = para.get('호', [])
+            if not isinstance(item_list, list):
+                item_list = [item_list] if item_list else []
+
+            for item in item_list:
+                if not item or not isinstance(item, dict):
+                    continue
+
+                item_obj = {
+                    'type': 'item',
+                    'no': str(item.get('호번호', '')),
+                    'content': item.get('호내용', ''),
+                    'subitems': []
+                }
+
+                # 목 파싱
+                subitem_list = item.get('목', [])
+                if not isinstance(subitem_list, list):
+                    subitem_list = [subitem_list] if subitem_list else []
+
+                for subitem in subitem_list:
+                    if not subitem or not isinstance(subitem, dict):
+                        continue
+
+                    subitem_obj = {
+                        'type': 'subitem',
+                        'no': str(subitem.get('목번호', '')),
+                        'content': subitem.get('목내용', '')
+                    }
+                    item_obj['subitems'].append(subitem_obj)
+
+                para_obj['items'].append(item_obj)
+
+            paragraphs.append(para_obj)
+
+        return paragraphs
 
     async def get_linked_ordinances(
         self,
