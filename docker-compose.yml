@@ -11,6 +11,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - USER_PASSWORD=${USER_PASSWORD:-user123}
       - MOLEG_API_KEY=${MOLEG_API_KEY}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
@@ -25,7 +27,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app/backend
-    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
     networks:
       - lawmatcher-network
@@ -46,6 +48,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - USER_PASSWORD=${USER_PASSWORD:-user123}
       - MOLEG_API_KEY=${MOLEG_API_KEY}
     depends_on:
       db:
@@ -69,6 +73,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - USER_PASSWORD=${USER_PASSWORD:-user123}
       - MOLEG_API_KEY=${MOLEG_API_KEY}
       - CELERY_BEAT_SYNC_HOUR=${CELERY_BEAT_SYNC_HOUR:-9}
       - CELERY_BEAT_SYNC_MINUTE=${CELERY_BEAT_SYNC_MINUTE:-0}
@@ -94,8 +100,8 @@ services:
     environment:
       - VITE_API_URL=http://backend:8000
       - VITE_DEV_BYPASS_AUTH=false
-      - VITE_ADMIN_PASSWORD=${VITE_ADMIN_PASSWORD:-admin1234}
-      - VITE_USER_PASSWORD=${VITE_USER_PASSWORD:-user1234}
+      - VITE_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - VITE_USER_PASSWORD=${USER_PASSWORD:-user123}
     depends_on:
       - backend
     command: npm run dev -- --host

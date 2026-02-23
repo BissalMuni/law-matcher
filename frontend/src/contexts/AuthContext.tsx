@@ -27,6 +27,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const storedToken = localStorage.getItem(TOKEN_KEY)
       const storedUser = localStorage.getItem(USER_KEY)
 
+      // Dev bypass 모드에서는 저장된 세션이 없어도 관리자 세션을 자동 주입
+      if (isDevBypass() && (!storedToken || !storedUser)) {
+        const devAdminUser: User = {
+          id: 0,
+          username: 'admin',
+          user_type: 'ADMIN',
+          full_name: '개발자 관리자',
+        }
+        const devToken = 'simple_admin_dev'
+
+        setToken(devToken)
+        setUser(devAdminUser)
+        localStorage.setItem(TOKEN_KEY, devToken)
+        localStorage.setItem(USER_KEY, JSON.stringify(devAdminUser))
+        setIsLoading(false)
+        return
+      }
+
       if (storedToken && storedUser) {
         // Simple login인 경우 API 검증 건너뛰기
         if (storedToken.startsWith('simple_')) {

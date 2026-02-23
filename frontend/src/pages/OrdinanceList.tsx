@@ -120,11 +120,38 @@ export default function OrdinanceList() {
     queryFn: () => departmentApi.getTree(),
   })
 
+  // 자치법규 실제 소관부서 목록 조회 (직제에 없는 부서 보강용)
+  const { data: ordinanceDepartments } = useQuery<DepartmentItem[]>({
+    queryKey: ['ordinance-departments'],
+    queryFn: () => ordinanceApi.getDepartments(),
+  })
+
   // 트리 데이터 변환
   const treeData: TreeDataNode[] = useMemo(() => {
     if (!departmentTree?.bureaus) return []
 
-    const totalCount = departmentTree.bureaus.reduce((sum, b) => sum + b.ordinance_count, 0)
+    const parentNames = new Set(departmentTree.bureaus.map((b) => b.name))
+
+    const inferParentAndChild = (departmentName: string): { parent: string; child: string } | null => {
+      if (departmentName.includes(' - ')) {
+        const [parent, ...rest] = departmentName.split(' - ')
+        const child = rest.join(' - ').trim()
+        if (parentNames.has(parent.trim()) && child) {
+          return { parent: parent.trim(), child }
+        }
+      }
+
+      const firstSpaceIdx = departmentName.indexOf(' ')
+      if (firstSpaceIdx > 0) {
+        const parent = departmentName.slice(0, firstSpaceIdx).trim()
+        const child = departmentName.slice(firstSpaceIdx + 1).trim()
+        if (parentNames.has(parent) && child) {
+          return { parent, child }
+        }
+      }
+
+      return null
+    }
 
     const buildChildren = (nodes: DepartmentTreeNode[]): TreeDataNode[] => {
       return nodes.map(node => ({
@@ -134,31 +161,68 @@ export default function OrdinanceList() {
       }))
     }
 
+    const rootChildren = buildChildren(departmentTree.bureaus)
+    const representedKeys = new Set<string>()
+    const collectKeys = (nodes: TreeDataNode[]) => {
+      for (const node of nodes) {
+        representedKeys.add(String(node.key))
+        if (node.children) collectKeys(node.children)
+      }
+    }
+    collectKeys(rootChildren)
+
+    const rootByKey = new Map<string, TreeDataNode>()
+    for (const node of rootChildren) {
+      rootByKey.set(String(node.key), node)
+    }
+
+    // 직제 트리에 없는 실제 부서명(예: 감사담당관, 기획경제국 세무관리과)을 트리에 보강
+    for (const dept of ordinanceDepartments || []) {
+      const fullName = dept.name
+      const inferred = inferParentAndChild(fullName)
+      const candidateKey = inferred ? fullName : fullName
+
+      // 이미 트리에서 표현 가능한 경우 중복 추가하지 않음
+      if (representedKeys.has(candidateKey)) continue
+      if (inferred && representedKeys.has(inferred.child)) continue
+
+      if (inferred) {
+        const parentNode = rootByKey.get(inferred.parent)
+        if (parentNode) {
+          const children = parentNode.children ? [...parentNode.children] : []
+          children.push({
+            title: `${inferred.child} (${dept.count})`,
+            key: fullName,
+          })
+          parentNode.children = children
+          representedKeys.add(fullName)
+          continue
+        }
+      }
+
+      rootChildren.push({
+        title: `${fullName} (${dept.count})`,
+        key: fullName,
+      })
+      representedKeys.add(fullName)
+    }
+
+    const totalCount = (ordinanceDepartments || []).reduce((sum, d) => sum + d.count, 0)
+
     return [
       {
         title: `전체 (${totalCount})`,
         key: '__all__',
         icon: <ApartmentOutlined />,
-        children: buildChildren(departmentTree.bureaus),
+        children: rootChildren,
       },
     ]
-  }, [departmentTree])
+  }, [departmentTree, ordinanceDepartments])
 
   // 드롭다운용 부서 목록 (평면화)
   const departments = useMemo(() => {
-    if (!departmentTree?.bureaus) return []
-    const result: DepartmentItem[] = []
-    const flatten = (nodes: DepartmentTreeNode[]) => {
-      for (const node of nodes) {
-        result.push({ name: node.name, count: node.ordinance_count })
-        if (node.children.length > 0) {
-          flatten(node.children)
-        }
-      }
-    }
-    flatten(departmentTree.bureaus)
-    return result
-  }, [departmentTree])
+    return ordinanceDepartments || []
+  }, [ordinanceDepartments])
 
   const onTreeSelect = (selectedKeys: React.Key[]) => {
     const key = selectedKeys[0] as string

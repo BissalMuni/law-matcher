@@ -19,6 +19,8 @@ from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.models.amendment import LawAmendment
 from backend.models.law_change import LawChange, ChangeStatus, ApiStatus
 from backend.core.config import settings
+from backend.external.moleg_client import MolegClient
+from backend.services.article_service import ArticleService
 
 
 class LawSearchResult:
@@ -532,6 +534,102 @@ class LawSyncService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+    @staticmethod
+    def _normalize_law_name(name: Optional[str]) -> str:
+        if not name:
+            return ""
+        return "".join(str(name).split())
+
+    @staticmethod
+    def _parse_api_date(date_value: Optional[str]) -> Optional[date]:
+        if not date_value:
+            return None
+        value = str(date_value).strip()
+        for fmt in ("%Y%m%d", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(value, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    def _find_exact_match(
+        self,
+        results: List[LawSearchResult],
+        target_name: str,
+    ) -> Optional[LawSearchResult]:
+        # 1) 완전 일치 우선
+        for item in results:
+            if item.law_name == target_name:
+                return item
+
+        # 2) 공백 제거 정규화 일치 허용
+        target_normalized = self._normalize_law_name(target_name)
+        for item in results:
+            if self._normalize_law_name(item.law_name) == target_normalized:
+                return item
+
+        return None
+
+    def _to_search_result_from_detail(self, law_detail: Any) -> LawSearchResult:
+        raw = {
+            "법령일련번호": law_detail.law_mst,
+            "법령ID": law_detail.law_id,
+            "법령명한글": law_detail.law_name,
+            "법령구분명": law_detail.law_type,
+            "공포일자": law_detail.proclaimed_date,
+            "시행일자": law_detail.enforced_date,
+            "제개정구분명": law_detail.revision_type,
+        }
+        result = LawSearchResult(raw)
+        # lawService의 날짜가 YYYY-MM-DD로 내려오는 경우를 보정
+        if result.proclaimed_date is None:
+            result.proclaimed_date = self._parse_api_date(law_detail.proclaimed_date)
+        if result.enforced_date is None:
+            result.enforced_date = self._parse_api_date(law_detail.enforced_date)
+        return result
+
+    async def _resolve_exact_match(
+        self,
+        law: Law,
+        moleg_client: MolegClient,
+    ) -> Tuple[Optional[LawSearchResult], List[LawSearchResult], bool]:
+        """
+        법령 매칭 우선순위:
+        1) MST(법령일련번호)로 직접 조회
+        2) 법령명 검색(검색폭 확대 + 재시도)
+        """
+        # 1) MST 직접 조회 (가장 안정적)
+        if law.law_serial_no:
+            try:
+                law_detail = await moleg_client.get_law_detail(str(law.law_serial_no))
+                if law_detail and law_detail.law_name:
+                    by_mst = self._to_search_result_from_detail(law_detail)
+                    if self._normalize_law_name(by_mst.law_name) == self._normalize_law_name(law.law_name):
+                        return by_mst, [by_mst], True
+            except Exception:
+                # MST 직접 조회 실패 시 검색으로 폴백
+                pass
+
+        # 2) 법령명 검색 (재시도 + display 확장)
+        queries = [law.law_name]
+        compact_name = self._normalize_law_name(law.law_name)
+        if compact_name and compact_name != law.law_name:
+            queries.append(compact_name)
+
+        last_results: List[LawSearchResult] = []
+        had_response = False
+        for query in queries:
+            results, _ = await self.search_laws(query=query, display=30)
+            if results:
+                had_response = True
+                last_results = results
+                exact_match = self._find_exact_match(results, law.law_name)
+                if exact_match:
+                    return exact_match, results, True
+            await asyncio.sleep(0.2)
+
+        return None, last_results, had_response
+
     async def update_all_law_info(self) -> Dict[str, Any]:
         """
         모든 상위법령의 정보를 법제처 API로 업데이트
@@ -551,42 +649,38 @@ class LawSyncService:
         updated = 0
         failed = 0
 
-        for law in all_laws:
-            try:
-                # 법령명으로 API 검색
-                results, _ = await self.search_laws(query=law.law_name, display=10)
+        moleg_client = MolegClient(api_key=self.api_key, base_url=settings.MOLEG_API_BASE_URL)
+        try:
+            for law in all_laws:
+                try:
+                    exact_match, _, _ = await self._resolve_exact_match(law, moleg_client)
 
-                # 정확히 일치하는 법령명 찾기
-                exact_match = None
-                for r in results:
-                    if r.law_name == law.law_name:
-                        exact_match = r
-                        break
+                    if exact_match:
+                        # 법령 정보 업데이트
+                        law.law_id = exact_match.law_id
+                        law.law_serial_no = exact_match.law_serial_no
+                        law.law_abbr = exact_match.law_abbr
+                        law.proclaimed_date = exact_match.proclaimed_date
+                        law.proclaimed_no = exact_match.proclaimed_no
+                        law.enforced_date = exact_match.enforced_date
+                        law.revision_type = exact_match.revision_type
+                        law.history_code = exact_match.history_code
+                        law.dept_name = exact_match.dept_name
+                        law.dept_code = exact_match.dept_code
+                        law.detail_link = exact_match.detail_link
+                        law.last_synced_at = datetime.utcnow()
+                        updated += 1
+                    else:
+                        failed += 1
 
-                if exact_match:
-                    # 법령 정보 업데이트
-                    law.law_id = exact_match.law_id
-                    law.law_serial_no = exact_match.law_serial_no
-                    law.law_abbr = exact_match.law_abbr
-                    law.proclaimed_date = exact_match.proclaimed_date
-                    law.proclaimed_no = exact_match.proclaimed_no
-                    law.enforced_date = exact_match.enforced_date
-                    law.revision_type = exact_match.revision_type
-                    law.history_code = exact_match.history_code
-                    law.dept_name = exact_match.dept_name
-                    law.dept_code = exact_match.dept_code
-                    law.detail_link = exact_match.detail_link
-                    law.last_synced_at = datetime.utcnow()
-                    updated += 1
-                else:
+                    # Rate limiting
+                    await asyncio.sleep(0.3)
+
+                except Exception as e:
+                    print(f"Failed to update law '{law.law_name}': {e}")
                     failed += 1
-
-                # Rate limiting
-                await asyncio.sleep(0.3)
-
-            except Exception as e:
-                print(f"Failed to update law '{law.law_name}': {e}")
-                failed += 1
+        finally:
+            await moleg_client.close()
 
         await self.db.commit()
 
@@ -606,6 +700,9 @@ class LawSyncService:
         Yields:
             진행 상황 및 변경된 법령 정보
         """
+        moleg_client = MolegClient(api_key=self.api_key, base_url=settings.MOLEG_API_BASE_URL)
+        article_service = ArticleService(self.db, moleg_client)
+
         # 모든 법령 조회
         stmt = select(Law).order_by(Law.id)
         result = await self.db.execute(stmt)
@@ -615,6 +712,16 @@ class LawSyncService:
         updated = 0
         failed = 0
         changed_laws = []
+
+        article_sync_stats = {
+            "synced_laws": 0,
+            "synced_articles": 0,
+            "created": 0,
+            "updated": 0,
+            "deleted": 0,
+            "changes_detected": 0,
+            "failed": 0,
+        }
 
         # 동기화 배치 ID 생성 (같은 동기화 작업 묶기용)
         sync_batch_id = str(uuid.uuid4())[:8]
@@ -627,187 +734,71 @@ class LawSyncService:
             "message": f"동기화 시작: 총 {total_laws}건의 법령",
         }
 
-        for idx, law in enumerate(all_laws):
-            current = idx + 1
-            law_name = law.law_name
+        try:
+            for idx, law in enumerate(all_laws):
+                current = idx + 1
+                law_name = law.law_name
 
-            # 요청 시작 알림
-            yield {
-                "type": "progress",
-                "current": current,
-                "total": total_laws,
-                "law_name": law_name,
-                "status": "requesting",
-                "message": f"[{current}/{total_laws}] {law_name} - API 요청 중...",
-            }
-
-            try:
-                # 법령명으로 API 검색
-                results, _ = await self.search_laws(query=law_name, display=10)
-
-                # 수신 완료 알림
+                # 요청 시작 알림
                 yield {
                     "type": "progress",
                     "current": current,
                     "total": total_laws,
                     "law_name": law_name,
-                    "status": "received",
-                    "message": f"[{current}/{total_laws}] {law_name} - 응답 수신 ({len(results)}건)",
+                    "status": "requesting",
+                    "message": f"[{current}/{total_laws}] {law_name} - API 요청 중...",
                 }
 
-                # 정확히 일치하는 법령명 찾기
-                exact_match = None
-                for r in results:
-                    if r.law_name == law_name:
-                        exact_match = r
-                        break
+                try:
+                    exact_match, results, had_response = await self._resolve_exact_match(law, moleg_client)
 
-                # API 응답이 없는 경우
-                if not results:
-                    failed += 1
-                    compare_result = "api_no_response"
-
-                    # API 실패 정보 기록
-                    failed_law_info = {
-                        "id": law.id,
-                        "law_id": law.law_id,
-                        "law_name": law_name,
-                        "law_type": law.law_type,
-                        "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
-                        "enforced_date": str(law.enforced_date) if law.enforced_date else None,
-                        "revision_type": law.revision_type,
-                        "dept_name": law.dept_name,
-                        "api_status": "no_response",
-                        "api_message": "API 응답 없음",
-                        "changes": {},
-                    }
-                    changed_laws.append(failed_law_info)
-
-                    # law_changes 테이블에 저장
-                    if save_to_db:
-                        law_change = LawChange(
-                            law_id=law.id,
-                            sync_date=sync_date,
-                            sync_batch_id=sync_batch_id,
-                            api_status=ApiStatus.NO_RESPONSE,
-                            api_message="API 응답 없음",
-                            old_values={
-                                "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
-                                "enforced_date": str(law.enforced_date) if law.enforced_date else None,
-                                "revision_type": law.revision_type,
-                            },
-                            new_values=None,
-                            dept_name=law.dept_name,
-                            dept_code=law.dept_code,
-                            status=ChangeStatus.PENDING,
-                        )
-                        self.db.add(law_change)
-
+                    # 수신 완료 알림
                     yield {
-                        "type": "changed",
+                        "type": "progress",
                         "current": current,
                         "total": total_laws,
-                        "law": failed_law_info,
-                        "message": f"[{current}/{total_laws}] {law_name} - API 응답 없음",
+                        "law_name": law_name,
+                        "status": "received",
+                        "message": f"[{current}/{total_laws}] {law_name} - 응답 수신 ({len(results)}건)",
                     }
-                elif exact_match:
-                    # 변경사항 비교
-                    changes = {}
-                    if law.proclaimed_date != exact_match.proclaimed_date:
-                        changes["proclaimed_date"] = {
-                            "old": str(law.proclaimed_date) if law.proclaimed_date else None,
-                            "new": str(exact_match.proclaimed_date) if exact_match.proclaimed_date else None,
-                        }
-                    if law.enforced_date != exact_match.enforced_date:
-                        changes["enforced_date"] = {
-                            "old": str(law.enforced_date) if law.enforced_date else None,
-                            "new": str(exact_match.enforced_date) if exact_match.enforced_date else None,
-                        }
-                    if law.revision_type != exact_match.revision_type:
-                        changes["revision_type"] = {
-                            "old": law.revision_type,
-                            "new": exact_match.revision_type,
-                        }
-                    if law.law_id != exact_match.law_id:
-                        changes["law_id"] = {
-                            "old": law.law_id,
-                            "new": exact_match.law_id,
-                        }
 
-                    # 법령 정보 업데이트 (law_serial_no가 동일한 경우에만 업데이트)
-                    law.law_id = exact_match.law_id
-                    # law_serial_no는 unique 제약이 있으므로, 같을 때만 업데이트
-                    if law.law_serial_no == exact_match.law_serial_no:
-                        law.law_abbr = exact_match.law_abbr
-                        law.proclaimed_date = exact_match.proclaimed_date
-                        law.proclaimed_no = exact_match.proclaimed_no
-                        law.enforced_date = exact_match.enforced_date
-                        law.revision_type = exact_match.revision_type
-                        law.history_code = exact_match.history_code
-                        law.dept_name = exact_match.dept_name
-                        law.dept_code = exact_match.dept_code
-                        law.detail_link = exact_match.detail_link
-                        law.last_synced_at = datetime.utcnow()
-                    else:
-                        # law_serial_no가 다르면 나머지 필드만 업데이트 (law_serial_no 제외)
-                        law.law_abbr = exact_match.law_abbr
-                        law.proclaimed_date = exact_match.proclaimed_date
-                        law.proclaimed_no = exact_match.proclaimed_no
-                        law.enforced_date = exact_match.enforced_date
-                        law.revision_type = exact_match.revision_type
-                        law.history_code = exact_match.history_code
-                        law.dept_name = exact_match.dept_name
-                        law.dept_code = exact_match.dept_code
-                        law.detail_link = exact_match.detail_link
-                        law.last_synced_at = datetime.utcnow()
-                        # law_serial_no 변경 기록
-                        changes["law_serial_no"] = {
-                            "old": law.law_serial_no,
-                            "new": exact_match.law_serial_no,
-                            "skipped": True,
-                        }
-                    updated += 1
+                    # API 응답이 없는 경우
+                    if not had_response:
+                        failed += 1
+                        compare_result = "api_no_response"
 
-                    compare_result = "changed" if changes else "unchanged"
-                    if changes:
-                        changed_law_info = {
+                    # API 실패 정보 기록
+                        failed_law_info = {
                             "id": law.id,
-                            "law_id": exact_match.law_id,
+                            "law_id": law.law_id,
                             "law_name": law_name,
-                            "law_type": exact_match.law_type,
-                            "proclaimed_date": str(exact_match.proclaimed_date) if exact_match.proclaimed_date else None,
-                            "enforced_date": str(exact_match.enforced_date) if exact_match.enforced_date else None,
-                            "revision_type": exact_match.revision_type,
-                            "dept_name": exact_match.dept_name,
-                            "api_status": "success",
-                            "api_message": "API 성공",
-                            "changes": changes,
+                            "law_type": law.law_type,
+                            "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
+                            "enforced_date": str(law.enforced_date) if law.enforced_date else None,
+                            "revision_type": law.revision_type,
+                            "dept_name": law.dept_name,
+                            "api_status": "no_response",
+                            "api_message": "API 응답 없음",
+                            "changes": {},
                         }
-                        changed_laws.append(changed_law_info)
+                        changed_laws.append(failed_law_info)
 
-                        # law_changes 테이블에 저장 (변경이 있는 경우만)
+                    # law_changes 테이블에 저장
                         if save_to_db:
                             law_change = LawChange(
                                 law_id=law.id,
                                 sync_date=sync_date,
                                 sync_batch_id=sync_batch_id,
-                                api_status=ApiStatus.SUCCESS,
-                                api_message="API 성공 - 변경 감지",
+                                api_status=ApiStatus.NO_RESPONSE,
+                                api_message="API 응답 없음",
                                 old_values={
                                     "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
                                     "enforced_date": str(law.enforced_date) if law.enforced_date else None,
                                     "revision_type": law.revision_type,
-                                    "law_id": law.law_id,
                                 },
-                                new_values={
-                                    "proclaimed_date": str(exact_match.proclaimed_date) if exact_match.proclaimed_date else None,
-                                    "enforced_date": str(exact_match.enforced_date) if exact_match.enforced_date else None,
-                                    "revision_type": exact_match.revision_type,
-                                    "law_id": exact_match.law_id,
-                                    "dept_name": exact_match.dept_name,
-                                },
-                                dept_name=exact_match.dept_name,
-                                dept_code=exact_match.dept_code,
+                                new_values=None,
+                                dept_name=law.dept_name,
+                                dept_code=law.dept_code,
                                 status=ChangeStatus.PENDING,
                             )
                             self.db.add(law_change)
@@ -816,108 +807,282 @@ class LawSyncService:
                             "type": "changed",
                             "current": current,
                             "total": total_laws,
-                            "law": changed_law_info,
-                            "message": f"[{current}/{total_laws}] {law_name} - 변경 감지!",
+                            "law": failed_law_info,
+                            "message": f"[{current}/{total_laws}] {law_name} - API 응답 없음",
                         }
+                    elif exact_match:
+                    # 변경사항 비교
+                        changes = {}
+                        old_values = {
+                            "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
+                            "enforced_date": str(law.enforced_date) if law.enforced_date else None,
+                            "revision_type": law.revision_type,
+                            "law_id": law.law_id,
+                        }
+                        if law.proclaimed_date != exact_match.proclaimed_date:
+                            changes["proclaimed_date"] = {
+                                "old": str(law.proclaimed_date) if law.proclaimed_date else None,
+                                "new": str(exact_match.proclaimed_date) if exact_match.proclaimed_date else None,
+                            }
+                        if law.enforced_date != exact_match.enforced_date:
+                            changes["enforced_date"] = {
+                                "old": str(law.enforced_date) if law.enforced_date else None,
+                                "new": str(exact_match.enforced_date) if exact_match.enforced_date else None,
+                            }
+                        if law.revision_type != exact_match.revision_type:
+                            changes["revision_type"] = {
+                                "old": law.revision_type,
+                                "new": exact_match.revision_type,
+                            }
+                        if law.law_id != exact_match.law_id:
+                            changes["law_id"] = {
+                                "old": law.law_id,
+                                "new": exact_match.law_id,
+                            }
 
-                    # 매 건마다 flush하여 에러 발생 시 해당 건만 롤백
-                    try:
-                        await self.db.flush()
-                    except Exception as flush_err:
-                        await self.db.rollback()
-                        failed += 1
-                        yield {
-                            "type": "error",
-                            "current": current,
-                            "total": total_laws,
-                            "law_name": law_name,
-                            "error": str(flush_err),
-                            "message": f"[{current}/{total_laws}] {law_name} - DB 저장 오류: {str(flush_err)}",
-                        }
-                        continue
-                else:
+                        # 법령 정보 업데이트 (law_serial_no가 동일한 경우에만 업데이트)
+                        law.law_id = exact_match.law_id
+                        # law_serial_no는 unique 제약이 있으므로, 같을 때만 업데이트
+                        if law.law_serial_no == exact_match.law_serial_no:
+                            law.law_abbr = exact_match.law_abbr
+                            law.proclaimed_date = exact_match.proclaimed_date
+                            law.proclaimed_no = exact_match.proclaimed_no
+                            law.enforced_date = exact_match.enforced_date
+                            law.revision_type = exact_match.revision_type
+                            law.history_code = exact_match.history_code
+                            law.dept_name = exact_match.dept_name
+                            law.dept_code = exact_match.dept_code
+                            law.detail_link = exact_match.detail_link
+                            law.last_synced_at = datetime.utcnow()
+                        else:
+                            # law_serial_no가 다르면 나머지 필드만 업데이트 (law_serial_no 제외)
+                            law.law_abbr = exact_match.law_abbr
+                            law.proclaimed_date = exact_match.proclaimed_date
+                            law.proclaimed_no = exact_match.proclaimed_no
+                            law.enforced_date = exact_match.enforced_date
+                            law.revision_type = exact_match.revision_type
+                            law.history_code = exact_match.history_code
+                            law.dept_name = exact_match.dept_name
+                            law.dept_code = exact_match.dept_code
+                            law.detail_link = exact_match.detail_link
+                            law.last_synced_at = datetime.utcnow()
+                            # law_serial_no 변경 기록
+                            changes["law_serial_no"] = {
+                                "old": law.law_serial_no,
+                                "new": exact_match.law_serial_no,
+                                "skipped": True,
+                            }
+                        updated += 1
+
+                        # 조문 동기화 (개정법령 탭 동기화 시 조문 DB 반영)
+                        article_sync_result = None
+                        try:
+                            yield {
+                                "type": "progress",
+                                "current": current,
+                                "total": total_laws,
+                                "law_name": law_name,
+                                "status": "article_syncing",
+                                "message": f"[{current}/{total_laws}] {law_name} - 조문 동기화 중...",
+                            }
+                            article_sync_result = await article_service.sync_articles_for_law(
+                                law_id=law.id,
+                                force=True,
+                            )
+                            article_sync_stats["synced_laws"] += 1
+                            article_sync_stats["synced_articles"] += article_sync_result.get("synced_articles", 0)
+                            article_sync_stats["created"] += article_sync_result.get("created", 0)
+                            article_sync_stats["updated"] += article_sync_result.get("updated", 0)
+                            article_sync_stats["deleted"] += article_sync_result.get("deleted", 0)
+                            article_sync_stats["changes_detected"] += article_sync_result.get("changes_detected", 0)
+
+                            yield {
+                                "type": "progress",
+                                "current": current,
+                                "total": total_laws,
+                                "law_name": law_name,
+                                "status": "article_synced",
+                                "message": (
+                                    f"[{current}/{total_laws}] {law_name} - 조문 동기화 완료 "
+                                    f"(처리 {article_sync_result.get('synced_articles', 0)}건, "
+                                    f"변경 {article_sync_result.get('changes_detected', 0)}건)"
+                                ),
+                            }
+                        except Exception as article_error:
+                            article_sync_stats["failed"] += 1
+                            yield {
+                                "type": "error",
+                                "current": current,
+                                "total": total_laws,
+                                "law_name": law_name,
+                                "error": str(article_error),
+                                "message": f"[{current}/{total_laws}] {law_name} - 조문 동기화 오류: {str(article_error)}",
+                            }
+
+                        compare_result = "changed" if changes else "unchanged"
+                        if changes or (article_sync_result and article_sync_result.get("changes_detected", 0) > 0):
+                            changed_law_info = {
+                                "id": law.id,
+                                "law_id": exact_match.law_id,
+                                "law_name": law_name,
+                                "law_type": exact_match.law_type,
+                                "proclaimed_date": str(exact_match.proclaimed_date) if exact_match.proclaimed_date else None,
+                                "enforced_date": str(exact_match.enforced_date) if exact_match.enforced_date else None,
+                                "revision_type": exact_match.revision_type,
+                                "dept_name": exact_match.dept_name,
+                                "api_status": "success",
+                                "api_message": "API 성공",
+                                "changes": changes,
+                                "article_sync": {
+                                    "synced_articles": article_sync_result.get("synced_articles", 0) if article_sync_result else 0,
+                                    "created": article_sync_result.get("created", 0) if article_sync_result else 0,
+                                    "updated": article_sync_result.get("updated", 0) if article_sync_result else 0,
+                                    "deleted": article_sync_result.get("deleted", 0) if article_sync_result else 0,
+                                    "changes_detected": article_sync_result.get("changes_detected", 0) if article_sync_result else 0,
+                                },
+                            }
+                            changed_laws.append(changed_law_info)
+
+                            # law_changes 테이블에 저장 (법령 변경이 있는 경우만)
+                            if save_to_db and changes:
+                                law_change = LawChange(
+                                    law_id=law.id,
+                                    sync_date=sync_date,
+                                    sync_batch_id=sync_batch_id,
+                                    api_status=ApiStatus.SUCCESS,
+                                    api_message="API 성공 - 변경 감지",
+                                    old_values=old_values,
+                                    new_values={
+                                        "proclaimed_date": str(exact_match.proclaimed_date) if exact_match.proclaimed_date else None,
+                                        "enforced_date": str(exact_match.enforced_date) if exact_match.enforced_date else None,
+                                        "revision_type": exact_match.revision_type,
+                                        "law_id": exact_match.law_id,
+                                        "dept_name": exact_match.dept_name,
+                                    },
+                                    dept_name=exact_match.dept_name,
+                                    dept_code=exact_match.dept_code,
+                                    status=ChangeStatus.PENDING,
+                                )
+                                self.db.add(law_change)
+
+                            yield {
+                                "type": "changed",
+                                "current": current,
+                                "total": total_laws,
+                                "law": changed_law_info,
+                                "message": f"[{current}/{total_laws}] {law_name} - 변경 감지!",
+                            }
+
+                        # 매 건마다 flush하여 에러 발생 시 해당 건만 롤백
+                        try:
+                            await self.db.flush()
+                        except Exception as flush_err:
+                            await self.db.rollback()
+                            failed += 1
+                            yield {
+                                "type": "error",
+                                "current": current,
+                                "total": total_laws,
+                                "law_name": law_name,
+                                "error": str(flush_err),
+                                "message": f"[{current}/{total_laws}] {law_name} - DB 저장 오류: {str(flush_err)}",
+                            }
+                            continue
+                    else:
                     # API 응답은 있지만 정확히 일치하는 법령명 없음
-                    failed += 1
-                    compare_result = "not_found"
+                        failed += 1
+                        compare_result = "not_found"
 
-                    api_message = f"정확히 일치하는 법령명 없음 (검색결과: {len(results)}건)"
+                        api_message = f"정확히 일치하는 법령명 없음 (검색결과: {len(results)}건)"
 
                     # 법령명 불일치 정보 기록
-                    not_found_law_info = {
-                        "id": law.id,
-                        "law_id": law.law_id,
-                        "law_name": law_name,
-                        "law_type": law.law_type,
-                        "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
-                        "enforced_date": str(law.enforced_date) if law.enforced_date else None,
-                        "revision_type": law.revision_type,
-                        "dept_name": law.dept_name,
-                        "api_status": "not_found",
-                        "api_message": api_message,
-                        "changes": {},
-                    }
-                    changed_laws.append(not_found_law_info)
+                        not_found_law_info = {
+                            "id": law.id,
+                            "law_id": law.law_id,
+                            "law_name": law_name,
+                            "law_type": law.law_type,
+                            "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
+                            "enforced_date": str(law.enforced_date) if law.enforced_date else None,
+                            "revision_type": law.revision_type,
+                            "dept_name": law.dept_name,
+                            "api_status": "not_found",
+                            "api_message": api_message,
+                            "changes": {},
+                        }
+                        changed_laws.append(not_found_law_info)
 
                     # law_changes 테이블에 저장
-                    if save_to_db:
-                        law_change = LawChange(
-                            law_id=law.id,
-                            sync_date=sync_date,
-                            sync_batch_id=sync_batch_id,
-                            api_status=ApiStatus.NOT_FOUND,
-                            api_message=api_message,
-                            old_values={
-                                "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
-                                "enforced_date": str(law.enforced_date) if law.enforced_date else None,
-                                "revision_type": law.revision_type,
-                            },
-                            new_values=None,
-                            dept_name=law.dept_name,
-                            dept_code=law.dept_code,
-                            status=ChangeStatus.PENDING,
-                        )
-                        self.db.add(law_change)
+                        if save_to_db:
+                            law_change = LawChange(
+                                law_id=law.id,
+                                sync_date=sync_date,
+                                sync_batch_id=sync_batch_id,
+                                api_status=ApiStatus.NOT_FOUND,
+                                api_message=api_message,
+                                old_values={
+                                    "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
+                                    "enforced_date": str(law.enforced_date) if law.enforced_date else None,
+                                    "revision_type": law.revision_type,
+                                },
+                                new_values=None,
+                                dept_name=law.dept_name,
+                                dept_code=law.dept_code,
+                                status=ChangeStatus.PENDING,
+                            )
+                            self.db.add(law_change)
+
+                        yield {
+                            "type": "changed",
+                            "current": current,
+                            "total": total_laws,
+                            "law": not_found_law_info,
+                            "message": f"[{current}/{total_laws}] {law_name} - 법령명 불일치",
+                        }
 
                     yield {
-                        "type": "changed",
+                        "type": "progress",
                         "current": current,
                         "total": total_laws,
-                        "law": not_found_law_info,
-                        "message": f"[{current}/{total_laws}] {law_name} - 법령명 불일치",
+                        "law_name": law_name,
+                        "status": "compared",
+                        "result": compare_result,
+                        "message": f"[{current}/{total_laws}] {law_name} - 비교 완료 ({compare_result})",
                     }
 
-                yield {
-                    "type": "progress",
-                    "current": current,
-                    "total": total_laws,
-                    "law_name": law_name,
-                    "status": "compared",
-                    "result": compare_result,
-                    "message": f"[{current}/{total_laws}] {law_name} - 비교 완료 ({compare_result})",
-                }
+                    # Rate limiting
+                    await asyncio.sleep(0.3)
 
-                # Rate limiting
-                await asyncio.sleep(0.3)
+                except Exception as e:
+                    failed += 1
+                    yield {
+                        "type": "error",
+                        "current": current,
+                        "total": total_laws,
+                        "law_name": law_name,
+                        "error": str(e),
+                        "message": f"[{current}/{total_laws}] {law_name} - 오류: {str(e)}",
+                    }
 
-            except Exception as e:
-                failed += 1
-                yield {
-                    "type": "error",
-                    "current": current,
-                    "total": total_laws,
-                    "law_name": law_name,
-                    "error": str(e),
-                    "message": f"[{current}/{total_laws}] {law_name} - 오류: {str(e)}",
-                }
+            await self.db.commit()
 
-        await self.db.commit()
-
-        yield {
-            "type": "complete",
-            "total": total_laws,
-            "updated": updated,
-            "failed": failed,
-            "changed_count": len(changed_laws),
-            "changed_laws": changed_laws,
-            "message": f"동기화 완료: 총 {total_laws}건 중 {updated}건 성공, {failed}건 실패, {len(changed_laws)}건 변경",
-        }
+            yield {
+                "type": "complete",
+                "total": total_laws,
+                "updated": updated,
+                "failed": failed,
+                "changed_count": len(changed_laws),
+                "changed_laws": changed_laws,
+                "article_synced_laws": article_sync_stats["synced_laws"],
+                "article_synced_articles": article_sync_stats["synced_articles"],
+                "article_created": article_sync_stats["created"],
+                "article_updated": article_sync_stats["updated"],
+                "article_deleted": article_sync_stats["deleted"],
+                "article_changes_detected": article_sync_stats["changes_detected"],
+                "article_sync_failed": article_sync_stats["failed"],
+                "message": (
+                    f"동기화 완료: 총 {total_laws}건 중 {updated}건 성공, {failed}건 실패, "
+                    f"{len(changed_laws)}건 변경, 조문 변경 {article_sync_stats['changes_detected']}건"
+                ),
+            }
+        finally:
+            await moleg_client.close()
