@@ -6,7 +6,6 @@ import {
   Space,
   Typography,
   Tag,
-  DatePicker,
   Card,
   Statistic,
   Row,
@@ -19,7 +18,7 @@ import {
   CalendarOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { articleApi, departmentApi } from '../services/api'
+import { articleApi, ordinanceApi } from '../services/api'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 
@@ -57,10 +56,10 @@ export default function RevisionNeededList() {
   const [days, setDays] = useState(30)
   const [department, setDepartment] = useState<string | undefined>(undefined)
 
-  // 부서 목록 조회
+  // 부서 목록 조회 (자치법규 실데이터 기준)
   const { data: departmentsData } = useQuery({
-    queryKey: ['departments-all'],
-    queryFn: () => departmentApi.getAll(),
+    queryKey: ['ordinance-departments'],
+    queryFn: () => ordinanceApi.getDepartments(),
   })
 
   // 개정 검토 필요 조례 목록 조회
@@ -241,11 +240,11 @@ export default function RevisionNeededList() {
             allowClear
             showSearch
             filterOption={(input, option) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
             }
             options={departmentsData?.map((dept: any) => ({
               value: dept.name,
-              label: dept.name,
+              label: `${dept.name} (${dept.count})`,
             }))}
           />
         </Space>
