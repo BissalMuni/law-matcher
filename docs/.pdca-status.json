@@ -1,8 +1,7 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-02-21T08:57:24.073Z",
+  "lastUpdated": "2026-02-23T10:00:00.000Z",
   "activeFeatures": [
-    "조문-조회-및-변경-감지-기능",
     "versions",
     "backend",
     "schemas",
@@ -19,24 +18,31 @@
     "조문-조회-및-변경-감지-기능": {
       "featureId": "article-tracking",
       "featureName": "조문 조회 및 변경 감지 기능",
-      "phase": "act",
-      "matchRate": null,
-      "iterationCount": 0,
+      "phase": "archived",
+      "matchRate": 95,
+      "iterationCount": 4,
       "startedAt": "2026-02-14T10:30:00.000Z",
-      "lastUpdated": "2026-02-14T12:00:00.000Z",
-      "planDocument": "docs/01-plan/features/조문-조회-및-변경-감지-기능.plan.md",
-      "designDocument": "docs/02-design/features/조문-조회-및-변경-감지-기능.design.md",
-      "analysisDocument": null,
-      "reportDocument": null,
+      "archivedAt": "2026-02-23T10:00:00.000Z",
+      "archivedTo": "docs/archive/2026-02/조문-조회-및-변경-감지-기능/",
+      "planDocument": "docs/archive/2026-02/조문-조회-및-변경-감지-기능/조문-조회-및-변경-감지-기능.plan.md",
+      "designDocument": "docs/archive/2026-02/조문-조회-및-변경-감지-기능/조문-조회-및-변경-감지-기능.design.md",
+      "analysisDocument": "docs/archive/2026-02/조문-조회-및-변경-감지-기능/조문-조회-및-변경-감지-기능.analysis.md",
+      "reportDocument": "docs/archive/2026-02/조문-조회-및-변경-감지-기능/조문-조회-및-변경-감지-기능.report.md",
       "tasks": {
         "plan": "Task #1",
-        "design": "Task #2"
+        "design": "Task #2",
+        "do": "Task #3",
+        "check": "Task #4",
+        "act": "Task #5",
+        "report": "Task #6"
       },
-      "phaseNumber": 5,
-      "previousPhase": "check",
-      "autoAdvanced": true,
+      "phaseNumber": 6,
+      "previousPhase": "act",
+      "autoAdvanced": false,
+      "productionReady": true,
       "timestamps": {
-        "lastUpdated": "2026-02-20T07:40:44.739Z"
+        "lastUpdated": "2026-02-23T00:00:00.000Z",
+        "completedAt": "2026-02-23T00:00:00.000Z"
       }
     },
     "versions": {
