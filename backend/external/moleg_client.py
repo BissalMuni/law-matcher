@@ -125,15 +125,42 @@ class MolegClient:
 
     def _parse_articles(self, articles_data: List[Dict]) -> List[LawArticle]:
         """Parse articles from API response"""
+        if isinstance(articles_data, dict):
+            articles_data = [articles_data]
+
         articles = []
         for art in articles_data:
+            if not isinstance(art, dict):
+                continue
+
             articles.append(LawArticle(
-                article_no=art.get("조문번호", ""),
-                article_title=art.get("조문제목"),
-                article_content=art.get("조문내용", ""),
+                article_no=self._normalize_text(art.get("조문번호", "")),
+                article_title=self._normalize_text(art.get("조문제목")) or None,
+                article_content=self._normalize_text(art.get("조문내용", "")),
                 paragraphs=self._parse_paragraphs(art),
             ))
         return articles
+
+    def _normalize_text(self, value: Any) -> str:
+        """
+        법제처 API의 비정형 텍스트(list/dict/None)를 문자열로 정규화.
+        """
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value.strip()
+        if isinstance(value, (int, float, bool)):
+            return str(value)
+        if isinstance(value, list):
+            parts = [self._normalize_text(item) for item in value]
+            return "\n".join([p for p in parts if p]).strip()
+        if isinstance(value, dict):
+            # content/content태그 우선, 없으면 값들을 순서대로 병합
+            if "content" in value:
+                return self._normalize_text(value.get("content"))
+            parts = [self._normalize_text(v) for v in value.values()]
+            return "\n".join([p for p in parts if p]).strip()
+        return str(value).strip()
 
     def _parse_paragraphs(self, article_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
@@ -160,7 +187,7 @@ class MolegClient:
             para_obj = {
                 'type': 'paragraph',
                 'no': str(para.get('항번호', '')),
-                'content': para.get('항내용', ''),
+                'content': self._normalize_text(para.get('항내용', '')),
                 'items': []
             }
 
@@ -176,7 +203,7 @@ class MolegClient:
                 item_obj = {
                     'type': 'item',
                     'no': str(item.get('호번호', '')),
-                    'content': item.get('호내용', ''),
+                    'content': self._normalize_text(item.get('호내용', '')),
                     'subitems': []
                 }
 
@@ -192,7 +219,7 @@ class MolegClient:
                     subitem_obj = {
                         'type': 'subitem',
                         'no': str(subitem.get('목번호', '')),
-                        'content': subitem.get('목내용', '')
+                        'content': self._normalize_text(subitem.get('목내용', ''))
                     }
                     item_obj['subitems'].append(subitem_obj)
 

@@ -43,6 +43,7 @@ interface SyncProgress {
   changed_count?: number
   updated?: number
   failed?: number
+  reconnecting?: boolean
 }
 
 interface ChangedLaw {
@@ -57,6 +58,13 @@ interface ChangedLaw {
   changes: Record<string, { old: string | null; new: string | null }>
   api_status?: 'success' | 'no_response' | 'not_found'
   api_message?: string
+  article_sync?: {
+    synced_articles: number
+    created: number
+    updated: number
+    deleted: number
+    changes_detected: number
+  }
 }
 
 interface SyncResult {
@@ -65,6 +73,13 @@ interface SyncResult {
   failed: number
   changedCount: number
   changedLaws: ChangedLaw[]
+  articleSyncedLaws: number
+  articleSyncedArticles: number
+  articleCreated: number
+  articleUpdated: number
+  articleDeleted: number
+  articleChangesDetected: number
+  articleSyncFailed: number
 }
 
 export default function AmendmentList() {
@@ -204,6 +219,13 @@ export default function AmendmentList() {
               failed: data.failed,
               changedCount: data.changed_count,
               changedLaws: data.changed_laws,
+              articleSyncedLaws: data.article_synced_laws || 0,
+              articleSyncedArticles: data.article_synced_articles || 0,
+              articleCreated: data.article_created || 0,
+              articleUpdated: data.article_updated || 0,
+              articleDeleted: data.article_deleted || 0,
+              articleChangesDetected: data.article_changes_detected || 0,
+              articleSyncFailed: data.article_sync_failed || 0,
             })
             setLogs((prev) => [...prev, data.message])
             eventSource.close()
@@ -220,8 +242,17 @@ export default function AmendmentList() {
     }
 
     eventSource.onerror = () => {
+      // EventSource는 내부적으로 재연결을 시도할 수 있다.
+      // 다만 이 엔드포인트는 재연결 시 새 동기화가 시작되므로 사용자에게 명확히 안내하고 종료한다.
       setSyncing(false)
-      setLogs((prev) => [...prev, '[오류] 연결이 끊어졌습니다.'])
+      setProgress((prev) => ({
+        ...(prev || { type: 'progress' }),
+        reconnecting: false,
+      }))
+      setLogs((prev) => [
+        ...prev,
+        '[오류] 동기화 스트림 연결이 종료되었습니다. 서버 재시작(--reload) 또는 인증 만료 가능성이 있습니다.',
+      ])
       eventSource.close()
     }
   }
@@ -399,7 +430,20 @@ export default function AmendmentList() {
             </div>
           )
         })
-        return <div>{changeItems.length > 0 ? changeItems : <Text type="secondary">변경 없음</Text>}</div>
+        if (changeItems.length > 0) {
+          return <div>{changeItems}</div>
+        }
+
+        if (record.article_sync && record.article_sync.changes_detected > 0) {
+          return (
+            <Text type="warning">
+              조문 변경 감지 {record.article_sync.changes_detected}건
+              (생성 {record.article_sync.created} / 수정 {record.article_sync.updated} / 삭제 {record.article_sync.deleted})
+            </Text>
+          )
+        }
+
+        return <Text type="secondary">변경 없음</Text>
       },
     },
   ]
@@ -410,6 +454,10 @@ export default function AmendmentList() {
         return <LoadingOutlined spin style={{ color: '#1890ff' }} />
       case 'received':
         return <CheckCircleOutlined style={{ color: '#52c41a' }} />
+      case 'article_syncing':
+        return <LoadingOutlined spin style={{ color: '#722ed1' }} />
+      case 'article_synced':
+        return <CheckCircleOutlined style={{ color: '#722ed1' }} />
       case 'compared':
         return <CheckCircleOutlined style={{ color: '#52c41a' }} />
       default:
@@ -502,7 +550,14 @@ export default function AmendmentList() {
                 ? changedLaws
                 : resultFilter === 'failed'
                 ? changedLaws.filter((law) => law.api_status === 'no_response' || law.api_status === 'not_found')
-                : changedLaws.filter((law) => law.api_status === 'success' && Object.keys(law.changes || {}).length > 0)
+                : changedLaws.filter(
+                  (law) =>
+                    law.api_status === 'success'
+                    && (
+                      Object.keys(law.changes || {}).length > 0
+                      || (law.article_sync?.changes_detected || 0) > 0
+                    )
+                )
             }
             columns={changedLawColumns}
             rowKey="id"
@@ -588,6 +643,8 @@ export default function AmendmentList() {
                 {progress.law_name}
                 {progress.status === 'requesting' && ' - API 요청 중...'}
                 {progress.status === 'received' && ' - 응답 수신'}
+                {progress.status === 'article_syncing' && ' - 조문 동기화 중...'}
+                {progress.status === 'article_synced' && ' - 조문 동기화 완료'}
                 {progress.status === 'compared' && ` - 비교 완료 (${progress.result})`}
               </Text>
             </Space>
@@ -605,7 +662,27 @@ export default function AmendmentList() {
                 <Descriptions.Item label="성공">{syncResult.updated}건</Descriptions.Item>
                 <Descriptions.Item label="실패">{syncResult.failed}건</Descriptions.Item>
                 <Descriptions.Item label="변경 감지">{syncResult.changedCount}건</Descriptions.Item>
+                <Descriptions.Item label="조문 동기화 법령">{syncResult.articleSyncedLaws}건</Descriptions.Item>
+                <Descriptions.Item label="조문 처리">{syncResult.articleSyncedArticles}건</Descriptions.Item>
+                <Descriptions.Item label="조문 생성/수정/삭제">
+                  {syncResult.articleCreated}/{syncResult.articleUpdated}/{syncResult.articleDeleted}
+                </Descriptions.Item>
+                <Descriptions.Item label="조문 변경 감지">
+                  {syncResult.articleChangesDetected}건
+                </Descriptions.Item>
               </Descriptions>
+            }
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        {syncResult && (
+          <Alert
+            type={syncResult.articleSyncFailed > 0 ? 'warning' : 'success'}
+            message={
+              syncResult.articleSyncFailed > 0
+                ? `조문 동기화 일부 실패 (${syncResult.articleSyncFailed}건)`
+                : '조문 정보 DB 반영 완료'
             }
             style={{ marginBottom: 16 }}
           />

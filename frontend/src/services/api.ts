@@ -9,11 +9,14 @@ const api = axios.create({
   },
 })
 
+const isDevBypass = import.meta.env.VITE_DEV_BYPASS_AUTH === 'true'
+
 // JWT Token Interceptor
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('law_matcher_token')
-    if (token) {
+    // simple_ 토큰은 개발용 가짜 세션이므로 Authorization 헤더를 붙이지 않는다.
+    if (token && !token.startsWith('simple_')) {
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
@@ -28,14 +31,19 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear auth data and redirect to login
-      localStorage.removeItem('law_matcher_token')
-      localStorage.removeItem('law_matcher_user')
+      const token = localStorage.getItem('law_matcher_token')
+      const isSimpleToken = !!token && token.startsWith('simple_')
 
-      // Only redirect if not already on login page
-      if (!window.location.pathname.startsWith('/login') &&
-          !window.location.pathname.startsWith('/landing')) {
-        window.location.href = '/login'
+      // 개발 우회 모드/가짜 세션에서는 401로 전체 세션을 강제로 날리지 않는다.
+      if (!isDevBypass && !isSimpleToken) {
+        localStorage.removeItem('law_matcher_token')
+        localStorage.removeItem('law_matcher_user')
+
+        // Only redirect if not already on login page
+        if (!window.location.pathname.startsWith('/login') &&
+            !window.location.pathname.startsWith('/landing')) {
+          window.location.href = '/login'
+        }
       }
     }
     return Promise.reject(error)
