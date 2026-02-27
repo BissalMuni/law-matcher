@@ -1,22 +1,18 @@
 <!--
 Sync Impact Report
 ==================
-- Version change: 1.0.0 → 2.0.0 (MAJOR: 전면 재작성 - 구현 세부사항 제거, 총괄 원칙으로 전환)
+- Version change: 2.1.0 → 2.1.1 (PATCH: 역할별 메뉴 분리 원칙 구체화)
 - Modified principles:
-  - Async-First Architecture → 비차단 처리 (구현 기술 제거, 철학만 유지)
-  - External API Resilience → 외부 의존 격리 (범용 원칙으로 확대)
-  - Change Detection Integrity → 데이터 무결성 (도메인 특화 → 일반 원칙)
-  - Layered Separation → 관심사 분리 (디렉토리 경로 제거)
-  - Containerized Development → 환경 재현성 (Docker 한정 제거)
-  - Security by Default → 보안 기본 적용 (구현 기술 제거)
-  - Korean-First UX → 사용자 중심 설계 (언어 한정 → UX 철학)
-- Removed sections:
-  - Technology Stack Constraints (세부사항 → plan/spec으로 이동)
-  - Development Workflow 상세 (세부사항 → plan/spec으로 이동)
+  - VII. 사용자 중심 설계: "각 역할에 필요한 기능만 노출" →
+    "역할별 네비게이션 메뉴 분리, 프론트엔드+백엔드 양쪽 권한 강제"로 구체화
+- Added sections: None
+- Removed sections: None
 - Templates requiring updates:
   - .specify/templates/plan-template.md ✅ Compatible
   - .specify/templates/spec-template.md ✅ Compatible
   - .specify/templates/tasks-template.md ✅ Compatible
+- Spec updates:
+  - specs/login/spec.md ✅ Updated (FR-007에 역할별 메뉴 매트릭스 추가)
 - Follow-up TODOs: None
 -->
 
@@ -92,7 +88,9 @@ Sync Impact Report
 - **사용자**: 소속 부서의 조례만 열람/검토할 수 있다. 개정 여부를 검토하여 결과를 저장하고, 최종적으로 개정 대상 또는 개정 제외 대상까지 관리한다.
 - **관리자**: 모든 부서의 조례를 열람/검토할 수 있으며, 사용자의 검토 결과를 승인할 권한을 가진다. 법령 동기화, 조례-법령 연계 설정, 부서 및 사용자 관리 등 시스템 운영을 담당한다.
 - UI와 메시지는 사용자의 언어(한국어)와 업무 용어를 사용한다.
-- 각 역할에 필요한 기능만 노출하며, 권한 밖의 기능에는 접근할 수 없도록 한다.
+- 역할별로 네비게이션 메뉴를 분리하여 해당 역할의 기능만 표시한다.
+  프론트엔드(메뉴 노출)와 백엔드(API 접근 제어) 양쪽에서 권한을 강제한다.
+- 인증 모델이 변경되더라도 역할 기반 접근 제어 원칙은 유지한다.
 
 ## Strategic Direction
 
@@ -105,6 +103,22 @@ Phase 1은 Phase 2의 설계 기준(프로토타입)이 된다. 따라서:
 - API 계약(엔드포인트, 요청/응답 스키마)은 전환 시 그대로 옮길 수 있도록 표준적으로 정의한다.
 - 데이터베이스 스키마는 전환 대상 RDBMS와 호환되는 표준 SQL로 설계한다.
 - UI 화면 구성과 사용자 흐름은 전환 후에도 동일하게 유지한다.
+
+### 인증 모델 진화
+
+인증 체계는 다음 단계로 진화한다. 각 단계의 구현 세부사항은
+해당 기능의 Spec 문서에서 정의한다.
+
+- **Auth Phase A (현재)**: 부서 단위 로그인. 개인 사용자 계정 없이
+  부서 정보로 인증하며, 관리자는 별도 비밀번호로 접근한다.
+- **Auth Phase B (추후)**: 개인별 로그인. 사용자 이름, 이메일 등
+  개인 식별 정보를 기반으로 인증하며, 부서 소속은 사용자 속성으로 관리한다.
+
+전환 시 준수 사항:
+
+- Auth Phase A에서 축적된 데이터(검토 결과 등)는 Phase B로 이관 가능해야 한다.
+- 인증 로직은 비즈니스 로직과 분리하여 인증 방식 변경이 다른 기능에 영향을 주지 않도록 한다.
+- 역할(사용자/관리자)과 권한 체계는 인증 모델과 독립적으로 유지한다.
 
 ## Constraints
 
@@ -123,4 +137,4 @@ Phase 1은 Phase 2의 설계 기준(프로토타입)이 된다. 따라서:
 - **준수 검증**: plan 단계에서 Constitution Check를 수행한다.
 - **세부 지침**: 기술 스택, 개발 워크플로우 등 구현 세부사항은 spec/plan 문서에서 관리한다.
 
-**Version**: 2.0.0 | **Ratified**: 2026-02-26 | **Last Amended**: 2026-02-26
+**Version**: 2.1.1 | **Ratified**: 2026-02-26 | **Last Amended**: 2026-02-27
