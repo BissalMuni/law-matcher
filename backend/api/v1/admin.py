@@ -1,14 +1,70 @@
 """
 Admin API endpoints for management tasks
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
+from pydantic import BaseModel
+from typing import Optional
 
-from backend.api.deps import get_db
+import redis.asyncio as aioredis
+
+from backend.api.deps import get_db, verify_admin_password
+from backend.core.config import settings
 
 router = APIRouter()
+
+MAINTENANCE_KEY = "law_matcher:maintenance_mode"
+
+
+async def get_redis():
+    """Get async Redis connection"""
+    return aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+class MaintenanceToggleRequest(BaseModel):
+    enabled: bool
+    message: Optional[str] = None
+
+
+@router.get("/maintenance")
+async def get_maintenance_status():
+    """점검모드 상태 조회 (인증 불필요)"""
+    r = await get_redis()
+    try:
+        enabled = await r.get(MAINTENANCE_KEY)
+        message = await r.get(f"{MAINTENANCE_KEY}:message")
+        return {
+            "enabled": enabled == "1",
+            "message": message or "시스템 정비 중입니다. 잠시 후 다시 접속해 주세요.",
+        }
+    finally:
+        await r.aclose()
+
+
+@router.post("/maintenance")
+async def toggle_maintenance(
+    request: MaintenanceToggleRequest,
+    _: bool = Depends(verify_admin_password),
+):
+    """점검모드 ON/OFF 토글 (관리자 비밀번호 필요)"""
+    r = await get_redis()
+    try:
+        if request.enabled:
+            await r.set(MAINTENANCE_KEY, "1")
+            if request.message:
+                await r.set(f"{MAINTENANCE_KEY}:message", request.message)
+        else:
+            await r.delete(MAINTENANCE_KEY)
+            await r.delete(f"{MAINTENANCE_KEY}:message")
+
+        return {
+            "enabled": request.enabled,
+            "message": "점검모드가 활성화되었습니다." if request.enabled else "점검모드가 해제되었습니다.",
+        }
+    finally:
+        await r.aclose()
 
 
 @router.post("/migrate-departments")

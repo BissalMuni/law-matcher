@@ -1,5 +1,6 @@
+import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { ConfigProvider } from 'antd'
+import { ConfigProvider, Spin } from 'antd'
 import koKR from 'antd/locale/ko_KR'
 import { AuthProvider } from './contexts/AuthContext'
 import MainLayout from './components/layout/MainLayout'
@@ -19,8 +20,48 @@ import LawChangeList from './pages/LawChangeList'
 import ReviewList from './pages/ReviewList'
 import ReviewDetail from './pages/ReviewDetail'
 import Statistics from './pages/Statistics'
+import Maintenance from './pages/Maintenance'
+import { maintenanceApi } from './services/api'
 
 function App() {
+  const [maintenanceMode, setMaintenanceMode] = useState(false)
+  const [maintenanceMessage, setMaintenanceMessage] = useState('')
+  const [checking, setChecking] = useState(true)
+
+  // URL 파라미터로 점검모드 우회 (?bypass=admin)
+  const isBypass = new URLSearchParams(window.location.search).get('bypass') === 'admin'
+
+  useEffect(() => {
+    maintenanceApi
+      .getStatus()
+      .then((res) => {
+        setMaintenanceMode(res.enabled)
+        setMaintenanceMessage(res.message)
+      })
+      .catch(() => {
+        // API 실패 시 점검모드 아닌 것으로 간주
+        setMaintenanceMode(false)
+      })
+      .finally(() => setChecking(false))
+  }, [])
+
+  if (checking) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
+
+  // 점검모드 활성화 && 우회 파라미터 없음 → 정비중 페이지
+  if (maintenanceMode && !isBypass) {
+    return (
+      <ConfigProvider locale={koKR}>
+        <Maintenance message={maintenanceMessage} />
+      </ConfigProvider>
+    )
+  }
+
   return (
     <ConfigProvider locale={koKR}>
       <AuthProvider>

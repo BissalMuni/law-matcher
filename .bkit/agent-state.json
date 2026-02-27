@@ -3,11 +3,11 @@
   "enabled": false,
   "teamName": "",
   "feature": "조문-조회-및-변경-감지-기능",
-  "pdcaPhase": "act",
+  "pdcaPhase": "archived",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-02-23T10:40:19.164Z",
-  "lastUpdated": "2026-02-23T10:45:35.344Z",
+  "startedAt": "2026-02-27T05:42:15.951Z",
+  "lastUpdated": "2026-02-27T05:47:53.712Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "a2ba35d6-a739-4ef6-a48e-29919306e49a"
+  "sessionId": "a90f0128-f59b-412c-ab26-aaf1cb0cb606"
 }

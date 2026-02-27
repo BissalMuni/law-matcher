@@ -441,6 +441,19 @@ export const dashboardApi = {
   },
 }
 
+// Maintenance API
+export const maintenanceApi = {
+  getStatus: async (): Promise<{ enabled: boolean; message: string }> => {
+    const { data } = await axios.get('/api/v1/admin/maintenance')
+    return data
+  },
+
+  toggle: async (enabled: boolean, message?: string) => {
+    const { data } = await api.post('/admin/maintenance', { enabled, message })
+    return data
+  },
+}
+
 export default api
 
 

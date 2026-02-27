@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-02-23T10:00:00.000Z",
+  "lastUpdated": "2026-02-27T02:59:05.602Z",
   "activeFeatures": [
     "versions",
     "backend",
@@ -11,7 +11,8 @@
     "tests",
     "layout",
     "api.ts",
-    "frontend"
+    "frontend",
+    "law-matcher"
   ],
   "primaryFeature": "조문-조회-및-변경-감지-기능",
   "features": {
@@ -67,9 +68,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T04:21:12.041Z",
-        "lastUpdated": "2026-02-21T08:51:09.438Z"
+        "lastUpdated": "2026-02-27T01:35:52.386Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/backend/tasks.py"
+      "lastFile": "c:\\Users\\user\\Downloads\\coding\\law-matcher\\backend\\main.py"
     },
     "schemas": {
       "phase": "do",
@@ -119,9 +120,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T08:49:01.805Z",
-        "lastUpdated": "2026-02-21T08:57:19.581Z"
+        "lastUpdated": "2026-02-27T00:47:55.549Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/backend/api/v1/ordinances.py"
+      "lastFile": "c:\\Users\\user\\Downloads\\coding\\law-matcher\\backend\\api\\v1\\admin.py"
     },
     "tests": {
       "phase": "do",
@@ -171,9 +172,22 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-14T09:01:33.886Z",
-        "lastUpdated": "2026-02-21T08:57:24.073Z"
+        "lastUpdated": "2026-02-27T00:49:44.629Z"
       },
-      "lastFile": "/home/jinkui/law-matcher/frontend/src/pages/ReviewList.tsx"
+      "lastFile": "c:\\Users\\user\\Downloads\\coding\\law-matcher\\frontend\\src\\App.tsx"
+    },
+    "law-matcher": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-27T02:57:03.523Z",
+        "lastUpdated": "2026-02-27T02:59:05.602Z"
+      },
+      "lastFile": "c:\\Users\\user\\Downloads\\coding\\law-matcher\\test_api_revision_reason2.py"
     }
   },
   "pipeline": {
@@ -184,7 +198,7 @@
   "session": {
     "startedAt": "2026-02-14T01:17:31.503Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-02-21T08:57:24.073Z"
+    "lastActivity": "2026-02-27T02:59:05.602Z"
   },
   "history": [
     {
@@ -820,6 +834,66 @@
     {
       "timestamp": "2026-02-21T08:57:24.073Z",
       "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-27T00:47:55.550Z",
+      "feature": "v1",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-27T00:48:24.044Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-27T00:48:53.038Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-27T00:49:11.955Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-27T00:49:44.629Z",
+      "feature": "frontend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-27T01:35:52.386Z",
+      "feature": "backend",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-27T02:57:03.524Z",
+      "feature": "law-matcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-27T02:57:21.585Z",
+      "feature": "law-matcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-27T02:57:57.660Z",
+      "feature": "law-matcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-27T02:59:05.602Z",
+      "feature": "law-matcher",
       "phase": "do",
       "action": "updated"
     }
