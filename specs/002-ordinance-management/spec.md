@@ -1,6 +1,6 @@
 # Feature Specification: 조례 관리 기능
 
-**Feature Branch**: `ordinance-management`
+**Feature Branch**: `002-ordinance-management`
 **Created**: 2026-02-27
 **Status**: Draft
 **Constitution Ref**: I. 데이터 무결성, IV. 관심사 분리, VII. 사용자 중심 설계
