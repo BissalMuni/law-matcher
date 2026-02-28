@@ -1,6 +1,6 @@
 # Feature Specification: 상위법령 연결 관리 기능
 
-**Feature Branch**: `law-mapping-management`
+**Feature Branch**: `003-law-mapping-management`
 **Created**: 2026-02-27
 **Status**: Draft
 **Constitution Ref**: Core Rule(개정대상 판별), I. 데이터 무결성, II. 외부 의존 격리

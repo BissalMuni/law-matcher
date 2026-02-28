@@ -1,7 +1,7 @@
 # Implementation Plan: 개정법령 변경이력 관리
 
-**Branch**: `001-law-change-tracking` | **Date**: 2026-02-27 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `/specs/001-law-change-tracking/spec.md`
+**Branch**: `004-law-change-tracking` | **Date**: 2026-02-27 | **Spec**: [spec.md](spec.md)
+**Input**: Feature specification from `/specs/004-law-change-tracking/spec.md`
 
 ## Summary
 
@@ -26,9 +26,9 @@
 | # | 원칙 | 준수 여부 | 근거 |
 |---|------|----------|------|
 | I | 데이터 무결성 | PASS | law_changes는 감지 로그로 삭제하지 않음. old_values/new_values로 원본+변경 보존 |
-| II | 외부 의존 격리 | PASS | 법제처 API 호출은 external/moleg_client.py에 격리. 동기화 로직은 services/에서 처리 |
-| III | 비차단 처리 | PASS | 동기화는 Celery 비동기 처리. 상태 전환은 API 호출 시 즉시 처리 |
-| IV | 관심사 분리 | PASS | API(api/v1/) → Service(services/) → Model(models/) 3계층. 프론트엔드는 API 계약 통해 통신 |
+| II | 관심사 분리 | PASS | API(api/v1/) → Service(services/) → Model(models/) 3계층. 프론트엔드는 API 계약 통해 통신 |
+| III | 외부 의존 격리 | PASS | 법제처 API 호출은 external/moleg_client.py에 격리. 동기화 로직은 services/에서 처리 |
+| IV | 비차단 처리 | PASS | 동기화는 Celery 비동기 처리. 상태 전환은 API 호출 시 즉시 처리 |
 | V | 환경 재현성 | PASS | Docker Compose로 전체 환경 선언. 환경 변수로 설정 관리 |
 | VI | 보안 기본 적용 | PASS | JWT 인증, 역할 기반 접근 제어 (FR-016, FR-017). 사용자 입력 검증 (Pydantic) |
 | VII | 사용자 중심 설계 | PASS | 역할별 기능 분리 (관리자: 승인/반려, 담당자: 검토의견 작성). 한국어 UI |
@@ -40,7 +40,7 @@
 ### Documentation (this feature)
 
 ```text
-specs/001-law-change-tracking/
+specs/004-law-change-tracking/
 ├── plan.md              # This file
 ├── research.md          # Phase 0 output
 ├── data-model.md        # Phase 1 output

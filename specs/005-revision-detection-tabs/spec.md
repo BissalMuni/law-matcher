@@ -1,6 +1,6 @@
 # Feature Specification: 개정 검토 대상 판별 방식 병렬 탭
 
-**Feature Branch**: `revision-detection-tabs`
+**Feature Branch**: `005-revision-detection-tabs`
 **Created**: 2026-02-27
 **Status**: Draft
 **Constitution Ref**: Core Rule(개정대상 판별), II. 외부 의존 격리, VII. 사용자 중심 설계

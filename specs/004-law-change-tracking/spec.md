@@ -1,6 +1,6 @@
 # Feature Specification: 개정법령 변경이력 관리
 
-**Feature Branch**: `001-law-change-tracking`
+**Feature Branch**: `004-law-change-tracking`
 **Created**: 2026-02-27
 **Status**: Draft
 **Input**: User description: "개정법령 변경이력 관리 - 상위법령 동기화 후 변경사항 감지, 승인/반려 워크플로우, 일괄처리, Excel 내보내기"

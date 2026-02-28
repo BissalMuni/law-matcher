@@ -1,6 +1,6 @@
 # Feature Specification: 로그인 기능
 
-**Feature Branch**: `login`
+**Feature Branch**: `001-login`
 **Created**: 2026-02-27
 **Status**: Draft
 **Constitution Ref**: VI. 보안 기본 적용, VII. 사용자 중심 설계, Strategic Direction > 인증 모델 진화
