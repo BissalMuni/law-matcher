@@ -143,9 +143,34 @@ T002 (DB Migration) ───┘                                       │
 
 ---
 
-## Phase 5: Polish
+## Phase 5: US5 부서 배정 ABOLISHED 처리 (P2)
 
-### T011 — 에러 메시지 및 UX 일관성 점검 [US2][US3]
+### T012 — Backend: 부서 배정 시 ABOLISHED 상태 처리 [US5]
+- **File**: `backend/services/ordinance_service.py`
+- **Work**:
+  - 부서 일괄 배정 로직에서 ABOLISHED 상태 조례 처리 규칙 추가
+  - ABOLISHED 조례 선택 시 배정 차단 또는 경고 반환
+  - 배정 대상에서 ABOLISHED 조례 자동 제외 옵션
+- **Accept**:
+  - ABOLISHED 조례에 부서 배정 시 적절한 에러/경고 반환
+  - ACTIVE 조례만 정상 배정됨
+- **Deps**: T005
+
+### T013 — Frontend: 부서 배정 UI 상태 안내 [US5] [P]
+- **File**: `frontend/src/pages/OrdinanceList.tsx`
+- **Work**:
+  - 일괄 배정 선택 시 ABOLISHED 조례가 포함된 경우 경고 메시지 표시
+  - "폐지된 조례 N건은 배정에서 제외됩니다" 안내
+  - ABOLISHED 조례는 체크박스 비활성화 또는 시각적 구분
+- **Accept**:
+  - 사용자가 ABOLISHED 조례의 배정 불가를 명확히 인지
+- **Deps**: T012
+
+---
+
+## Phase 6: Polish
+
+### T014 — 에러 메시지 및 UX 일관성 점검 [US2][US3]
 - **Files**:
   - `backend/api/v1/ordinances.py`
   - `frontend/src/pages/OrdinanceList.tsx`
@@ -173,4 +198,7 @@ T002 (DB Migration) ───┘                                       │
 | T008 | Frontend API: status 파라미터 추가 | 4. Frontend | T007 |
 | T009 | Frontend: 조례 목록 status 필터 UI | 4. Frontend | T008 |
 | T010 | Frontend: 조례 상세 폐지 상태 배지 | 4. Frontend | T008 |
-| T011 | 에러 메시지 및 UX 일관성 점검 | 5. Polish | T006, T009, T010 |
+| T011 | 에러 메시지 및 UX 일관성 점검 | 5. US5 부서 배정 | T005 |
+| T012 | Backend: 부서 배정 ABOLISHED 처리 | 5. US5 부서 배정 | T005 |
+| T013 | Frontend: 부서 배정 UI 상태 안내 | 5. US5 부서 배정 | T012 |
+| T014 | 에러 메시지 및 UX 일관성 점검 | 6. Polish | T006, T009, T010, T013 |

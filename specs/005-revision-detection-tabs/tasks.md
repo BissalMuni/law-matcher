@@ -136,6 +136,30 @@ Phase 10 (Polish & Integration)                          │
 
 ---
 
+## Phase 2.5: 조문 동기화 메타데이터 저장
+
+### T007a - 조문 동기화 시 신규 메타 저장 [US2]
+
+**File:** `backend/services/law_sync_service.py` (수정)
+**Work:**
+
+- 법제처 API 조문 동기화 시 `revision_type_detail`, `change_flag` 필드를 Article 레코드에 저장
+- MolegClient(T007)에서 파싱된 조문메타(`조문제개정유형`, `조문변경여부`)를 DB에 반영
+- 기존 동기화 로직에 메타 필드 업데이트 추가 (신규 조문 생성 시 + 기존 조문 갱신 시)
+**Depends on:** T007
+
+### T007b - 조문 응답 스키마/직렬화 보강 [US2]
+
+**File:** `backend/schemas/article.py` (수정 또는 신규)
+**Work:**
+
+- 조문 API 응답에 `revision_type_detail`, `change_flag` 필드 포함
+- 기존 Article 스키마에 새 필드 추가 (nullable)
+- 프론트엔드 TabB에서 사용할 수 있도록 직렬화 보장
+**Depends on:** T004, T005
+
+---
+
 ## Phase 3: Service Logic
 
 ### T008 - 개정문 조문번호 추출 파서 [US3]

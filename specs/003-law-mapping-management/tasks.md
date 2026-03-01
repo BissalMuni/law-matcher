@@ -43,6 +43,13 @@ All tasks in this phase are parallel and independent of each other. They depend 
 | T009 | Reinforce last-law deletion warning: when removing the final parent law mapping from an ordinance, show stronger confirmation with impact description | `backend/api/v1/ordinances.py`, `frontend/src/pages/OrdinanceDetail.tsx` | [US3] | T006, T008 |
 | T010 | Ensure no_parent_law flag auto-clears when a parent law mapping is added (FR-006a) and verify Korean error message is returned on failure | `backend/services/ordinance_service.py` | [US1] [US4] | T003 |
 
+## Phase 5: US6 자동추천 실패 복구 (P3)
+
+| ID | Task | File(s) | US | Deps |
+|----|------|---------|----|------|
+| T011 | Add suggestion calculation failure recovery: catch exceptions, return partial results with error flag, log failures for monitoring | `backend/services/article_service.py` | [US6] | T007 |
+| T012 | Localize suggestion API error responses to Korean: "자동 추천 계산 중 오류가 발생했습니다. 수동으로 매핑해 주세요" | `backend/api/v1/articles.py` | [US6] | T011 |
+
 ## Dependencies & Execution Order
 
 ```
@@ -56,6 +63,7 @@ T001 (API retry logic)
                                                          ^
                                                          |
                                                    T008 -+
+ T007 ---> T011 (suggestion failure recovery) ---> T012 (suggestion Korean errors)
 ```
 
 **Critical path:** T001 -> T005 -> T007 -> T008 -> T009
@@ -64,9 +72,9 @@ T001 (API retry logic)
 
 | Metric | Count |
 |--------|-------|
-| Total tasks | 10 |
+| Total tasks | 12 |
 | Parallel tasks | 5 (T002-T006) |
-| Backend tasks | 8 |
+| Backend tasks | 10 |
 | Frontend tasks | 2 |
 | New files | 0 |
 | Modified files | 8 |

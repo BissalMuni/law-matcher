@@ -181,9 +181,86 @@
 
 ---
 
-## Phase 6: Polish & Integration
+## Phase 6: US6 Excel 내보내기 (P2)
 
-### T018: 상태 전환 엣지케이스 처리 [US3] [US4] [US5]
+### T019: 엑셀 내보내기 쿼리 [US6]
+- **File**: `backend/services/law_sync_service.py` (수정)
+- **Work**:
+  - 변경이력 데이터를 엑셀로 내보내는 서비스 로직 추가
+  - 현재 적용된 필터(기간, 상태 등)를 반영한 쿼리
+  - 대량 데이터 스트리밍 처리 (메모리 효율)
+- **Dependencies**: T008
+
+### T020: 엑셀 내보내기 API 및 프론트 버튼 [US6] [P]
+- **Files**: `backend/api/v1/law_changes.py` (수정), `frontend/src/pages/LawChangeList.tsx` (수정)
+- **Work**:
+  - `GET /api/v1/law-changes/export` 엔드포인트 추가 (필터 쿼리 파라미터 그대로 사용)
+  - LawChangeList 페이지에 "엑셀 다운로드" 버튼 추가
+  - 다운로드 중 로딩 상태 표시
+- **Dependencies**: T019
+
+---
+
+## Phase 7: US7 변경이력 통계 (P2)
+
+### T021: 통계 집계 서비스 로직 [US7]
+- **File**: `backend/services/law_sync_service.py` (수정)
+- **Work**:
+  - 기간/상태 기준 변경이력 통계 집계 함수 추가
+  - 지표: 총 변경 건수, 상태별 건수(검토대기/검토중/개정확정), 법령유형별 분포
+- **Dependencies**: T002
+
+### T022: 통계 API 및 프론트 카드 [US7] [P]
+- **Files**: `backend/api/v1/law_changes.py` (수정), `frontend/src/pages/LawChangeList.tsx` (수정)
+- **Work**:
+  - `GET /api/v1/law-changes/statistics` 엔드포인트 추가 (기간 파라미터)
+  - LawChangeList 페이지 상단에 통계 카드(Ant Design Statistic) 표시
+  - 기간 선택 시 카드 값 갱신
+- **Dependencies**: T021
+
+---
+
+## Phase 8: US8 법령별 이력 추적 (P3)
+
+### T023: 법령별 이력 조회 API [US8]
+- **File**: `backend/api/v1/law_changes.py` (수정)
+- **Work**:
+  - `GET /api/v1/law-changes/by-law/{law_id}` 엔드포인트 추가
+  - 특정 법령의 변경 이력만 시간순 조회
+  - 페이지네이션 지원
+- **Dependencies**: T011
+
+### T024: 법령별 이력 필터 UI [US8] [P]
+- **File**: `frontend/src/pages/LawChangeList.tsx` (수정)
+- **Work**:
+  - 법령 선택 드롭다운/검색 필터 추가
+  - 선택된 법령의 이력만 표시
+  - 법령 선택 해제 시 전체 목록으로 복귀
+- **Dependencies**: T023
+
+---
+
+## Phase 9: US9 동기화 배치 관리 (P3)
+
+### T025: 배치 실행/기록 로직 [US9]
+- **File**: `backend/services/law_sync_service.py` (수정)
+- **Work**:
+  - 배치 실행 이력 기록 (시작시간, 종료시간, 결과, 처리 건수)
+  - 마지막 동기화 일시 조회 함수
+- **Dependencies**: T008
+
+### T026: 배치 상태 조회 API [US9] [P]
+- **Files**: `backend/api/v1/law_changes.py` (수정), `frontend/src/pages/LawChangeList.tsx` (수정)
+- **Work**:
+  - `GET /api/v1/sync/status` 엔드포인트 추가 (마지막 실행 결과, 다음 예정 시간)
+  - LawChangeList 페이지에 동기화 상태 표시 (마지막 실행 시간, 성공/실패)
+- **Dependencies**: T025
+
+---
+
+## Phase 10: Polish & Integration
+
+### T027: 상태 전환 엣지케이스 처리 [US3] [US4] [US5]
 - **File**: `backend/services/ordinance_service.py`, `backend/services/review_service.py` (수정)
 - **Work**:
   - 동시 접근 시 race condition 방지 (optimistic locking 또는 상태 체크)
@@ -223,26 +300,41 @@ Phase 5 (Frontend) - T007 + Phase 4 완료 후:
   T014 → T016 (OrdinanceDetail) [P]
   T014 → T017 (ReviewList) [P]
 
-Phase 6 (Polish):
-  T008 + T009 + T010 → T018 (엣지케이스)
+Phase 6-9 (P2/P3 User Stories):
+  T008 → T019 (엑셀 쿼리) → T020 (엑셀 API/UI) [P]
+  T002 → T021 (통계 집계) → T022 (통계 API/UI) [P]
+  T011 → T023 (법령별 이력 API) → T024 (법령별 필터 UI) [P]
+  T008 → T025 (배치 기록) → T026 (배치 상태 API/UI) [P]
+
+Phase 10 (Polish):
+  T008 + T009 + T010 → T027 (엣지케이스)
 ```
 
 ### Critical Path
+
 ```
 T001 → T003 → T005 → T009 → T010 → T013 → T014 → T016
 ```
 
 ### Parallel Execution Groups
+
 - **Group A** [P]: T002, T003, T004 (모델 변경 - T001 완료 후 병렬)
 - **Group B** [P]: T005, T006, T007 (스키마/타입 - 각 모델 완료 후 병렬)
 - **Group C** [P]: T011, T012 (API - 각 서비스 완료 후 병렬)
 - **Group D** [P]: T015, T016, T017 (프론트엔드 페이지 - T014 완료 후 병렬)
+- **Group E** [P]: T019-T026 (P2/P3 기능 - 각 의존성 충족 후 독립 진행)
 
 ### Task Count Summary
-- Total: 18 tasks
+
+- Total: 27 tasks
 - Phase 1 (Setup): 1 task
 - Phase 2 (Models & Schemas): 6 tasks
 - Phase 3 (Services): 3 tasks
 - Phase 4 (APIs): 3 tasks
 - Phase 5 (Frontend): 4 tasks
-- Phase 6 (Polish): 1 task
+- Phase 6 (US6 Excel): 2 tasks
+- Phase 7 (US7 통계): 2 tasks
+- Phase 8 (US8 이력): 2 tasks
+- Phase 9 (US9 배치): 2 tasks
+- Phase 10 (Polish): 1 task
+- P1: T001-T018 (18 tasks), P2: T019-T022 (4 tasks), P3: T023-T026 (4 tasks), Polish: T027 (1 task)
