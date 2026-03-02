@@ -1,388 +1,196 @@
-# 005-revision-detection-tabs: Task Breakdown
+# Tasks: 개정 검토 대상 판별 방식 병렬 탭
 
-## Dependencies & Execution Order
-
-```
-Phase 1 (Setup)
-  T001 ─────────────────────────────────────────────────┐
-                                                         │
-Phase 2 (Foundational - Models + Migrations + Client)    │
-  T002 [P] ──┐                                          │
-  T003 [P] ──┤                                          │
-  T004 [P] ──┤                                          │
-  T005 [P] ──┤                                          │
-  T006       ←┘ (after T002-T005)                       │
-  T007       ← (after T006)                             │
-                                                         │
-Phase 3 (Service Logic)                                  │
-  T008       ← (after T007)                             │
-  T009       ← (after T007, T008)                       │
-                                                         │
-Phase 4 (API Endpoints)                                  │
-  T010       ← (after T009)                             │
-  T011       ← (after T009)                             │
-                                                         │
-Phase 5 (Frontend - US1 Tab A)                           │
-  T012 [P] ──┐                                          │
-  T013       ←┘ (after T012)                            │
-  T014       ← (after T013)                             │
-                                                         │
-Phase 6 (Frontend - US2 Tab B)                           │
-  T015       ← (after T014)                             │
-                                                         │
-Phase 7 (Frontend - US3 Tab C)                           │
-  T016       ← (after T014)                             │
-                                                         │
-Phase 8 (Frontend - US4 Compare)                         │
-  T017       ← (after T014, T015, T016)                 │
-  T018       ← (after T017)                             │
-                                                         │
-Phase 9 (US5 Notifications)                              │
-  T019       ← (after T009)                             │
-  T020       ← (after T019)                             │
-                                                         │
-Phase 10 (Polish & Integration)                          │
-  T021       ← (after all)                              │
-```
-
----
+**Input**: Design documents from `/specs/005-revision-detection-tabs/`
+**Prerequisites**: plan.md, spec.md, data-model.md, contracts/api-contracts.md
 
 ## Phase 1: Setup
 
-### T001 - 프론트엔드 타입 정의 추가 [US1][US2][US3][US4]
-**File:** `frontend/src/types/api.ts` (수정)
-**Work:**
-- 탭 관련 타입 추가:
-  - `RevisionReasonResponse` (제개정이유 API 응답)
-  - `DetectionResult` (판별 결과 단건)
-  - `DetectionResultsResponse` (3탭 통합 판별 결과)
-  - `DetectionTab` union type: `'proclaimed_date' | 'article_change' | 'revision_reason'`
-  - `DetectionSummaryItem` (요약 뷰용)
-- 기존 `Ordinance` 타입에 detection 관련 필드 확장
+**Purpose**: 프론트엔드 타입 정의 및 프로젝트 구조 준비
+
+- [ ] T001 [P] [US1] [US2] [US3] [US4] 프론트엔드 타입 정의 — RevisionReasonResponse, DetectionResult, DetectionResultsResponse, DetectionMethodType union, DetectionSummaryItem 타입 추가. 기존 Ordinance 타입에 detection 관련 필드 확장 (`frontend/src/types/api.ts`)
 
 ---
 
-## Phase 2: Foundational (Models + Migrations + MolegClient)
+## Phase 2: Foundational — Models, Migrations, Client
 
-### T002 - LawRevisionReason 모델 생성 [P][US3]
-**File:** `backend/models/law_revision_reason.py` (신규)
-**Work:**
-- 신규 모델 `LawRevisionReason`:
-  - `id` (PK)
-  - `law_mst_id` (FK → law_mst)
-  - `revision_reason_content` (Text) - 제개정이유내용
-  - `amendment_content` (Text) - 개정문내용
-  - `fetched_at` (DateTime) - 캐시 시점
-  - 유니크 제약: `law_mst_id` (1:1 캐시)
-- `__init__.py`에 모델 등록
+**Purpose**: 신규 테이블, 모델, 마이그레이션, 외부 클라이언트 확장. 모든 US에 필요한 공통 인프라
 
-### T003 - RevisionDetectionResult 모델 생성 [P][US1][US2][US3]
-**File:** `backend/models/revision_detection_result.py` (신규)
-**Work:**
-- 신규 모델 `RevisionDetectionResult`:
-  - `id` (PK)
-  - `ordinance_id` (FK → ordinance)
-  - `detection_method` (Enum: `proclaimed_date`, `article_change`, `revision_reason`)
-  - `is_changed` (Boolean) - 변경 판별 결과
-  - `detail` (JSON) - 방식별 상세 결과
-  - `detected_at` (DateTime)
-  - 유니크 제약: `(ordinance_id, detection_method)`
-- `__init__.py`에 모델 등록
+**⚠️ CRITICAL**: Phase 2 완료 전까지 서비스/API 레이어 작업 불가
 
-### T004 - Article 모델 확장 [P][US2]
-**File:** `backend/models/article.py` (수정)
-**Work:**
-- 필드 추가:
-  - `revision_type_detail` (String, nullable) - 조문제개정유형 (예: "신설", "개정", "삭제")
-  - `change_flag` (Boolean, nullable) - 변경여부 플래그
-- 기존 관계/인덱스에 영향 없도록 nullable 추가
+- [ ] T002 [P] [US3] LawRevisionReason 모델 생성 — law_id FK(laws.id) UNIQUE, law_mst VARCHAR, revision_reason TEXT, amendment_content TEXT, extracted_articles JSONB, fetched_at TIMESTAMP, created_at, updated_at. `__init__.py`에 등록 (`backend/models/law_revision_reason.py` 신규)
+- [ ] T003 [P] [US1] [US2] [US3] RevisionDetectionResult 모델 생성 — ordinance_id FK, law_id FK, detection_method VARCHAR(30), needs_revision BOOLEAN, detail JSONB, detected_at. UNIQUE(ordinance_id, law_id, detection_method). 인덱스: ordinance_id, detection_method. `__init__.py`에 등록 (`backend/models/revision_detection_result.py` 신규)
+- [ ] T004 [P] [US2] Article 모델 확장 — revision_type_detail VARCHAR(50) nullable (조문제개정유형: 신설/일부개정/전부개정), change_flag VARCHAR(5) nullable (조문변경여부: Y/N) 추가 (`backend/models/article.py`)
+- [ ] T005 [P] [US1] [US2] [US3] Pydantic 스키마 정의 — RevisionReasonOut, DetectionResultOut, DetectionResultsOut, DetectRequest, DetectionMethodEnum. ordinance.py에 detection-results 응답 추가 (`backend/schemas/revision.py` 신규, `backend/schemas/ordinance.py` 수정)
+- [ ] T006 [US1] [US2] [US3] Alembic 마이그레이션 3건 — law_revision_reasons 테이블 생성, revision_detection_results 테이블 생성, articles에 revision_type_detail+change_flag 추가. 마이그레이션 의존 체인 설정 (`backend/alembic/versions/` 3건 신규)
+- [ ] T007 [US2] [US3] MolegClient 확장 — get_law_detail() 응답에서 `법령.제개정이유.제개정이유내용` (list[list[str]]) + `법령.개정문.개정문내용` (list[list[str]]) 파싱, `"\n".join(data[0])`으로 텍스트 복원, 조문메타(조문제개정유형/조문변경여부) 파싱, JSON 기본+XML 폴백, 파싱 실패 시 None+로깅 (`backend/external/moleg_client.py`)
+- [ ] T008 [US2] 조문 동기화 시 메타 저장 — 법제처 API 조문 동기화 시 T007에서 파싱된 revision_type_detail, change_flag를 Article 레코드에 저장 (신규+갱신 모두) (`backend/services/law_sync_service.py`)
+- [ ] T009 [P] [US2] 조문 응답 스키마 보강 — Article 스키마에 revision_type_detail, change_flag 필드 추가 (nullable), 프론트엔드에서 사용 가능하도록 직렬화 보장 (`backend/schemas/article.py`)
 
-### T005 - 스키마 정의 [P][US1][US2][US3]
-**File:** `backend/schemas/revision.py` (신규)
-**Work:**
-- Pydantic 스키마:
-  - `RevisionReasonOut` - 제개정이유 응답
-  - `DetectionResultOut` - 판별 결과 단건
-  - `DetectionResultsOut` - 3탭 통합 응답
-  - `DetectRequest` - 판별 실행 요청
-  - `DetectionMethodEnum` - 판별 방식 enum
-
-**File:** `backend/schemas/ordinance.py` (수정)
-- detection-results 관련 응답 스키마 추가
-
-### T006 - Alembic 마이그레이션 3건 생성
-**Files (신규):**
-- `backend/alembic/versions/YYYYMMDD_add_law_revision_reasons.py`
-- `backend/alembic/versions/YYYYMMDD_add_revision_detection_results.py`
-- `backend/alembic/versions/YYYYMMDD_add_article_revision_fields.py`
-**Work:**
-- T002 모델 → `law_revision_reasons` 테이블 생성
-- T003 모델 → `revision_detection_results` 테이블 생성
-- T004 변경 → `articles` 테이블에 `revision_type_detail`, `change_flag` 컬럼 추가
-- 마이그레이션 의존 체인 설정 (순서 보장)
-**Depends on:** T002, T003, T004
-
-### T007 - MolegClient 확장: 제개정이유/개정문/조문메타 파싱 [US2][US3]
-**File:** `backend/external/moleg_client.py` (수정)
-**Work:**
-- `get_law_detail()` 응답 파싱 확장:
-  - `법령.제개정이유.제개정이유내용` (list[list[str]]) 추출
-  - `법령.개정문.개정문내용` (list[list[str]]) 추출
-  - 텍스트 복원: `"\n".join(data[0])`
-  - 조문메타 파싱: `조문제개정유형`, `조문변경여부` 필드 추출
-- 반환 딕셔너리에 `revision_reason`, `amendment_text`, 조문별 `revision_type_detail`/`change_flag` 포함
-- 파싱 실패 시 graceful fallback (None 반환, 로깅)
-**Depends on:** T006
-
----
-
-## Phase 2.5: 조문 동기화 메타데이터 저장
-
-### T007a - 조문 동기화 시 신규 메타 저장 [US2]
-
-**File:** `backend/services/law_sync_service.py` (수정)
-**Work:**
-
-- 법제처 API 조문 동기화 시 `revision_type_detail`, `change_flag` 필드를 Article 레코드에 저장
-- MolegClient(T007)에서 파싱된 조문메타(`조문제개정유형`, `조문변경여부`)를 DB에 반영
-- 기존 동기화 로직에 메타 필드 업데이트 추가 (신규 조문 생성 시 + 기존 조문 갱신 시)
-**Depends on:** T007
-
-### T007b - 조문 응답 스키마/직렬화 보강 [US2]
-
-**File:** `backend/schemas/article.py` (수정 또는 신규)
-**Work:**
-
-- 조문 API 응답에 `revision_type_detail`, `change_flag` 필드 포함
-- 기존 Article 스키마에 새 필드 추가 (nullable)
-- 프론트엔드 TabB에서 사용할 수 있도록 직렬화 보장
-**Depends on:** T004, T005
+**Checkpoint**: 모델/마이그레이션/클라이언트 확장 완료 — 서비스 레이어 구현 가능
 
 ---
 
 ## Phase 3: Service Logic
 
-### T008 - 개정문 조문번호 추출 파서 [US3]
-**File:** `backend/services/amendment_parser.py` (신규)
-**Work:**
-- `parse_amendment_articles(amendment_text: str) -> list[str]`:
-  - 정규식 `제(\d+조(?:의\d+)?)` 로 조문번호 추출
-  - 중복 제거, 정렬 반환
-- `match_articles_to_ordinance(article_numbers: list[str], mapped_articles: list[Article]) -> list[dict]`:
-  - 추출된 조문번호와 매핑 테이블의 조문 대조
-  - 매치 결과 반환 (매치/미매치 구분)
-- 엣지 케이스 처리: 빈 개정문, 조문번호 없는 경우
-**Depends on:** T007
+**Purpose**: 개정문 파서 및 3탭 판별 통합 서비스
 
-### T009 - 3탭 판별 통합 서비스 [US1][US2][US3]
-**File:** `backend/services/revision_detection_service.py` (신규)
-**Work:**
-- `RevisionDetectionService` 클래스:
-  - `detect_by_proclaimed_date(ordinance_id) -> DetectionResultOut`:
-    - 기존 공포일자 비교 로직 재사용/호출
-    - 결과를 `RevisionDetectionResult`에 저장
-  - `detect_by_article_change(ordinance_id) -> DetectionResultOut`:
-    - `ArticleChange` 테이블 조회
-    - T004에서 추가한 `revision_type_detail`, `change_flag` 활용
-    - 결과 저장
-  - `detect_by_revision_reason(ordinance_id) -> DetectionResultOut`:
-    - MolegClient로 제개정이유/개정문 조회 (캐시 확인 → 없으면 API 호출 → LawRevisionReason 저장)
-    - `amendment_parser`로 조문번호 추출
-    - 매핑 테이블 대조 → 영향 여부 판별
-    - 결과 저장
-  - `detect_all(ordinance_id) -> DetectionResultsOut`:
-    - 3방식 모두 실행, 통합 결과 반환
-  - `get_cached_results(ordinance_id) -> DetectionResultsOut | None`:
-    - 기존 판별 결과 조회 (캐시)
-**Depends on:** T007, T008
+- [ ] T010 [US3] 개정문 조문번호 추출 파서 — `parse_amendment_articles(text) → list[str]`: 정규식 `제(\d+조(?:의\d+)?)` 패턴으로 변경 조문번호 추출 (중복 제거, 정렬). `match_articles_to_ordinance(articles, mapped)`: 매핑 대조 결과 반환. 엣지케이스: 빈 개정문, 비정형 패턴(별표/서식) (`backend/services/amendment_parser.py` 신규)
+- [ ] T011 [US1] [US2] [US3] 3탭 판별 통합 서비스 — detect_by_proclaimed_date(): 공포일자 비교, detect_by_article_change(): 조문 변경 추적 (revision_type_detail/change_flag 활용), detect_by_revision_reason(): 제개정이유 조회(DB캐시→API)→개정문 파싱→매핑 대조, detect_all(): 3방식 동시 실행+결과 DB 저장, get_cached_results(): 기존 결과 조회 (`backend/services/revision_detection_service.py` 신규)
+
+**Checkpoint**: 3가지 판별 방식 서비스 로직 완료
 
 ---
 
 ## Phase 4: API Endpoints
 
-### T010 - 법령 제개정이유 엔드포인트 [US3]
-**File:** `backend/api/v1/laws.py` (수정)
-**Work:**
-- `GET /laws/{law_id}/revision-reason`:
-  - LawRevisionReason 캐시 확인
-  - 캐시 미스 → MolegClient 호출 → 저장 → 반환
-  - 응답: `RevisionReasonOut` (제개정이유내용 + 개정문내용)
-**Depends on:** T009
+**Purpose**: 제개정이유 조회, 판별 결과 조회, 판별 실행 API
 
-### T011 - 자치법규 판별 엔드포인트 [US1][US2][US3]
-**File:** `backend/api/v1/ordinances.py` (수정)
-**Work:**
-- `GET /ordinances/{ordinance_id}/detection-results`:
-  - 캐시된 판별 결과 조회
-  - 없으면 빈 응답 (404 아님, 빈 배열)
-  - 응답: `DetectionResultsOut`
-- `POST /ordinances/{ordinance_id}/detect`:
-  - body로 `detection_method` 지정 가능 (생략 시 전체)
-  - `RevisionDetectionService.detect_all()` 또는 개별 호출
-  - 응답: `DetectionResultsOut`
-**Depends on:** T009
+- [ ] T012 [US3] 법령 제개정이유 API — GET /api/v1/laws/{id}/revision-reason: DB 캐시(LawRevisionReason) 확인→미스 시 MolegClient 호출→저장→반환. 에러: 404 법령 미발견, 502 API 오류, 204 데이터 없음 (`backend/api/v1/laws.py`)
+- [ ] T013 [P] [US1] [US2] [US3] 판별 결과 조회/실행 API — GET /api/v1/ordinances/{id}/detection-results: 3탭 결과 통합 조회 (캐시). POST /api/v1/ordinances/{id}/detect: 판별 실행 (methods 파라미터로 선택적), 결과 DB 저장 (`backend/api/v1/ordinances.py`)
+
+**Checkpoint**: 3개 신규 API 엔드포인트 동작 확인
 
 ---
 
-## Phase 5: Frontend - US1 (Tab A: 공포일자 기반)
+## Phase 5: US1 — 탭A 법령비교 서브탭 (P1) 🎯 MVP
 
-### T012 - API 서비스 확장 [P][US1][US2][US3]
-**File:** `frontend/src/services/api.ts` (수정)
-**Work:**
-- API 함수 추가:
-  - `getRevisionReason(lawId: number)` → GET /laws/{id}/revision-reason
-  - `getDetectionResults(ordinanceId: number)` → GET /ordinances/{id}/detection-results
-  - `runDetection(ordinanceId: number, method?: string)` → POST /ordinances/{id}/detect
-- TanStack Query 훅:
-  - `useRevisionReason(lawId)`
-  - `useDetectionResults(ordinanceId)`
-  - `useRunDetection()` (mutation)
+**Goal**: 조례 상세 → 개정검토 탭 → 법령비교 서브탭에서 공포일자 비교 결과 표시
 
-### T013 - TabA_ProclaimedDate 컴포넌트 [US1]
-**File:** `frontend/src/components/detection/TabA_ProclaimedDate.tsx` (신규)
-**Work:**
-- Props: `ordinanceId`, `detectionResult?`
-- 공포일자 기반 판별 결과 표시:
-  - 상위법령 최신 공포일자 vs 매핑 시점 비교
-  - 변경 감지 여부 Badge (Ant Design Tag)
-  - 상세: 공포일자 타임라인, 차이 일수
-- 로딩/에러 상태 처리
-- 결과 없을 시 "판별 실행" 버튼 표시
-**Depends on:** T012
+**Independent Test**: 공포일자가 이후인 법령은 "개정 검토 필요" 표시, 이전이면 "최신 상태"
 
-### T014 - OrdinanceDetail 탭 구조 재구성 [US1]
-**File:** `frontend/src/pages/OrdinanceDetail.tsx` (수정)
-**Work:**
-- 기존 Card 기반 레이아웃 → Ant Design `Tabs` 구조로 변경
-- 탭 구성:
-  - 탭A: "공포일자 기반" → `TabA_ProclaimedDate` (lazy)
-  - 탭B: "조문 변경 기반" → placeholder (T015에서 구현)
-  - 탭C: "제개정이유 기반" → placeholder (T016에서 구현)
-- 탭 lazy loading: 선택 시에만 데이터 fetch
-- 기존 매핑/조문 정보는 유지 (탭 외부 또는 별도 섹션)
-**Depends on:** T013
+- [ ] T014 [P] [US1] [US2] [US3] 프론트엔드 API 서비스 확장 — getRevisionReason(lawId), getDetectionResults(ordinanceId), runDetection(ordinanceId, methods?) 함수 추가. TanStack Query 훅: useRevisionReason, useDetectionResults, useRunDetection (`frontend/src/services/api.ts`)
+- [ ] T015 [US1] TabA_LawCompare 컴포넌트 — 공포일자 기반 판별 결과 표시: 상위법령 목록+공포일자 비교, 변경 감지 Badge (Ant Design Tag), 차이 일수 표시, 가장 최근 개정 법령 상단 정렬. 로딩/에러 상태, 결과 없을 시 "판별 실행" 버튼 (`frontend/src/components/detection/TabA_LawCompare.tsx` 신규)
+- [ ] T016 [US1] OrdinanceDetail 개정검토 탭에 서브탭 구조 추가 — Ant Design Tabs로 법령비교/조문비교/개정이유비교 3개 서브탭 구성, lazy loading (탭 클릭 시 최초 1회 fetch), TabA_LawCompare 연결, TabB/TabC는 placeholder (`frontend/src/pages/OrdinanceDetail.tsx`)
+
+**Checkpoint**: 법령비교 서브탭에서 공포일자 비교 결과 정상 표시
 
 ---
 
-## Phase 6: Frontend - US2 (Tab B: 조문 변경 기반)
+## Phase 6: US2 — 탭B 조문비교 서브탭 (P1)
 
-### T015 - TabB_ArticleChange 컴포넌트 [US2]
-**File:** `frontend/src/components/detection/TabB_ArticleChange.tsx` (신규)
-**Work:**
-- Props: `ordinanceId`, `detectionResult?`
-- 조문 변경 기반 판별 결과 표시:
-  - ArticleChange 목록 (조문번호, 변경유형, 변경전/후)
-  - `revision_type_detail` 컬럼 표시 (신설/개정/삭제)
-  - `change_flag` 기반 하이라이트
-  - Ant Design Table 사용
-- 변경 없는 조문은 접힌 상태로 표시
-- OrdinanceDetail 탭B placeholder 교체
-**Depends on:** T014
+**Goal**: 조문비교 서브탭에서 변경된 조문 목록 + 제개정유형 표시
+
+**Independent Test**: 변경된 조문(change_flag=Y) 목록 표시, 매핑 조문 중 변경된 것 강조
+
+- [ ] T017 [US2] TabB_ArticleCompare 컴포넌트 — 조문 변경 기반 판별 결과: 변경된 조문 목록 (조문번호/제개정유형/변경여부), revision_type_detail 표시 (신설/일부개정/전부개정), change_flag 기반 하이라이트, 매핑 조문 변경 감지 강조, 신설 조문 별도 섹션. OrdinanceDetail 탭B placeholder 교체 (`frontend/src/components/detection/TabB_ArticleCompare.tsx` 신규)
+
+**Checkpoint**: 조문비교 서브탭에서 변경 조문 목록 및 제개정유형 표시
 
 ---
 
-## Phase 7: Frontend - US3 (Tab C: 제개정이유 기반)
+## Phase 7: US3 — 탭C 개정이유비교 서브탭 (P1)
 
-### T016 - TabC_RevisionReason 컴포넌트 [US3]
-**File:** `frontend/src/components/detection/TabC_RevisionReason.tsx` (신규)
-**Work:**
-- Props: `ordinanceId`, `lawId`, `detectionResult?`
-- 제개정이유 기반 판별 결과 표시:
-  - 제개정이유 원문 표시 (Typography.Paragraph, 접기/펼치기)
-  - 개정문 원문 표시
-  - 추출된 조문번호 목록 (Tag 컴포넌트)
-  - 매핑 대조 결과: 매치된 조문 하이라이트, 미매치 조문 별도 표시
-  - 영향 판별 결과 Badge
-- `useRevisionReason(lawId)` 훅 사용
-- OrdinanceDetail 탭C placeholder 교체
-**Depends on:** T014
+**Goal**: 개정이유분석 서브탭에서 제개정이유 전문 + 개정문 + 추출 조문 표시
+
+**Independent Test**: 개정문에서 조문번호 자동 추출 → 매핑 대조 → 검토 필요/참고 분류
+
+- [ ] T018 [US3] TabC_ReasonCompare 컴포넌트 — 제개정이유 원문 (Typography.Paragraph, 접기/펼치기), 개정문 원문, 추출된 조문번호 목록 (Tag), 매핑 대조 결과: 매핑 조문="검토 필요" 하이라이트+비매핑="참고(매핑 검토)" (FR-011), 타법개정 시 "상세 확인 필요" 안내, useRevisionReason 훅 사용. OrdinanceDetail 탭C placeholder 교체 (`frontend/src/components/detection/TabC_ReasonCompare.tsx` 신규)
+
+**Checkpoint**: 개정이유비교 서브탭에서 제개정이유+개정문+조문추출 표시, 매핑 대조 정상
 
 ---
 
-## Phase 8: Frontend - US4 (탭 비교 뷰)
+## Phase 8: US4 — 서브탭 비교 뷰 (P2)
 
-### T017 - DetectionSummary 컴포넌트 [US4]
-**File:** `frontend/src/components/detection/DetectionSummary.tsx` (신규)
-**Work:**
-- Props: `detectionResults: DetectionResultsResponse`
-- 3탭 판별 결과 요약 카드:
-  - 각 방식별 변경 감지 여부 아이콘 (CheckCircle/CloseCircle)
-  - 일치/불일치 하이라이트
-  - 최종 판별 제안 (다수결 또는 가중치 기반)
-- Ant Design Descriptions 또는 카드 그리드 사용
-**Depends on:** T014, T015, T016
+**Goal**: 관리자가 3개 서브탭 판별 결과를 나란히 비교하여 최적 방식 평가
 
-### T018 - DetectionCompare 페이지 + 메뉴 등록 [US4]
-**File:** `frontend/src/pages/DetectionCompare.tsx` (신규)
-**Work:**
-- 관리자 전용 페이지: 3탭 판별 결과 비교 뷰
-- 자치법규 선택 (검색/드롭다운)
-- 선택된 자치법규에 대해:
-  - `DetectionSummary` 상단 표시
-  - 3탭 결과 나란히 비교 (Row + Col 그리드)
-  - 각 탭 컴포넌트 재사용 (TabA, TabB, TabC)
-- "전체 판별 실행" 버튼 → `useRunDetection` mutation
-- 로딩/에러 상태
+**Independent Test**: 동일 조례에 대해 3탭 결과 비교 → 일치/불일치 분석
 
-**File:** `frontend/src/components/layout/MainLayout.tsx` (수정)
-- 관리자 메뉴에 "탭 비교" 항목 추가
-- 라우트: `/admin/detection-compare`
-**Depends on:** T017
+- [ ] T019 [US4] DetectionSummary 컴포넌트 — 3탭 판별 결과 요약 카드: 방식별 needs_revision 아이콘 (CheckCircle/CloseCircle), 일치/불일치 하이라이트, Ant Design Descriptions/카드 그리드 (`frontend/src/components/detection/DetectionSummary.tsx` 신규)
+- [ ] T020 [US4] DetectionCompare 페이지 + 메뉴 등록 — 관리자 전용 3탭 비교 뷰 페이지. 조례 선택(검색/드롭다운), DetectionSummary 상단, 3탭 결과 나란히 비교 (Row+Col 그리드), TabA/B/C 컴포넌트 재사용, "전체 판별 실행" 버튼. MainLayout 관리자 메뉴에 "탭 비교" 추가, 라우트 /admin/detection-compare (`frontend/src/pages/DetectionCompare.tsx` 신규, `frontend/src/components/layout/MainLayout.tsx` 수정)
+
+**Checkpoint**: 관리자 비교 뷰에서 3탭 나란히 비교 가능
 
 ---
 
-## Phase 9: US5 (자동 알림)
+## Phase 9: US5 — 주간 요약 리포트 알림 (P2)
 
-### T019 - 판별 결과 기반 알림 생성 로직 [US5]
-**File:** `backend/services/revision_detection_service.py` (수정)
-**Work:**
-- `detect_all()` 완료 후 알림 생성 로직 추가:
-  - 변경 감지 시 → Notification 레코드 생성
-  - 알림 내용: 어떤 방식(들)에서 변경 감지되었는지 요약
-  - 기존 Notification 모델/서비스 활용 (있는 경우) 또는 간단한 알림 테이블 활용
-- 중복 알림 방지: 동일 ordinance + 동일 결과에 대해 재알림 안 함
-**Depends on:** T009
+**Goal**: 주 1회 검토 요약 리포트를 인앱 알림함에 생성
 
-### T020 - 프론트엔드 알림 표시 [US5]
-**File:** `frontend/src/pages/OrdinanceDetail.tsx` (수정)
-**Work:**
-- 판별 결과에 변경 감지가 있을 경우 Alert 배너 표시
-- "새로운 변경이 감지되었습니다" 알림 (Ant Design Alert, type=warning)
-- 알림 dismiss 가능
-**Depends on:** T019
+**Independent Test**: 한 주간 감지 건 누적 → 주간 리포트 생성 → 인앱 알림함 확인
+
+- [ ] T021 [US5] 판별 결과 기반 알림 생성 로직 — detect_all() 완료 후 변경 감지 시 Notification 생성, 알림 내용: 어떤 방식에서 변경 감지되었는지 요약, 중복 알림 방지 (동일 ordinance+동일 결과), 주간 집계를 위한 기반 로직 (`backend/services/revision_detection_service.py` 수정)
+- [ ] T022 [US5] 프론트엔드 알림 표시 — 판별 결과에 변경 감지 시 Alert 배너 표시 (Ant Design Alert type=warning "새로운 변경이 감지되었습니다"), dismiss 가능 (`frontend/src/pages/OrdinanceDetail.tsx` 수정)
+
+**Checkpoint**: 판별 결과 변경 감지 시 알림 생성 및 프론트 표시
 
 ---
 
-## Phase 10: Polish & Integration
+## Phase 10: Polish
 
-### T021 - 통합 점검 및 마무리
-**Files:** 전체 관련 파일
-**Work:**
-- OrdinanceDetail 탭 전환 시 데이터 로딩 최적화 확인
-- 탭 간 상태 유지 (탭 전환 시 리렌더 방지)
-- API 에러 핸들링 일관성 점검
-- 타입 정합성 확인 (백엔드 스키마 ↔ 프론트엔드 타입)
-- 로딩 스피너/스켈레톤 일관성
-- 관리자 권한 체크 (DetectionCompare 페이지)
-**Depends on:** T001-T020
+**Purpose**: 통합 점검 및 최적화
+
+- [ ] T023 탭 전환 최적화 — lazy loading 동작 확인, 탭 간 상태 유지 (리렌더 방지), 로딩 스피너/스켈레톤 일관성, 3탭 로딩 3초 이내 (SC-003) (`frontend/src/pages/OrdinanceDetail.tsx`, 관련 컴포넌트)
+- [ ] T024 타입 정합성 및 에러 핸들링 — 백엔드 스키마↔프론트엔드 타입 일치 확인, API 에러 핸들링 일관성, 탭C API 장애 시 탭C만 비활성화+탭A/B 정상 동작 보장 (Constitution III)
 
 ---
 
-## Summary
+## Dependencies & Execution Order
 
-| Phase | Tasks | Priority | User Stories |
-|-------|-------|----------|-------------|
-| 1. Setup | T001 | P1 | US1,US2,US3,US4 |
-| 2. Foundational | T002-T007 | P1 | US1,US2,US3 |
-| 3. Service Logic | T008-T009 | P1 | US1,US2,US3 |
-| 4. API Endpoints | T010-T011 | P1 | US1,US2,US3 |
-| 5. Frontend US1 | T012-T014 | P1 | US1 |
-| 6. Frontend US2 | T015 | P1 | US2 |
-| 7. Frontend US3 | T016 | P1 | US3 |
-| 8. Frontend US4 | T017-T018 | P2 | US4 |
-| 9. US5 Notifications | T019-T020 | P2 | US5 |
-| 10. Polish | T021 | P1 | All |
+```text
+Phase 1 (Setup):
+  T001 — 독립 실행 가능
 
-**Total: 21 tasks** (T001-T021)
-**Parallel opportunities:** T002-T005 (Phase 2 models), T012 (API service can start with T013)
-**Critical path:** T001 → T002-T005 → T006 → T007 → T008 → T009 → T010/T011 → T012 → T013 → T014 → T015/T016 → T017 → T018 → T021
+Phase 2 (Foundational) — 모델 병렬, 마이그레이션/클라이언트 순차:
+  T002 [P], T003 [P], T004 [P], T005 [P], T009 [P] — 병렬 가능
+  T002 + T003 + T004 → T006 (마이그레이션)
+  T006 → T007 (MolegClient 확장)
+  T007 → T008 (조문 동기화 메타 저장)
+
+Phase 3 (Services) — Phase 2 완료 후:
+  T007 → T010 (개정문 파서)
+  T007 + T010 → T011 (판별 통합 서비스)
+
+Phase 4 (API) — Phase 3 완료 후:
+  T011 → T012 (제개정이유 API)
+  T011 → T013 [P] (판별 조회/실행 API)
+
+Phase 5 (US1) — Phase 4 완료 후:
+  T014 [P] (API 서비스) → T015 (TabA) → T016 (OrdinanceDetail 서브탭)
+
+Phase 6 (US2) — T016 완료 후:
+  T016 → T017 (TabB)
+
+Phase 7 (US3) — T016 완료 후:
+  T016 → T018 (TabC)
+
+Phase 8 (US4) — T016 + T017 + T018 완료 후:
+  T019 (DetectionSummary) → T020 (DetectionCompare 페이지)
+
+Phase 9 (US5) — T011 완료 후:
+  T011 → T021 (알림 로직) → T022 (프론트 알림)
+
+Phase 10 (Polish) — 전체 완료 후:
+  T023, T024
+```
+
+### Critical Path
+
+```text
+T002-T004 → T006 → T007 → T010 → T011 → T013 → T014 → T015 → T016 → T017/T018 → T019 → T020
+```
+
+### Parallel Execution Groups
+
+- **Group A** [P]: T001, T002, T003, T004, T005, T009 (타입/모델/스키마 — 독립 파일)
+- **Group B** [P]: T012, T013 (API 엔드포인트 — 다른 파일)
+- **Group C** [P]: T017, T018 (TabB, TabC — T016 완료 후 병렬)
+- **Group D** [P]: T021-T022 (US5 알림 — T011 완료 후 독립)
+
+---
+
+## Task Count Summary
+
+| Phase                          | Tasks          | Priority |
+| ------------------------------ | -------------- | -------- |
+| Phase 1: Setup                 | T001 (1)       | Setup    |
+| Phase 2: Foundational          | T002-T009 (8)  | P1       |
+| Phase 3: Service Logic         | T010-T011 (2)  | P1       |
+| Phase 4: API Endpoints         | T012-T013 (2)  | P1       |
+| Phase 5: US1 TabA 법령비교     | T014-T016 (3)  | P1       |
+| Phase 6: US2 TabB 조문비교     | T017 (1)       | P1       |
+| Phase 7: US3 TabC 개정이유비교 | T018 (1)       | P1       |
+| Phase 8: US4 서브탭 비교       | T019-T020 (2)  | P2       |
+| Phase 9: US5 알림              | T021-T022 (2)  | P2       |
+| Phase 10: Polish               | T023-T024 (2)  | Polish   |
+| **Total**                      | **24 tasks**   |          |

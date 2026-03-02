@@ -1,340 +1,226 @@
-# 004-law-change-tracking Tasks
+# Tasks: 개정법령 변경이력 관리
 
-## Phase 1: Setup & Configuration
+**Input**: Design documents from `/specs/004-law-change-tracking/`
+**Prerequisites**: plan.md, spec.md, data-model.md, contracts/api-contracts.md
 
-### T001: Alembic 마이그레이션 준비 [US3]
-- **File**: `backend/alembic/versions/YYYYMMDD_revision_status.py` (신규)
-- **Work**:
-  - `ordinances` 테이블에 `revision_status` 컬럼 추가 (nullable VARCHAR, default null)
-  - 기존 `needs_revision` 컬럼 데이터를 `revision_status`로 마이그레이션 (needs_revision=true → revision_status="검토대기")
-  - `needs_revision` 컬럼 제거
-  - `law_changes` 테이블에서 `ChangeStatus` 관련 컬럼 제거 (승인/반려 상태)
-  - `ordinance_reviews` 테이블의 `review_result` 제약 조건 업데이트 (2가지 값만 허용)
-  - downgrade 함수 작성
-- **Dependencies**: None
+## Phase 1: Setup & Migration
+
+**Purpose**: DB 스키마 변경 및 마이그레이션
+
+- [ ] T001 [US3] Alembic 마이그레이션 — ordinances 테이블에 revision_status (VARCHAR 20, nullable, default null) 추가, needs_revision→revision_status 데이터 이관 (needs_revision=true → "검토대기"), needs_revision 컬럼 제거 (`backend/alembic/versions/YYYYMMDD_add_revision_status.py`)
+- [ ] T002 [P] [US1] Alembic 마이그레이션 — law_changes 테이블에서 status, processed_at, processed_by, process_note, updated_at 컬럼 제거. UNIQUE(law_id, sync_batch_id) 제약 추가 (`backend/alembic/versions/YYYYMMDD_simplify_law_changes.py`)
+- [ ] T003 [P] [US5] Alembic 마이그레이션 — ordinance_reviews.review_result 기존 "검토중" 값을 "개정필요"로 변환. 향후 "개정필요"/"개정불필요" 2가지만 허용 (`backend/alembic/versions/YYYYMMDD_constrain_review_result.py`)
 
 ---
 
-## Phase 2: Foundational - Model & Schema Changes
+## Phase 2: Foundational — Model & Schema
 
-### T002: law_change 모델 단순화 [US1] [US2]
-- **File**: `backend/models/law_change.py` (수정)
-- **Work**:
-  - `ChangeStatus` enum 제거 (승인/반려 상태 불필요)
-  - 감지 로그 전용으로 모델 단순화
-  - 승인/반려 관련 필드 제거
-  - 변경 감지 일시, 법령 정보, 변경 유형 등 핵심 필드만 유지
-- **Dependencies**: T001
+**Purpose**: 모든 US에 필요한 모델/스키마 변경. 이 Phase 완료 후 US별 서비스/API 구현 가능
 
-### T003: ordinance 모델 revision_status 도입 [US3] [P]
-- **File**: `backend/models/ordinance.py` (수정)
-- **Work**:
-  - `needs_revision` (Boolean) → `revision_status` (nullable String) 전환
-  - revision_status 허용 값: null, "검토대기", "검토중", "개정확정"
-  - revision_status 생명주기: null → "검토대기" → "검토중" → "개정확정"/null/"검토대기"
-  - 빨간불 판별 프로퍼티: revision_status가 null이 아니면 빨간불 ON (단, "개정불필요" 승인 시 null로 해제)
-- **Dependencies**: T001
+**⚠️ CRITICAL**: Phase 2 완료 전까지 서비스 레이어 작업 불가
 
-### T004: ordinance_review 모델 review_result 제한 [US4] [P]
-- **File**: `backend/models/ordinance_review.py` (수정)
-- **Work**:
-  - `review_result` 값을 2가지로 제한: "개정필요", "개정불필요"
-  - 기존 다른 값들 제거
-  - 관련 enum/상수 정리
-- **Dependencies**: T001
+- [ ] T004 [US1] law_change 모델 단순화 — ChangeStatus enum 제거, 승인/반려 관련 필드(status, processed_at, processed_by, process_note, updated_at) 제거, sync_batch_id 추가, 감지 로그 전용으로 정리 (`backend/models/law_change.py`)
+- [ ] T005 [P] [US3] ordinance 모델 revision_status 도입 — needs_revision(Boolean) → revision_status(nullable VARCHAR) 전환. 허용 값: null/"검토대기"/"검토중"/"개정확정". 빨간불 판별 property 추가 (`backend/models/ordinance.py`)
+- [ ] T006 [P] [US5] ordinance_review 모델 review_result 제한 — review_result 값을 "개정필요"/"개정불필요" 2가지만 허용, 기존 다른 값 관련 enum/상수 정리 (`backend/models/ordinance_review.py`)
+- [ ] T007 [P] [US1] law_change 스키마 단순화 — 승인/반려 관련 필드 제거, 목록/상세 응답 스키마 정리, sync_batch_id 포함 (`backend/schemas/ordinance.py` 내 LawChange 관련)
+- [ ] T008 [P] [US3] ordinance 스키마 업데이트 — needs_revision → revision_status 필드 전환, 응답에 revision_status 포함 (`backend/schemas/ordinance.py`)
+- [ ] T009 [P] [US5] review 스키마 업데이트 — review_result를 "개정필요"/"개정불필요" 2가지로 정리, 승인/반려 응답에 ordinance_revision_status 포함 (`backend/schemas/review.py`)
+- [ ] T010 [P] [US1] 프론트엔드 타입 정의 업데이트 — Ordinance 타입에 revision_status 추가 (null|"검토대기"|"검토중"|"개정확정"), needs_revision 제거, LawChange 타입에서 승인/반려 상태 필드 제거, ReviewResult 타입을 2가지로 제한 (`frontend/src/types/api.ts`)
 
-### T005: ordinance 스키마 업데이트 [US1] [US3] [P]
-- **File**: `backend/schemas/ordinance.py` (수정)
-- **Work**:
-  - `needs_revision` → `revision_status` 필드 전환
-  - revision_status 응답에 포함 (null | "검토대기" | "검토중" | "개정확정")
-  - 빨간불 상태 표시를 위한 computed 필드 또는 직접 노출
-- **Dependencies**: T003
-
-### T006: review 스키마 업데이트 [US4] [US5] [P]
-- **File**: `backend/schemas/review.py` (수정)
-- **Work**:
-  - `review_result` enum을 "개정필요", "개정불필요" 2가지로 정리
-  - 승인/반려 요청/응답 스키마 정리
-  - 검토의견 작성 요청 스키마 유지
-- **Dependencies**: T004
-
-### T007: API 타입 정의 업데이트 (Frontend) [US1] [US4] [P]
-- **File**: `frontend/src/types/api.ts` (수정)
-- **Work**:
-  - `Ordinance` 타입에 `revision_status` 추가 (null | "검토대기" | "검토중" | "개정확정")
-  - `needs_revision` 제거
-  - `LawChange` 타입에서 승인/반려 상태 필드 제거
-  - `ReviewResult` 타입을 "개정필요" | "개정불필요"로 제한
-- **Dependencies**: None
+**Checkpoint**: 모델/스키마 변경 완료 — 서비스 레이어 구현 시작 가능
 
 ---
 
-## Phase 3: Service Layer - Core Business Logic
+## Phase 3: US1+US2 — 법령 변경사항 조회 (P1) 🎯 MVP
 
-### T008: 동기화 후 자동 플래깅 로직 [US3]
-- **File**: `backend/services/law_sync_service.py` (수정)
-- **Work**:
-  - 법제처 API 동기화 완료 후 검토대상 조례 자동 판별 로직 추가
-  - 상위법 변경 감지 시 관련 조례의 `revision_status`를 "검토대기"로 설정 (FR-009)
-  - 이미 "검토중" 또는 "개정확정" 상태인 조례는 덮어쓰지 않음
-  - null 상태인 조례만 "검토대기"로 전환
-- **Dependencies**: T002, T003
+**Goal**: 관리자가 동기화 후 감지된 법령 변경 기록을 목록/상세로 조회, 필터링/검색 가능
 
-### T009: ordinance_service revision_status 전환 로직 [US4] [US5]
-- **File**: `backend/services/ordinance_service.py` (수정)
-- **Work**:
-  - "검토 시작" 기능: revision_status를 "검토대기" → "검토중"으로 전환 (FR-010)
-  - 열람만으로는 자동 전환하지 않음 (명시적 버튼 클릭 필요)
-  - 관리자의 "개정확정" 수동 해제 기능: revision_status → null (FR-015)
-  - 부서 담당자는 본인 부서 소관 조례만 접근 가능 (FR-017)
-  - 상태 전환 유효성 검증 (올바른 생명주기 순서 확인)
-- **Dependencies**: T003, T005
+**Independent Test**: 변경 기록 존재 상태에서 목록 접근 → 필터링/검색 → 상세 조회 정상 동작
 
-### T010: review_service 승인 후 자동 상태 처리 [US5]
-- **File**: `backend/services/review_service.py` (수정)
-- **Work**:
-  - 승인 시 review_result에 따른 자동 상태 처리:
-    - 개정필요 + 승인 → ordinance.revision_status = "개정확정" (FR-012)
-    - 개정불필요 + 승인 → ordinance.revision_status = null (빨간불 해제) (FR-013)
-  - 반려 시 → ordinance.revision_status = "검토대기" (FR-014)
-  - 관리자만 승인/반려 가능하도록 권한 체크 (FR-016)
-  - 건별 승인/반려만 구현 (일괄 처리는 추후)
-- **Dependencies**: T004, T006, T009
+- [ ] T011 [US1] law_changes API 정리 — approve/reject/bulk 엔드포인트 제거, 목록 조회(필터링/페이지네이션/검색) 유지, 상세 조회 유지 (`backend/api/v1/law_changes.py`)
+- [ ] T012 [P] [US1] 프론트엔드 API 호출 함수 — law_changes 관련 approve/reject 함수 제거 (`frontend/src/services/api.ts`)
+- [ ] T013 [US1] LawChangeList 페이지 수정 — 승인/반려 UI 완전 제거, 법령명/변경유형/감지일시 등 조회용 컬럼만 유지, 필터(API상태/소관부처/동기화일자/개정유형) 유지 (`frontend/src/pages/LawChangeList.tsx`)
+
+**Checkpoint**: 변경사항 목록/상세 조회 및 필터링 동작 확인
 
 ---
 
-## Phase 4: API Endpoints
+## Phase 4: US3 — 검토대상 조례 자동 플래깅 (P1)
 
-### T011: law_changes API 정리 [US1] [US2]
-- **File**: `backend/api/v1/law_changes.py` (수정)
-- **Work**:
-  - approve/reject 엔드포인트 제거 (law_changes는 감지 로그 전용)
-  - 목록 조회 엔드포인트 유지 (필터링/페이지네이션)
-  - 상세 조회 엔드포인트 유지
-  - 불필요한 상태 변경 API 모두 제거
-- **Dependencies**: T002
+**Goal**: 동기화 후 검토대상 조례에 자동으로 빨간불(revision_status="검토대기") 부여
 
-### T012: ordinances API "검토 시작" 엔드포인트 추가 [US4]
-- **File**: `backend/api/v1/ordinances.py` (수정)
-- **Work**:
-  - `POST /api/v1/ordinances/{id}/start-review` 엔드포인트 신규 추가
-  - revision_status가 "검토대기"인 경우만 "검토중"으로 전환 허용
-  - 부서 담당자 본인 소관 조례만 가능 (FR-017)
-  - 관리자의 "개정확정" 수동 해제 API 추가 (FR-015)
-  - 조례 목록/상세 조회에 revision_status 포함
-- **Dependencies**: T005, T009
+**Independent Test**: 동기화 실행 → 연계 조례에 빨간불 표시, 비연계 조례는 무변경
 
-### T013: reviews API 승인/반려 로직 업데이트 [US5]
-- **File**: `backend/api/v1/reviews.py` (수정)
-- **Work**:
-  - 승인/반려 시 review_service를 통해 ordinance.revision_status 자동 처리
-  - 관리자 권한 체크 (FR-016)
-  - 응답에 변경된 ordinance 상태 포함
-  - 건별 승인/반려 엔드포인트 유지
-- **Dependencies**: T006, T010
+- [ ] T014 [US3] 동기화 후 자동 플래깅 서비스 — 법령 변경 감지 시 ordinance_law_mappings로 관련 조례 조회, revision_status가 null인 조례만 "검토대기"로 설정, 이미 "검토중"/"개정확정" 상태는 덮어쓰지 않음 (`backend/services/law_sync_service.py`)
+
+**Checkpoint**: 동기화 후 관련 조례에 revision_status="검토대기" 정확 부여
 
 ---
 
-## Phase 5: Frontend - API Service & Pages
+## Phase 5: US4 — 부서 담당자 검토 시작 및 의견 작성 (P1)
 
-### T014: API 호출 함수 업데이트 [US1] [US4] [US5]
-- **File**: `frontend/src/services/api.ts` (수정)
-- **Work**:
-  - law_changes 관련: approve/reject API 호출 제거
-  - ordinances 관련: `startReview(id)` 함수 추가 (POST /ordinances/{id}/start-review)
-  - ordinances 관련: `clearRevisionStatus(id)` 함수 추가 (관리자 수동 해제)
-  - reviews 관련: 승인/반려 API 호출 함수 유지 및 응답 타입 업데이트
-- **Dependencies**: T007
+**Goal**: 부서 담당자가 빨간불 조례에서 "검토 시작" 클릭 → "검토중" 전환 → 검토의견 작성
 
-### T015: LawChangeList 페이지 수정 [US1]
-- **File**: `frontend/src/pages/LawChangeList.tsx` (수정)
-- **Work**:
-  - 승인/반려 UI 완전 제거 (law_changes는 감지 로그 전용)
-  - 변경사항 목록 조회 및 필터링 UI 유지
-  - revision_status 대신 law_change 고유 정보만 표시
-  - 법령명, 변경유형, 감지일시 등 조회용 컬럼만 유지
-- **Dependencies**: T014
+**Independent Test**: "검토대기" 조례 → "검토 시작" 클릭 → "검토중" → 검토의견(개정필요/불필요) 작성 확인
 
-### T016: OrdinanceDetail 페이지 수정 [US4] [US3]
-- **File**: `frontend/src/pages/OrdinanceDetail.tsx` (수정)
-- **Work**:
-  - "검토 시작" 버튼 추가 (revision_status = "검토대기"일 때만 표시)
-  - 버튼 클릭 시 startReview API 호출 → "검토중" 전환
-  - revision_status 상태 배지 표시 (검토대기/검토중/개정확정)
-  - 빨간불 표시 (revision_status가 null이 아닌 경우)
-  - 검토의견 작성 UI: review_result를 "개정필요"/"개정불필요" 2가지만 선택 가능
-  - revision_status가 "검토중"일 때만 검토의견 작성 가능
-- **Dependencies**: T014
+- [ ] T015 [US4] ordinance_service revision_status 전환 로직 — "검토 시작": revision_status "검토대기"→"검토중" (FR-010, 명시적 버튼 클릭), 부서 담당자 본인 소관 조례만 접근 가능 (FR-017), 상태 전환 유효성 검증 (`backend/services/ordinance_service.py`)
+- [ ] T016 [US4] "검토 시작" API 엔드포인트 — POST /api/v1/ordinances/{id}/start-review, revision_status="검토대기"일 때만 "검토중"으로 전환 허용, 부서 권한 체크 (`backend/api/v1/ordinances.py`)
+- [ ] T017 [P] [US4] 프론트엔드 API 함수 추가 — startReview(id) 함수 추가 (POST /ordinances/{id}/start-review), clearRevisionStatus(id) 함수 추가 (`frontend/src/services/api.ts`)
+- [ ] T018 [US4] OrdinanceDetail 페이지 수정 — "검토 시작" 버튼 (revision_status="검토대기"일 때만 표시), 클릭 시 startReview API 호출→"검토중" 전환, revision_status 상태 배지 표시, 빨간불 표시(revision_status≠null), review_result를 "개정필요"/"개정불필요" 2가지만 선택 가능, "검토중"일 때만 검토의견 작성 가능 (`frontend/src/pages/OrdinanceDetail.tsx`)
 
-### T017: ReviewList 페이지 수정 [US5]
-- **File**: `frontend/src/pages/ReviewList.tsx` (수정)
-- **Work**:
-  - 승인/반려 UI 업데이트 (건별 처리)
-  - 승인 시 review_result에 따른 결과 미리보기 표시
-    - 개정필요 → "승인 시 개정확정 처리됩니다"
-    - 개정불필요 → "승인 시 정상 상태로 전환됩니다"
-  - 반려 시 "검토대기 상태로 되돌립니다" 안내
-  - 관리자만 승인/반려 버튼 표시
-  - 처리 후 ordinance revision_status 변경 결과 반영
-- **Dependencies**: T014
+**Checkpoint**: 담당자가 "검토 시작"→"검토중"→검토의견 작성 플로우 동작
 
 ---
 
-## Phase 6: US6 Excel 내보내기 (P2)
+## Phase 6: US5 — 관리자 검토의견 승인/반려 (P1)
 
-### T019: 엑셀 내보내기 쿼리 [US6]
-- **File**: `backend/services/law_sync_service.py` (수정)
-- **Work**:
-  - 변경이력 데이터를 엑셀로 내보내는 서비스 로직 추가
-  - 현재 적용된 필터(기간, 상태 등)를 반영한 쿼리
-  - 대량 데이터 스트리밍 처리 (메모리 효율)
-- **Dependencies**: T008
+**Goal**: 관리자가 검토의견을 승인/반려하면 조례 상태가 자동 처리됨
 
-### T020: 엑셀 내보내기 API 및 프론트 버튼 [US6] [P]
-- **Files**: `backend/api/v1/law_changes.py` (수정), `frontend/src/pages/LawChangeList.tsx` (수정)
-- **Work**:
-  - `GET /api/v1/law-changes/export` 엔드포인트 추가 (필터 쿼리 파라미터 그대로 사용)
-  - LawChangeList 페이지에 "엑셀 다운로드" 버튼 추가
-  - 다운로드 중 로딩 상태 표시
-- **Dependencies**: T019
+**Independent Test**: 개정필요 승인→개정확정, 개정불필요 승인→null, 반려→검토대기
+
+- [ ] T019 [US5] review_service 승인/반려 후 자동 상태 처리 — 개정필요+승인→revision_status="개정확정" (FR-012), 개정불필요+승인→revision_status=null (FR-013), 반려→revision_status="검토대기" (FR-014), 관리자만 승인/반려 가능 (FR-016) (`backend/services/review_service.py`)
+- [ ] T020 [US5] 관리자 "개정확정" 수동 해제 — revision_status "개정확정"→null (FR-015), 관리자 전용 (`backend/services/ordinance_service.py`)
+- [ ] T021 [US5] reviews API 승인/반려 업데이트 — 승인 시 review_service 통해 ordinance.revision_status 자동 처리, 관리자 권한 체크, 응답에 변경된 ordinance 상태 포함, 건별 처리 (`backend/api/v1/reviews.py`)
+- [ ] T022 [US5] clear-revision API 엔드포인트 — POST /api/v1/ordinances/{id}/clear-revision, 관리자 전용, "개정확정" 상태만 해제 가능 (`backend/api/v1/ordinances.py`)
+- [ ] T023 [US5] ReviewList 페이지 수정 — 승인/반려 UI 건별 처리, 승인 시 결과 미리보기(개정필요→"개정확정 처리됩니다", 개정불필요→"정상 상태로 전환됩니다"), 반려 시 "검토대기로 되돌립니다" 안내, 관리자만 승인/반려 버튼 표시 (`frontend/src/pages/ReviewList.tsx`)
+
+**Checkpoint**: 승인/반려 후 조례 상태 자동 처리 100% 정확
 
 ---
 
-## Phase 7: US7 변경이력 통계 (P2)
+## Phase 7: US6 — Excel 내보내기 (P2)
 
-### T021: 통계 집계 서비스 로직 [US7]
-- **File**: `backend/services/law_sync_service.py` (수정)
-- **Work**:
-  - 기간/상태 기준 변경이력 통계 집계 함수 추가
-  - 지표: 총 변경 건수, 상태별 건수(검토대기/검토중/개정확정), 법령유형별 분포
-- **Dependencies**: T002
+**Goal**: 필터 조건에 맞는 법령 변경 기록을 Excel로 내보내기
 
-### T022: 통계 API 및 프론트 카드 [US7] [P]
-- **Files**: `backend/api/v1/law_changes.py` (수정), `frontend/src/pages/LawChangeList.tsx` (수정)
-- **Work**:
-  - `GET /api/v1/law-changes/statistics` 엔드포인트 추가 (기간 파라미터)
-  - LawChangeList 페이지 상단에 통계 카드(Ant Design Statistic) 표시
-  - 기간 선택 시 카드 값 갱신
-- **Dependencies**: T021
+**Independent Test**: 필터 적용 → 내보내기 → Excel 내용이 화면 목록과 일치
+
+- [ ] T024 [US6] 엑셀 내보내기 서비스 — 필터 조건 반영 쿼리, 대량 데이터 스트리밍 처리, 법령명/변경항목/전후값/소관부처/동기화일자 컬럼 포함 (`backend/services/law_sync_service.py`)
+- [ ] T025 [US6] 엑셀 내보내기 API 및 프론트 — GET /api/v1/law-changes/export 엔드포인트, LawChangeList에 "엑셀 다운로드" 버튼 추가 (`backend/api/v1/law_changes.py`, `frontend/src/pages/LawChangeList.tsx`)
+
+**Checkpoint**: 필터 적용 상태에서 Excel 다운로드, 내용 일치 확인
 
 ---
 
-## Phase 8: US8 법령별 이력 추적 (P3)
+## Phase 8: US7 — 변경이력 통계 (P2)
 
-### T023: 법령별 이력 조회 API [US8]
-- **File**: `backend/api/v1/law_changes.py` (수정)
-- **Work**:
-  - `GET /api/v1/law-changes/by-law/{law_id}` 엔드포인트 추가
-  - 특정 법령의 변경 이력만 시간순 조회
-  - 페이지네이션 지원
-- **Dependencies**: T011
+**Goal**: 소관부처별/API상태별 변경 통계 조회
 
-### T024: 법령별 이력 필터 UI [US8] [P]
-- **File**: `frontend/src/pages/LawChangeList.tsx` (수정)
-- **Work**:
-  - 법령 선택 드롭다운/검색 필터 추가
-  - 선택된 법령의 이력만 표시
-  - 법령 선택 해제 시 전체 목록으로 복귀
-- **Dependencies**: T023
+**Independent Test**: 통계 화면에서 부처별 집계가 실제 데이터와 일치
+
+- [ ] T026 [US7] 통계 집계 서비스 — 부처별/API상태별 변경 건수 집계, 기간 필터 지원 (`backend/services/law_sync_service.py`)
+- [ ] T027 [US7] 통계 API 및 프론트 카드 — GET /api/v1/law-changes/stats 엔드포인트, LawChangeList 상단에 Ant Design Statistic 카드 표시 (`backend/api/v1/law_changes.py`, `frontend/src/pages/LawChangeList.tsx`)
+
+**Checkpoint**: 통계 카드에 정확한 집계 수치 표시
 
 ---
 
-## Phase 9: US9 동기화 배치 관리 (P3)
+## Phase 9: US8 — 법령별 변경 이력 추적 (P3)
 
-### T025: 배치 실행/기록 로직 [US9]
-- **File**: `backend/services/law_sync_service.py` (수정)
-- **Work**:
-  - 배치 실행 이력 기록 (시작시간, 종료시간, 결과, 처리 건수)
-  - 마지막 동기화 일시 조회 함수
-- **Dependencies**: T008
+**Goal**: 특정 법령의 전체 변경 이력을 시간순으로 조회
 
-### T026: 배치 상태 조회 API [US9] [P]
-- **Files**: `backend/api/v1/law_changes.py` (수정), `frontend/src/pages/LawChangeList.tsx` (수정)
-- **Work**:
-  - `GET /api/v1/sync/status` 엔드포인트 추가 (마지막 실행 결과, 다음 예정 시간)
-  - LawChangeList 페이지에 동기화 상태 표시 (마지막 실행 시간, 성공/실패)
-- **Dependencies**: T025
+**Independent Test**: 특정 법령 선택 → 모든 변경 기록 시간순 표시
+
+- [ ] T028 [US8] 법령별 이력 조회 API — GET /api/v1/law-changes/history/{law_id} (시간순, 페이지네이션), GET /api/v1/law-changes/history-summary (법령별 총 변경 횟수+최근 변경일) (`backend/api/v1/law_changes.py`)
+- [ ] T029 [US8] 법령별 이력 필터 UI — 법령 선택 드롭다운/검색 필터, 선택 시 해당 법령 이력만 표시, 해제 시 전체 복귀 (`frontend/src/pages/LawChangeList.tsx`)
+
+**Checkpoint**: 법령별 이력 조회 및 필터링 동작
 
 ---
 
-## Phase 10: Polish & Integration
+## Phase 10: US9 — 동기화 배치/일자 관리 (P3)
 
-### T027: 상태 전환 엣지케이스 처리 [US3] [US4] [US5]
-- **File**: `backend/services/ordinance_service.py`, `backend/services/review_service.py` (수정)
-- **Work**:
-  - 동시 접근 시 race condition 방지 (optimistic locking 또는 상태 체크)
-  - 이미 "검토중"인 조례에 대한 중복 "검토 시작" 방지
-  - 승인/반려 시 현재 revision_status 유효성 재확인
-  - 자동 플래깅 시 기존 진행 중 검토에 영향 없음 확인
-- **Dependencies**: T008, T009, T010
+**Goal**: 동기화 배치 정보 및 일자 목록으로 특정 시점 결과 조회
+
+**Independent Test**: 배치 목록 → 특정 배치 선택 → 해당 변경 기록만 필터링
+
+- [ ] T030 [US9] 배치/일자 조회 API — GET /api/v1/law-changes/sync-batches (배치 목록+건수), GET /api/v1/law-changes/sync-dates (일자 목록), GET /api/v1/law-changes/departments (부처 목록), GET /api/v1/law-changes/revision-types (제개정구분 목록) (`backend/api/v1/law_changes.py`)
+- [ ] T031 [US9] 배치/일자 필터 UI — 동기화 배치/일자 드롭다운, 선택 시 해당 시점 변경 기록만 필터링 (`frontend/src/pages/LawChangeList.tsx`)
+
+**Checkpoint**: 배치/일자 기반 필터링 동작
+
+---
+
+## Phase 11: Polish
+
+**Purpose**: 엣지케이스 처리 및 크로스커팅 관심사
+
+- [ ] T032 [US3] [US4] [US5] 상태 전환 엣지케이스 — 동시 접근 race condition 방지 (optimistic locking/상태 체크), 중복 "검토 시작" 방지, 승인/반려 시 revision_status 유효성 재확인, 자동 플래깅 시 기존 진행 중 검토 무영향 확인 (`backend/services/ordinance_service.py`, `backend/services/review_service.py`)
+- [ ] T033 [US4] RoleProtectedRoute 적용 — 관리자 전용 기능(승인/반려/수동해제)에 프론트엔드 역할 기반 접근 제어 적용 (`frontend/src/components/RoleProtectedRoute.tsx`, 관련 페이지)
 
 ---
 
 ## Dependencies & Execution Order
 
-```
-Phase 1 (Setup):
-  T001 (마이그레이션)
+### Phase Dependencies
 
-Phase 2 (Models & Schemas) - 병렬 가능:
-  T001 → T002 (law_change 모델)
-  T001 → T003 (ordinance 모델) [P]
-  T001 → T004 (review 모델) [P]
-  T003 → T005 (ordinance 스키마) [P]
-  T004 → T006 (review 스키마) [P]
-  T007 (frontend 타입) [P] - 독립 실행 가능
+```text
+Phase 1 (Migration):
+  T001, T002 [P], T003 [P] — 병렬 실행 가능
 
-Phase 3 (Services):
-  T002 + T003 → T008 (동기화 자동 플래깅)
-  T003 + T005 → T009 (ordinance 상태 전환)
-  T004 + T006 + T009 → T010 (승인 후 자동 처리)
+Phase 2 (Models & Schemas) — Phase 1 완료 후:
+  T001 → T004 (law_change 모델), T005 (ordinance 모델)
+  T002 → T004
+  T003 → T006
+  T004 → T007 [P]
+  T005 → T008 [P]
+  T006 → T009 [P]
+  T010 [P] — 독립 실행 가능 (프론트엔드)
 
-Phase 4 (APIs):
-  T002 → T011 (law_changes API) [P]
-  T005 + T009 → T012 (ordinances API) [P]
-  T006 + T010 → T013 (reviews API)
+Phase 3 (US1+US2) — T004, T007 완료 후:
+  T011, T012 [P] → T013
 
-Phase 5 (Frontend) - T007 + Phase 4 완료 후:
-  T014 (API 함수) → T015 (LawChangeList) [P]
-  T014 → T016 (OrdinanceDetail) [P]
-  T014 → T017 (ReviewList) [P]
+Phase 4 (US3) — T005, T008 완료 후:
+  T014
 
-Phase 6-9 (P2/P3 User Stories):
-  T008 → T019 (엑셀 쿼리) → T020 (엑셀 API/UI) [P]
-  T002 → T021 (통계 집계) → T022 (통계 API/UI) [P]
-  T011 → T023 (법령별 이력 API) → T024 (법령별 필터 UI) [P]
-  T008 → T025 (배치 기록) → T026 (배치 상태 API/UI) [P]
+Phase 5 (US4) — T005, T008 완료 후:
+  T015 → T016
+  T017 [P] → T018
 
-Phase 10 (Polish):
-  T008 + T009 + T010 → T027 (엣지케이스)
+Phase 6 (US5) — T006, T009, T015 완료 후:
+  T019 → T021
+  T020 → T022
+  T017 → T023
+
+Phase 7-10 (P2/P3):
+  T014 → T024 → T025 [P]
+  T004 → T026 → T027 [P]
+  T011 → T028 → T029 [P]
+  T011 → T030 → T031 [P]
+
+Phase 11 (Polish):
+  T014 + T015 + T019 → T032
+  T023 → T033
 ```
 
 ### Critical Path
 
 ```
-T001 → T003 → T005 → T009 → T010 → T013 → T014 → T016
+T001 → T005 → T008 → T015 → T019 → T021 → T023
 ```
 
 ### Parallel Execution Groups
 
-- **Group A** [P]: T002, T003, T004 (모델 변경 - T001 완료 후 병렬)
-- **Group B** [P]: T005, T006, T007 (스키마/타입 - 각 모델 완료 후 병렬)
-- **Group C** [P]: T011, T012 (API - 각 서비스 완료 후 병렬)
-- **Group D** [P]: T015, T016, T017 (프론트엔드 페이지 - T014 완료 후 병렬)
-- **Group E** [P]: T019-T026 (P2/P3 기능 - 각 의존성 충족 후 독립 진행)
+- **Group A** [P]: T001, T002, T003 (마이그레이션 — 독립 테이블)
+- **Group B** [P]: T005, T006, T004 (모델 변경 — Phase 1 후 병렬)
+- **Group C** [P]: T007, T008, T009, T010 (스키마/타입 — 각 모델 후 병렬)
+- **Group D** [P]: T011, T012 (US1 API — Phase 2 후 병렬)
+- **Group E** [P]: T024-T031 (P2/P3 기능 — 각 의존성 후 독립)
 
-### Task Count Summary
+---
 
-- Total: 27 tasks
-- Phase 1 (Setup): 1 task
-- Phase 2 (Models & Schemas): 6 tasks
-- Phase 3 (Services): 3 tasks
-- Phase 4 (APIs): 3 tasks
-- Phase 5 (Frontend): 4 tasks
-- Phase 6 (US6 Excel): 2 tasks
-- Phase 7 (US7 통계): 2 tasks
-- Phase 8 (US8 이력): 2 tasks
-- Phase 9 (US9 배치): 2 tasks
-- Phase 10 (Polish): 1 task
-- P1: T001-T018 (18 tasks), P2: T019-T022 (4 tasks), P3: T023-T026 (4 tasks), Polish: T027 (1 task)
+## Task Count Summary
+
+| Phase                       | Tasks           | Priority     |
+| --------------------------- | --------------- | ------------ |
+| Phase 1: Migration          | T001-T003 (3)   | Setup        |
+| Phase 2: Models & Schemas   | T004-T010 (7)   | Foundational |
+| Phase 3: US1+US2 조회       | T011-T013 (3)   | P1           |
+| Phase 4: US3 자동 플래깅    | T014 (1)        | P1           |
+| Phase 5: US4 검토 시작/의견 | T015-T018 (4)   | P1           |
+| Phase 6: US5 승인/반려      | T019-T023 (5)   | P1           |
+| Phase 7: US6 Excel          | T024-T025 (2)   | P2           |
+| Phase 8: US7 통계           | T026-T027 (2)   | P2           |
+| Phase 9: US8 이력           | T028-T029 (2)   | P3           |
+| Phase 10: US9 배치          | T030-T031 (2)   | P3           |
+| Phase 11: Polish            | T032-T033 (2)   | Polish       |
+| **Total**                   | **33 tasks**    |              |
