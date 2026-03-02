@@ -3,42 +3,41 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu, theme, Dropdown, Space, Avatar } from 'antd'
 import type { MenuProps } from 'antd'
 import {
-  DashboardOutlined,
   FileTextOutlined,
-  AlertOutlined,
   TeamOutlined,
   BarChartOutlined,
   BookOutlined,
   UserOutlined,
   LogoutOutlined,
   DownOutlined,
-  WarningOutlined,
+  SyncOutlined,
+  AuditOutlined,
 } from '@ant-design/icons'
 import { useAuth } from '../../contexts/AuthContext'
 
 const { Header, Sider, Content } = Layout
 
-// Menu items for admin users (all tabs)
+// Menu items for admin users (6 tabs)
 const adminMenuItems = [
   {
     key: '/ordinances',
     icon: <FileTextOutlined />,
-    label: '자치법규',
-  },
-  {
-    key: '/revision-needed',
-    icon: <WarningOutlined />,
-    label: '개정검토필요',
+    label: '자치법규관리',
   },
   {
     key: '/laws',
     icon: <BookOutlined />,
-    label: '상위법령',
+    label: '법령관리',
   },
   {
     key: '/amendments',
-    icon: <AlertOutlined />,
-    label: '개정법령',
+    icon: <SyncOutlined />,
+    label: '변경감지',
+  },
+  {
+    key: '/revision-needed',
+    icon: <AuditOutlined />,
+    label: '개정검토',
   },
   {
     key: '/departments',
@@ -46,23 +45,28 @@ const adminMenuItems = [
     label: '부서관리',
   },
   {
-    key: '/statistics',
-    icon: <BarChartOutlined />,
-    label: '법령연계통계',
-  },
-  {
     key: '/dashboard',
-    icon: <DashboardOutlined />,
-    label: '대시보드',
+    icon: <BarChartOutlined />,
+    label: '현황',
   },
 ]
 
-// Menu items for regular users (only 자치법규)
+// Menu items for regular users (3 tabs)
 const regularUserMenuItems = [
   {
     key: '/ordinances',
     icon: <FileTextOutlined />,
-    label: '자치법규',
+    label: '자치법규관리',
+  },
+  {
+    key: '/revision-needed',
+    icon: <AuditOutlined />,
+    label: '개정검토',
+  },
+  {
+    key: '/dashboard',
+    icon: <BarChartOutlined />,
+    label: '현황',
   },
 ]
 
@@ -105,6 +109,13 @@ export default function MainLayout() {
   // Select menu items based on user type
   const sidebarMenuItems = user?.user_type === 'ADMIN' ? adminMenuItems : regularUserMenuItems
 
+  // Match selectedKeys by pathname prefix for sub-routes
+  const getSelectedKey = () => {
+    const menuKeys = sidebarMenuItems.map((item) => item.key)
+    const matched = menuKeys.find((key) => location.pathname === key || location.pathname.startsWith(key + '/'))
+    return matched ? [matched] : []
+  }
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Sider
@@ -128,7 +139,7 @@ export default function MainLayout() {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={getSelectedKey()}
           items={sidebarMenuItems}
           onClick={handleMenuClick}
         />
