@@ -21,6 +21,7 @@ import LawChangeList from './pages/LawChangeList'
 import ReviewList from './pages/ReviewList'
 import ReviewDetail from './pages/ReviewDetail'
 import Maintenance from './pages/Maintenance'
+import DetectionCompare from './pages/DetectionCompare'
 import { maintenanceApi } from './services/api'
 
 function App() {
@@ -80,6 +81,16 @@ function App() {
                 <Route path="ordinances" element={<OrdinanceList />} />
                 <Route path="ordinances/:id" element={<OrdinanceDetail />} />
                 <Route path="revision-needed" element={<RevisionNeededList />} />
+<<<<<<< HEAD
+                <Route path="laws" element={<LawList />} />
+                <Route path="departments" element={<DepartmentList />} />
+                <Route path="departments/:id" element={<DepartmentDetail />} />
+                <Route path="amendments" element={<LawChangeList />} />
+                <Route path="reviews" element={<ReviewList />} />
+                <Route path="reviews/:id" element={<ReviewDetail />} />
+                <Route path="statistics" element={<Statistics />} />
+                <Route path="admin/detection-compare" element={<DetectionCompare />} />
+=======
                 <Route path="dashboard" element={<Dashboard />} />
 
                 {/* ADMIN only routes */}
@@ -93,6 +104,7 @@ function App() {
                   <Route path="reviews" element={<ReviewList />} />
                   <Route path="reviews/:id" element={<ReviewDetail />} />
                 </Route>
+>>>>>>> origin/main
               </Route>
             </Route>
 

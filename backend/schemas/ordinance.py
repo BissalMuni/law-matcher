@@ -6,6 +6,7 @@ from datetime import date, datetime
 from pydantic import BaseModel
 
 from backend.schemas.user import UserBriefResponse
+from backend.schemas.revision import DetectionResultOut
 
 
 class OrdinanceBase(BaseModel):
@@ -248,6 +249,13 @@ class OrdinanceSearchResponse(BaseModel):
     total: int
     items: List[OrdinanceSearchResult]
     message: str
+
+
+class OrdinanceDetectionResultsResponse(BaseModel):
+    """조례 기준 판별 결과 응답"""
+    ordinance_id: int
+    ordinance_name: str
+    results: List[DetectionResultOut]
 
 
 class OrdinanceRegisterFromApiRequest(BaseModel):

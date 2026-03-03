@@ -2,9 +2,14 @@
 MOLEG (법제처) API Client
 """
 import asyncio
+import logging
+import xml.etree.ElementTree as ET
 from typing import Optional, List, Dict, Any
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+logger = logging.getLogger(__name__)
 
 
 class LinkedOrdinance(BaseModel):
@@ -25,7 +30,9 @@ class LawArticle(BaseModel):
     article_no: str
     article_title: Optional[str] = None
     article_content: str
-    paragraphs: List[Dict[str, Any]] = []
+    paragraphs: List[Dict[str, Any]] = Field(default_factory=list)
+    revision_type_detail: Optional[str] = None
+    change_flag: Optional[str] = None
 
 
 class LawDetail(BaseModel):
@@ -37,7 +44,9 @@ class LawDetail(BaseModel):
     proclaimed_date: Optional[str] = None
     enforced_date: Optional[str] = None
     revision_type: Optional[str] = None
-    articles: List[LawArticle] = []
+    revision_reason: Optional[str] = None
+    amendment_content: Optional[str] = None
+    articles: List[LawArticle] = Field(default_factory=list)
 
 
 class MolegClient:
@@ -76,7 +85,26 @@ class MolegClient:
         return data.get("LawSearch", {}).get("law", [])
 
     async def get_law_detail(self, law_mst: str) -> LawDetail:
-        """Get law detail by MST"""
+        """Get law detail by MST (JSON first, XML fallback)."""
+        try:
+            return await self._get_law_detail_json(law_mst)
+        except Exception as json_error:
+            logger.warning(
+                "JSON law detail parsing failed for MST=%s, trying XML fallback: %s",
+                law_mst,
+                json_error,
+            )
+            try:
+                return await self._get_law_detail_xml(law_mst)
+            except Exception as xml_error:
+                logger.error(
+                    "XML fallback failed for MST=%s: %s",
+                    law_mst,
+                    xml_error,
+                )
+                raise
+
+    async def _get_law_detail_json(self, law_mst: str) -> LawDetail:
         params = {
             "OC": self.api_key,
             "target": "law",
@@ -93,16 +121,73 @@ class MolegClient:
         data = response.json()
         law_data = data.get("법령", {})
         basic_info = law_data.get("기본정보", {})
+        law_type_raw = basic_info.get("법종구분", {})
+        law_type = law_type_raw.get("content", "") if isinstance(law_type_raw, dict) else law_type_raw
 
         return LawDetail(
-            law_id=basic_info.get("법령ID", ""),
+            law_id=self._normalize_text(basic_info.get("법령ID", "")),
             law_mst=law_mst,
-            law_name=basic_info.get("법령명_한글", ""),
-            law_type=basic_info.get("법종구분", {}).get("content", "") if isinstance(basic_info.get("법종구분"), dict) else basic_info.get("법종구분", ""),
-            proclaimed_date=basic_info.get("공포일자"),
-            enforced_date=basic_info.get("시행일자"),
-            revision_type=basic_info.get("제개정구분"),
+            law_name=self._normalize_text(basic_info.get("법령명_한글", "")),
+            law_type=self._normalize_text(law_type),
+            proclaimed_date=self._normalize_text(basic_info.get("공포일자")) or None,
+            enforced_date=self._normalize_text(basic_info.get("시행일자")) or None,
+            revision_type=self._normalize_text(basic_info.get("제개정구분")) or None,
+            revision_reason=self._extract_nested_text(
+                law_data.get("제개정이유", {}).get("제개정이유내용")
+            ),
+            amendment_content=self._extract_nested_text(
+                law_data.get("개정문", {}).get("개정문내용")
+            ),
             articles=self._parse_articles(law_data.get("조문", {}).get("조문단위", [])),
+        )
+
+    async def _get_law_detail_xml(self, law_mst: str) -> LawDetail:
+        params = {
+            "OC": self.api_key,
+            "target": "law",
+            "MST": law_mst,
+            "type": "XML",
+        }
+
+        response = await self.client.get(
+            f"{self.base_url}/lawService.do",
+            params=params,
+        )
+        response.raise_for_status()
+        root = ET.fromstring(response.text)
+
+        basic = root.find("./기본정보")
+        law_id = self._xml_text(basic, "법령ID")
+        law_name = self._xml_text(basic, "법령명_한글")
+        law_type = self._xml_text(basic, "법종구분")
+        proclaimed_date = self._xml_text(basic, "공포일자")
+        enforced_date = self._xml_text(basic, "시행일자")
+        revision_type = self._xml_text(basic, "제개정구분")
+        revision_reason = self._xml_text(root.find("./제개정이유"), "제개정이유내용")
+        amendment_content = self._xml_text(root.find("./개정문"), "개정문내용")
+
+        article_nodes = root.findall("./조문/조문단위")
+        articles_data = []
+        for node in article_nodes:
+            articles_data.append({
+                "조문번호": self._xml_text(node, "조문번호"),
+                "조문제목": self._xml_text(node, "조문제목"),
+                "조문내용": self._xml_text(node, "조문내용"),
+                "조문제개정유형": self._xml_text(node, "조문제개정유형"),
+                "조문변경여부": self._xml_text(node, "조문변경여부"),
+            })
+
+        return LawDetail(
+            law_id=law_id,
+            law_mst=law_mst,
+            law_name=law_name,
+            law_type=law_type,
+            proclaimed_date=proclaimed_date or None,
+            enforced_date=enforced_date or None,
+            revision_type=revision_type or None,
+            revision_reason=revision_reason or None,
+            amendment_content=amendment_content or None,
+            articles=self._parse_articles(articles_data),
         )
 
     async def get_law_history(self, law_id: str) -> List[Dict[str, Any]]:
@@ -138,8 +223,43 @@ class MolegClient:
                 article_title=self._normalize_text(art.get("조문제목")) or None,
                 article_content=self._normalize_text(art.get("조문내용", "")),
                 paragraphs=self._parse_paragraphs(art),
+                revision_type_detail=self._normalize_text(art.get("조문제개정유형")) or None,
+                change_flag=self._normalize_text(art.get("조문변경여부")) or None,
             ))
         return articles
+
+    def _extract_nested_text(self, value: Any) -> Optional[str]:
+        """
+        법제처 JSON list[list[str]](또는 유사 구조)에서 본문 문자열 복원.
+        파싱 실패 시 None 반환 및 로깅.
+        """
+        try:
+            if value is None:
+                return None
+            if isinstance(value, list):
+                if value and isinstance(value[0], list):
+                    joined = "\n".join(
+                        [self._normalize_text(line) for line in value[0] if self._normalize_text(line)]
+                    ).strip()
+                    return joined or None
+                joined = "\n".join(
+                    [self._normalize_text(item) for item in value if self._normalize_text(item)]
+                ).strip()
+                return joined or None
+
+            normalized = self._normalize_text(value)
+            return normalized or None
+        except Exception as exc:
+            logger.warning("Failed to parse nested law text: %s", exc)
+            return None
+
+    def _xml_text(self, node: Optional[ET.Element], tag: str) -> str:
+        if node is None:
+            return ""
+        found = node.find(tag)
+        if found is None or found.text is None:
+            return ""
+        return found.text.strip()
 
     def _normalize_text(self, value: Any) -> str:
         """

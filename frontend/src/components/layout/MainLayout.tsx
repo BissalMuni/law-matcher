@@ -10,8 +10,13 @@ import {
   UserOutlined,
   LogoutOutlined,
   DownOutlined,
+<<<<<<< HEAD
+  WarningOutlined,
+  ApartmentOutlined,
+=======
   SyncOutlined,
   AuditOutlined,
+>>>>>>> origin/main
 } from '@ant-design/icons'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -48,6 +53,11 @@ const adminMenuItems = [
     key: '/dashboard',
     icon: <BarChartOutlined />,
     label: '현황',
+  },
+  {
+    key: '/admin/detection-compare',
+    icon: <ApartmentOutlined />,
+    label: '탭 비교',
   },
 ]
 

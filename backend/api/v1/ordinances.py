@@ -33,8 +33,11 @@ from backend.schemas.ordinance import (
     OrdinanceReviewApprovalRequest,
     AllOrdinanceReviewsResponse,
     OrdinanceReviewWithOrdinance,
+    OrdinanceDetectionResultsResponse,
 )
+from backend.schemas.revision import DetectRequest
 from backend.services.ordinance_service import OrdinanceService
+from backend.services.revision_detection_service import RevisionDetectionService
 from backend.core.exceptions import NotFoundError
 
 router = APIRouter()
@@ -431,6 +434,36 @@ async def get_ordinance(
     """Get ordinance by ID"""
     service = OrdinanceService(db)
     return await service.get_by_id(ordinance_id)
+
+
+@router.get("/{ordinance_id}/detection-results", response_model=OrdinanceDetectionResultsResponse)
+async def get_detection_results(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """3탭 판별 결과 조회 (캐시)"""
+    service = RevisionDetectionService(db)
+    try:
+        return await service.get_cached_results(ordinance_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/{ordinance_id}/detect", response_model=OrdinanceDetectionResultsResponse)
+async def run_detection(
+    ordinance_id: int,
+    request: DetectRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """3탭 판별 실행 (methods 선택 가능)"""
+    service = RevisionDetectionService(db)
+    try:
+        selected_methods = [method.value for method in request.methods] if request.methods else None
+        return await service.detect_all(ordinance_id=ordinance_id, methods=selected_methods)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"detection failed: {exc}")
 
 
 

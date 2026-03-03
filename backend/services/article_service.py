@@ -224,6 +224,8 @@ class ArticleService:
             content_hash=article_data.content_hash,
             mst_seq=article_data.mst_seq,
             jo_seq=article_data.jo_seq,
+            revision_type_detail=article_data.revision_type_detail,
+            change_flag=article_data.change_flag,
             last_synced_at=datetime.utcnow(),
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
@@ -386,6 +388,8 @@ class ArticleService:
                 "content": api_art.article_content,
                 "hash": content_hash,
                 "paragraphs": api_art.paragraphs,
+                "revision_type_detail": api_art.revision_type_detail,
+                "change_flag": api_art.change_flag,
             }
 
         # 3. 비교 결과 초기화
@@ -407,6 +411,8 @@ class ArticleService:
                         article_content=api_data["content"],
                         paragraphs={"paragraphs": api_data["paragraphs"]},
                         content_hash=api_data["hash"],
+                        revision_type_detail=api_data["revision_type_detail"],
+                        change_flag=api_data["change_flag"],
                     )
                 )
                 result["created"].append(new_article)
@@ -423,6 +429,8 @@ class ArticleService:
             else:
                 # 4.2 기존 조문 - 해시 비교
                 db_article = db_article_map[article_no]
+                db_article.revision_type_detail = api_data["revision_type_detail"]
+                db_article.change_flag = api_data["change_flag"]
 
                 if db_article.content_hash != api_data["hash"]:
                     # 변경 감지!
