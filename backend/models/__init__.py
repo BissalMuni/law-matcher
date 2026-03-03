@@ -14,6 +14,8 @@ from backend.models.ordinance_review import OrdinanceReview
 from backend.models.article import Article
 from backend.models.ordinance_article_mapping import OrdinanceArticleMapping
 from backend.models.article_change import ArticleChange
+from backend.models.law_revision_reason import LawRevisionReason
+from backend.models.revision_detection_result import RevisionDetectionResult
 
 __all__ = [
     "User",
@@ -31,4 +33,6 @@ __all__ = [
     "Article",
     "OrdinanceArticleMapping",
     "ArticleChange",
+    "LawRevisionReason",
+    "RevisionDetectionResult",
 ]

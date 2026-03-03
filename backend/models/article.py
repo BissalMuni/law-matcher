@@ -44,6 +44,8 @@ class Article(Base):
     # 법제처 API 원본 정보
     mst_seq: Mapped[Optional[int]] = mapped_column(Integer)
     jo_seq: Mapped[Optional[int]] = mapped_column(Integer)
+    revision_type_detail: Mapped[Optional[str]] = mapped_column(String(50))
+    change_flag: Mapped[Optional[str]] = mapped_column(String(5))
 
     # 메타데이터
     last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime)

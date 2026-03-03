@@ -24,6 +24,8 @@ class ArticleCreate(ArticleBase):
     content_hash: str
     mst_seq: Optional[int] = None
     jo_seq: Optional[int] = None
+    revision_type_detail: Optional[str] = None
+    change_flag: Optional[str] = None
 
 
 class ArticleUpdate(BaseModel):
@@ -32,6 +34,8 @@ class ArticleUpdate(BaseModel):
     article_content: Optional[str] = None
     paragraphs: Optional[Dict[str, Any]] = None
     content_hash: Optional[str] = None
+    revision_type_detail: Optional[str] = None
+    change_flag: Optional[str] = None
 
 
 class ArticleResponse(ArticleBase):
@@ -44,6 +48,8 @@ class ArticleResponse(ArticleBase):
     content_hash: str
     mst_seq: Optional[int] = None
     jo_seq: Optional[int] = None
+    revision_type_detail: Optional[str] = None
+    change_flag: Optional[str] = None
     ordinance_count: Optional[int] = None  # 연계된 조례 개수
     change_count: Optional[int] = None  # 변경 이력 개수
     last_changed_date: Optional[date] = None  # 최근 변경일
