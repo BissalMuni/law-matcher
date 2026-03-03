@@ -76,23 +76,25 @@ backend/
 
 frontend/src/
 ├── pages/
-│   ├── OrdinanceDetail.tsx          # 수정: Card → Tabs 구조 변경
-│   └── DetectionCompare.tsx         # 신규: 3탭 비교 뷰 (관리자)
+│   ├── OrdinanceDetail.tsx          # 선행: UI 재설계에서 Card→Tabs 전환 완료됨
+│   └── DetectionCompare.tsx         # 신규: 서브탭 비교 뷰 (관리자)
 ├── components/
 │   ├── detection/
-│   │   ├── TabA_ProclaimedDate.tsx  # 신규: 공포일자 비교 탭
-│   │   ├── TabB_ArticleChange.tsx   # 신규: 조문 변경 탭
-│   │   ├── TabC_RevisionReason.tsx  # 신규: 제개정이유 분석 탭
+│   │   ├── TabA_LawCompare.tsx      # 신규: 법령비교 서브탭
+│   │   ├── TabB_ArticleCompare.tsx  # 신규: 조문비교 서브탭
+│   │   ├── TabC_ReasonCompare.tsx   # 신규: 개정이유비교 서브탭
 │   │   └── DetectionSummary.tsx     # 신규: 판별 요약 배지
 │   └── layout/
-│       └── MainLayout.tsx           # 수정: 탭비교 메뉴 항목 추가 (관리자)
+│       └── MainLayout.tsx           # 선행: UI 재설계에서 메뉴 구조 변경 완료됨
 ├── services/
 │   └── api.ts                       # 수정: revision-reason, detection-results API 추가
 └── types/
     └── api.ts                       # 수정: 탭 관련 타입 추가
 ```
 
-**Structure Decision**: 기존 Web application 구조 유지. 탭 컴포넌트를 `components/detection/`에 분리하여 OrdinanceDetail에서 조합. 판별 로직은 `revision_detection_service.py`에 통합.
+**Structure Decision**: 기존 Web application 구조 유지. 서브탭 컴포넌트를 `components/detection/`에 분리하여 OrdinanceDetail의 "개정검토" 탭 안에 조합. 판별 로직은 `revision_detection_service.py`에 통합.
+
+**선행 작업 (UI 재설계)**: OrdinanceDetail의 Card→Tabs 전환과 MainLayout 메뉴 재구성은 UI 재설계 작업에서 먼저 수행됨. 005 구현 시에는 이미 "개정검토" 탭이 존재하므로, 해당 탭 안에 법령비교/조문비교/개정이유비교 서브탭을 추가하면 됨.
 
 ## 구현 범위
 
@@ -100,10 +102,10 @@ frontend/src/
 
 | User Story | 상태 | 작업 |
 |------------|------|------|
-| US1 탭A 공포일자 | ✅ 데이터/로직 완료 | UI를 Tabs 구조로 재구성 |
-| US2 탭B 조문변경 | ⚠️ 부분 구현 | 조문제개정유형/변경여부 필드 추가 + UI 탭 |
-| US3 탭C 제개정이유 | ❌ 미구현 | **전면 신규** (API 파싱→모델→서비스→UI) |
-| US4 탭 비교 | ❌ 미구현 | 신규 비교 뷰 페이지 |
+| US1 법령비교 | ✅ 데이터/로직 완료 | "개정검토" 탭 안에 법령비교 서브탭 추가 (Tabs 구조는 UI 재설계에서 완료됨) |
+| US2 조문비교 | ⚠️ 부분 구현 | 조문제개정유형/변경여부 필드 추가 + 조문비교 서브탭 |
+| US3 개정이유비교 | ❌ 미구현 | **전면 신규** (API 파싱→모델→서비스→개정이유비교 서브탭) |
+| US4 서브탭 비교 | ❌ 미구현 | 신규 비교 뷰 페이지 |
 | US5 자동 알림 | ❌ 미구현 | 알림 생성 로직 (이메일/웹훅은 추후) |
 
 ### 핵심 구현 단계

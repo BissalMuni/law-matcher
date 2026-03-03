@@ -5,6 +5,7 @@ import koKR from 'antd/locale/ko_KR'
 import { AuthProvider } from './contexts/AuthContext'
 import MainLayout from './components/layout/MainLayout'
 import ProtectedRoute from './components/ProtectedRoute'
+import RoleProtectedRoute from './components/RoleProtectedRoute'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -19,7 +20,6 @@ import LawList from './pages/LawList'
 import LawChangeList from './pages/LawChangeList'
 import ReviewList from './pages/ReviewList'
 import ReviewDetail from './pages/ReviewDetail'
-import Statistics from './pages/Statistics'
 import Maintenance from './pages/Maintenance'
 import DetectionCompare from './pages/DetectionCompare'
 import { maintenanceApi } from './services/api'
@@ -76,12 +76,12 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<MainLayout />}>
                 <Route index element={<Navigate to="/ordinances" replace />} />
-                <Route path="dashboard" element={<Dashboard />} />
+
+                {/* Shared routes (ADMIN + USER) */}
                 <Route path="ordinances" element={<OrdinanceList />} />
                 <Route path="ordinances/:id" element={<OrdinanceDetail />} />
-                <Route path="articles" element={<ArticleList />} />
-                <Route path="articles/:id" element={<ArticleDetail />} />
                 <Route path="revision-needed" element={<RevisionNeededList />} />
+<<<<<<< HEAD
                 <Route path="laws" element={<LawList />} />
                 <Route path="departments" element={<DepartmentList />} />
                 <Route path="departments/:id" element={<DepartmentDetail />} />
@@ -90,6 +90,21 @@ function App() {
                 <Route path="reviews/:id" element={<ReviewDetail />} />
                 <Route path="statistics" element={<Statistics />} />
                 <Route path="admin/detection-compare" element={<DetectionCompare />} />
+=======
+                <Route path="dashboard" element={<Dashboard />} />
+
+                {/* ADMIN only routes */}
+                <Route element={<RoleProtectedRoute allowedRoles={['ADMIN']} />}>
+                  <Route path="laws" element={<LawList />} />
+                  <Route path="amendments" element={<LawChangeList />} />
+                  <Route path="departments" element={<DepartmentList />} />
+                  <Route path="departments/:id" element={<DepartmentDetail />} />
+                  <Route path="articles" element={<ArticleList />} />
+                  <Route path="articles/:id" element={<ArticleDetail />} />
+                  <Route path="reviews" element={<ReviewList />} />
+                  <Route path="reviews/:id" element={<ReviewDetail />} />
+                </Route>
+>>>>>>> origin/main
               </Route>
             </Route>
 

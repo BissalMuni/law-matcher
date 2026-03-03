@@ -1,108 +1,114 @@
 # Tasks: 로그인 기능
 
 **Input**: Design documents from `/specs/001-login/`
-**Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/
+**Prerequisites**: plan.md (required), spec.md (required)
 
-## Phase 1: Setup (Shared Infrastructure)
+## Format: `[ID] [P?] [Story] Description`
 
-**Purpose**: 인증 기능 보강 작업 준비
+- **[P]**: Can run in parallel (different files, no dependencies)
+- **[Story]**: Which user story this task belongs to
 
-- [ ] T001 인증 라우트/서비스 진입점 점검 in /home/jinkui/law-matcher/backend/api/v1/auth.py
-- [ ] T002 비밀번호 변경 화면 라우팅 위치 점검 in /home/jinkui/law-matcher/frontend/src/App.tsx
-- [ ] T003 [P] 인증 타입 정의 점검 in /home/jinkui/law-matcher/frontend/src/types/auth.ts
+---
+
+## Phase 1: Setup
+
+> 기존 프로젝트에 이미 구조가 갖춰져 있으므로 별도 셋업 불필요.
+
+_(no tasks)_
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: 공통 인증/에러 처리 기반 정비
+> 기존 코드(security, config, models, deps)가 이미 존재하므로 별도 기반 작업 불필요.
 
-- [ ] T004 인증 예외 코드 표준화 in /home/jinkui/law-matcher/backend/core/exceptions.py
-- [ ] T005 [P] 인증 스키마 공통 메시지 정리 in /home/jinkui/law-matcher/backend/schemas/auth.py
-- [ ] T006 [P] 프론트 공통 인증 에러 핸들러 정리 in /home/jinkui/law-matcher/frontend/src/services/api.ts
-- [ ] T007 권한별 메뉴 표시 규칙 정비 in /home/jinkui/law-matcher/frontend/src/components/layout/MainLayout.tsx
+_(no tasks)_
 
 ---
 
-## Phase 3: User Story 1 - 부서 로그인 (Priority: P1)
+## Phase 3: US1/US2 에러 처리 보강 (부서 로그인 / 관리자 로그인)
 
-**Goal**: 부서 사용자가 명확한 오류와 함께 안정적으로 로그인한다
-
-**Independent Test**: 정상 계정 로그인 성공, 잘못된 입력 시 한국어 오류 표시
-
-- [ ] T008 [US1] 부서 로그인 실패 분기 로직 보강 in /home/jinkui/law-matcher/backend/services/auth_service.py
-- [ ] T009 [US1] 로그인 API 예외 응답 매핑 보강 in /home/jinkui/law-matcher/backend/api/v1/auth.py
-- [ ] T010 [P] [US1] 로그인 입력 검증/오류 UI 보강 in /home/jinkui/law-matcher/frontend/src/pages/Login.tsx
-- [ ] T011 [US1] 로그인 성공 후 기본 이동 경로 정리 in /home/jinkui/law-matcher/frontend/src/contexts/AuthContext.tsx
+| ID | Par | Story | Description |
+|----|-----|-------|-------------|
+| T001 | [P] | US1/US2 | `backend/api/v1/auth.py` - 로그인 엔드포인트 에러 처리 보강. 잘못된 자격 증명, 빈 필드, 존재하지 않는 사용자 등에 대해 명확한 HTTP 에러 응답(400/401/422) 반환. 에러 메시지에 민감 정보 노출 방지. |
+| T002 | [P] | US1/US2 | `backend/services/auth_service.py` - 인증 서비스 에러 처리 보강. 예외 상황(DB 연결 실패 등)에 대한 적절한 예외 래핑 및 로깅 추가. |
+| T003 | [P] | US1/US2 | `frontend/src/pages/Login.tsx` - 로그인 페이지 에러 처리 보강. 네트워크 에러, 서버 에러, 잘못된 자격 증명 등 각 케이스별 사용자 친화적 에러 메시지 표시. |
+| T004 | [P] | US1/US2 | `frontend/src/contexts/AuthContext.tsx` - 인증 컨텍스트 에러 처리 보강. 토큰 만료, 리프레시 실패 시 적절한 에러 상태 관리 및 로그아웃 처리. |
 
 ---
 
-## Phase 4: User Story 2 - 관리자 로그인 (Priority: P1)
+## Phase 4: US4 비밀번호 변경 - 백엔드
 
-**Goal**: 관리자 인증과 관리자 전용 접근 제어를 보장한다
+| ID | Par | Story | Description |
+|----|-----|-------|-------------|
+| T005 | | US4 | `backend/schemas/auth.py` - 비밀번호 변경 요청/응답 스키마 확인. `ChangePasswordRequest` 스키마에 `current_password`, `new_password` 필드가 있는지 확인하고 없으면 추가. 비밀번호 유효성 검증(최소 길이 등) 포함. |
+| T006 | | US4 | `backend/api/v1/auth.py` - `PUT /auth/change-password` 엔드포인트 추가. 인증된 사용자(`get_current_user` 의존성)만 접근 가능. 현재 비밀번호 확인 후 새 비밀번호로 변경. 기존 `auth_service.change_password()` 호출. 에러 응답: 현재 비밀번호 불일치(400), 미인증(401). |
 
-**Independent Test**: 관리자 로그인 성공 시 관리자 메뉴 노출, 일반 사용자 차단
-
-- [ ] T012 [US2] 관리자 로그인 검증 로직 보강 in /home/jinkui/law-matcher/backend/services/auth_service.py
-- [ ] T013 [US2] 관리자 전용 의존성 검증 보강 in /home/jinkui/law-matcher/backend/api/deps.py
-- [ ] T014 [P] [US2] 관리자 메뉴 렌더링 조건 보강 in /home/jinkui/law-matcher/frontend/src/components/layout/MainLayout.tsx
-- [ ] T015 [US2] 보호 라우트 권한 체크 보강 in /home/jinkui/law-matcher/frontend/src/components/ProtectedRoute.tsx
+> T006은 T005의 스키마에 의존하므로 순차 실행.
 
 ---
 
-## Phase 5: User Story 3 - 로그아웃 (Priority: P1)
+## Phase 5: US4 비밀번호 변경 - 프론트엔드
 
-**Goal**: 로그아웃 시 인증 상태와 토큰이 즉시 해제된다
+| ID | Par | Story | Description |
+|----|-----|-------|-------------|
+| T007 | [P] | US4 | `frontend/src/services/api.ts` - `changePassword(currentPassword, newPassword)` API 호출 함수 추가. `PUT /auth/change-password` 엔드포인트 호출. 에러 응답 처리 포함. |
+| T008 | | US4 | `frontend/src/pages/ChangePassword.tsx` - 비밀번호 변경 페이지 신규 생성. Ant Design Form 사용. 필드: 현재 비밀번호, 새 비밀번호, 새 비밀번호 확인. 클라이언트 사이드 유효성 검증(빈 값, 비밀번호 일치, 최소 길이). 성공 시 알림 표시 후 이전 페이지로 이동. 에러 시(현재 비밀번호 불일치 등) 사용자 친화적 메시지 표시. |
+| T009 | | US4 | `frontend/src/App.tsx` - `/change-password` 라우트 추가. `ProtectedRoute`로 감싸서 인증된 사용자만 접근 가능. USER/ADMIN 모두 접근 허용. |
+| T010 | | US4 | `frontend/src/components/layout/MainLayout.tsx` - 사용자 메뉴(헤더 드롭다운 등)에 "비밀번호 변경" 메뉴 항목 추가. 클릭 시 `/change-password`로 이동. |
 
-**Independent Test**: 로그아웃 직후 보호 페이지 접근 시 로그인 페이지로 이동
-
-- [ ] T016 [US3] 로그아웃 API 호출/응답 처리 점검 in /home/jinkui/law-matcher/backend/api/v1/auth.py
-- [ ] T017 [US3] 클라이언트 토큰 제거/상태 초기화 보강 in /home/jinkui/law-matcher/frontend/src/contexts/AuthContext.tsx
-- [ ] T018 [US3] 로그아웃 후 라우팅 전환 정비 in /home/jinkui/law-matcher/frontend/src/components/layout/MainLayout.tsx
-
----
-
-## Phase 6: User Story 4 - 비밀번호 변경 (Priority: P2)
-
-**Goal**: 현재 비밀번호 검증 후 새 비밀번호로 변경한다
-
-**Independent Test**: 비밀번호 변경 성공 후 재로그인 가능, 현재 비밀번호 오류 시 실패
-
-- [ ] T019 [US4] change-password 엔드포인트 구현 in /home/jinkui/law-matcher/backend/api/v1/auth.py
-- [ ] T020 [US4] 비밀번호 변경 서비스 검증/저장 로직 보강 in /home/jinkui/law-matcher/backend/services/auth_service.py
-- [ ] T021 [P] [US4] 비밀번호 변경 요청/응답 스키마 보강 in /home/jinkui/law-matcher/backend/schemas/auth.py
-- [ ] T022 [P] [US4] 비밀번호 변경 API 함수 추가 in /home/jinkui/law-matcher/frontend/src/services/api.ts
-- [ ] T023 [US4] 비밀번호 변경 페이지 구현 in /home/jinkui/law-matcher/frontend/src/pages/ChangePassword.tsx
-- [ ] T024 [US4] 비밀번호 변경 라우트/메뉴 연결 in /home/jinkui/law-matcher/frontend/src/App.tsx
+> T008은 T007의 API 함수에 의존. T009/T010은 T008의 컴포넌트에 의존.
 
 ---
 
-## Phase 7: Polish & Cross-Cutting Concerns
+## Phase 6: FR-007 역할별 메뉴 및 권한 확인
 
-**Purpose**: 인증 기능 전반 품질 정리
+| ID | Par | Story | Description |
+|----|-----|-------|-------------|
+| T011 | [P] | FR-007 | `frontend/src/components/layout/MainLayout.tsx` - 역할별 메뉴 표시 확인. USER(`user_type=USER`)는 자치법규 관련 메뉴만 표시, ADMIN(`user_type=ADMIN`)은 전체 메뉴 표시. 메뉴 숨김 처리가 올바르게 동작하는지 확인하고 누락 시 수정. |
+| T012 | [P] | FR-007 | `backend/api/deps.py` - 백엔드 역할 기반 접근 차단 확인. ADMIN 전용 엔드포인트에 역할 검증이 적용되어 있는지 확인하고 누락 시 보강. USER가 ADMIN 전용 API 호출 시 403 반환. |
+| T013 | [P] | US2 | `frontend/src/components/ProtectedRoute.tsx` - 보호 라우트 권한 체크 보강. ADMIN 전용 페이지에 대한 라우트 레벨 권한 검증. 권한 없는 사용자 접근 시 403 페이지 또는 리다이렉트 처리. |
 
-- [ ] T025 [P] 인증 한국어 문구 일관성 정리 in /home/jinkui/law-matcher/frontend/src/pages/Login.tsx
-- [ ] T026 비밀번호 정책 안내 문구 정리 in /home/jinkui/law-matcher/frontend/src/pages/ChangePassword.tsx
-- [ ] T027 인증 로깅/감사 항목 보강 in /home/jinkui/law-matcher/backend/services/auth_service.py
-- [ ] T028 인증 기능 문서 업데이트 in /home/jinkui/law-matcher/docs/auth-login.md
+---
+
+## Phase 7: US3 로그아웃
+
+| ID | Par | Story | Description |
+|----|-----|-------|-------------|
+| T014 | | US3 | `backend/api/v1/auth.py` - 로그아웃 API 호출/응답 처리 점검. 로그아웃 엔드포인트가 정상 동작하는지 확인하고, 토큰 무효화 처리가 올바른지 검증. |
+| T015 | | US3 | `frontend/src/contexts/AuthContext.tsx` - 로그아웃 시 클라이언트 토큰 제거 및 인증 상태 초기화. localStorage/sessionStorage 토큰 삭제, AuthContext 상태 리셋. |
+| T016 | | US3 | `frontend/src/components/layout/MainLayout.tsx` - 로그아웃 후 라우팅 전환. 로그아웃 완료 후 즉시 로그인 페이지(`/login`)로 이동. 보호 페이지 접근 시 로그인 페이지로 리다이렉트. |
+
+---
+
+## Phase 8: 로그인 후 네비게이션
+
+| ID | Par | Story | Description |
+|----|-----|-------|-------------|
+| T017 | | US1/US2 | `frontend/src/contexts/AuthContext.tsx` - 로그인 성공 후 기본 이동 경로 정리. 부서 사용자는 자치법규 목록으로, 관리자는 대시보드 또는 메인 페이지로 이동. 역할별 기본 랜딩 페이지 분기 처리. |
 
 ---
 
 ## Dependencies & Execution Order
 
-- Setup → Foundational 완료 후 US1~US4 진행
-- US1~US3 완료 후 US4 진행 권장
-- Polish는 모든 스토리 완료 후 진행
+```
+Phase 3 (T001~T004): 모두 병렬 실행 가능
+    │
+Phase 4 (T005 → T006): 순차 실행, Phase 3과는 병렬 가능
+    │
+Phase 5 (T007 [P with T005~T006] → T008 → T009, T010): T007은 Phase 4와 병렬 가능, T008~T010은 순차
+    │
+Phase 6 (T011, T012, T013): 병렬 실행 가능, Phase 5 이후 실행 권장
+    │
+Phase 7 (T014 → T015 → T016): US3 로그아웃, Phase 3과 병렬 가능
+    │
+Phase 8 (T017): 로그인 후 네비게이션, Phase 3 이후 실행
+```
 
-## Parallel Opportunities
-
-- T003, T005, T006
-- T010, T014
-- T021, T022
-- T025
-
-## Implementation Strategy
-
-1. MVP: US1~US3
-2. 확장: US4
-3. 마무리: Polish
+**요약**:
+- 총 17개 태스크
+- US1/US2: T001~T004 (에러 처리 보강, 기존 코드 수정)
+- US3: T014~T016 (로그아웃 API, 토큰 제거, 리다이렉트)
+- US4: T005~T010 (비밀번호 변경, 백엔드 1개 수정 + 프론트엔드 3개 수정/1개 신규)
+- FR-007: T011~T013 (역할별 메뉴/차단/보호라우트 확인)
+- 네비게이션: T017 (로그인 후 기본 경로)
