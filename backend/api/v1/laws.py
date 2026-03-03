@@ -3,14 +3,16 @@ Laws API endpoints - 상위법령 관리
 """
 import json
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.api.deps import get_db, get_current_user
+from backend.core.config import settings
 from backend.models.law import Law
+from backend.models.law_revision_reason import LawRevisionReason
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.models.user import User
 from backend.schemas.ordinance import (
@@ -27,6 +29,9 @@ from backend.schemas.ordinance import (
     LawSearchResponse,
     LawInfoUpdateResponse,
 )
+from backend.schemas.revision import RevisionReasonOut
+from backend.external.moleg_client import MolegClient
+from backend.services.amendment_parser import parse_amendment_articles
 from backend.services.law_sync_service import LawSyncService
 
 router = APIRouter()
@@ -212,6 +217,74 @@ async def get_law(
     if not law:
         raise HTTPException(status_code=404, detail="Law not found")
     return law
+
+
+@router.get("/{law_id}/revision-reason", response_model=RevisionReasonOut)
+async def get_law_revision_reason(
+    law_id: int,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    법령 제개정이유/개정문 조회
+    - 캐시 우선 조회
+    - 미스 시 법제처 API 호출 후 캐시 저장
+    """
+    law = await db.get(Law, law_id)
+    if not law:
+        raise HTTPException(status_code=404, detail="Law not found")
+
+    cached_stmt = select(LawRevisionReason).where(LawRevisionReason.law_id == law_id)
+    cached = (await db.execute(cached_stmt)).scalar_one_or_none()
+    if cached:
+        if not cached.revision_reason and not cached.amendment_content:
+            response.status_code = 204
+            return Response(status_code=204)
+        extracted = cached.extracted_articles or {}
+        return RevisionReasonOut(
+            law_id=cached.law_id,
+            law_mst=cached.law_mst,
+            revision_reason=cached.revision_reason,
+            amendment_content=cached.amendment_content,
+            extracted_articles=extracted.get("articles", []) if isinstance(extracted, dict) else [],
+            fetched_at=cached.fetched_at,
+        )
+
+    client = MolegClient(api_key=settings.MOLEG_API_KEY or "test", base_url=settings.MOLEG_API_BASE_URL)
+    try:
+        detail = await client.get_law_detail(str(law.law_serial_no))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch revision reason: {exc}")
+    finally:
+        await client.close()
+
+    revision_reason = detail.revision_reason
+    amendment_content = detail.amendment_content
+    extracted_articles = parse_amendment_articles(amendment_content or "")
+
+    record = LawRevisionReason(
+        law_id=law_id,
+        law_mst=str(law.law_serial_no),
+        revision_reason=revision_reason,
+        amendment_content=amendment_content,
+        extracted_articles={"articles": extracted_articles},
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+
+    if not revision_reason and not amendment_content:
+        response.status_code = 204
+        return Response(status_code=204)
+
+    return RevisionReasonOut(
+        law_id=record.law_id,
+        law_mst=record.law_mst,
+        revision_reason=record.revision_reason,
+        amendment_content=record.amendment_content,
+        extracted_articles=extracted_articles,
+        fetched_at=record.fetched_at,
+    )
 
 
 @router.get("/{law_id}/ordinances")

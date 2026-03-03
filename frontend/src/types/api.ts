@@ -53,6 +53,11 @@ export interface DetectionResultsResponse {
   ordinance_id: number
   ordinance_name: string
   results: DetectionResult[]
+  notification?: {
+    message: string
+    changed_methods: string[]
+    created_at: string
+  } | null
 }
 
 export interface DetectionSummaryItem {

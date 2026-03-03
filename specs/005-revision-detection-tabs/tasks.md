@@ -34,8 +34,8 @@
 
 **Purpose**: 개정문 파서 및 3탭 판별 통합 서비스
 
-- [ ] T010 [US3] 개정문 조문번호 추출 파서 — `parse_amendment_articles(text) → list[str]`: 정규식 `제(\d+조(?:의\d+)?)` 패턴으로 변경 조문번호 추출 (중복 제거, 정렬). `match_articles_to_ordinance(articles, mapped)`: 매핑 대조 결과 반환. 엣지케이스: 빈 개정문, 비정형 패턴(별표/서식) (`backend/services/amendment_parser.py` 신규)
-- [ ] T011 [US1] [US2] [US3] 3탭 판별 통합 서비스 — detect_by_proclaimed_date(): 공포일자 비교, detect_by_article_change(): 조문 변경 추적 (revision_type_detail/change_flag 활용), detect_by_revision_reason(): 제개정이유 조회(DB캐시→API)→개정문 파싱→매핑 대조, detect_all(): 3방식 동시 실행+결과 DB 저장, get_cached_results(): 기존 결과 조회 (`backend/services/revision_detection_service.py` 신규)
+- [x] T010 [US3] 개정문 조문번호 추출 파서 — `parse_amendment_articles(text) → list[str]`: 정규식 `제(\d+조(?:의\d+)?)` 패턴으로 변경 조문번호 추출 (중복 제거, 정렬). `match_articles_to_ordinance(articles, mapped)`: 매핑 대조 결과 반환. 엣지케이스: 빈 개정문, 비정형 패턴(별표/서식) (`backend/services/amendment_parser.py` 신규)
+- [x] T011 [US1] [US2] [US3] 3탭 판별 통합 서비스 — detect_by_proclaimed_date(): 공포일자 비교, detect_by_article_change(): 조문 변경 추적 (revision_type_detail/change_flag 활용), detect_by_revision_reason(): 제개정이유 조회(DB캐시→API)→개정문 파싱→매핑 대조, detect_all(): 3방식 동시 실행+결과 DB 저장, get_cached_results(): 기존 결과 조회 (`backend/services/revision_detection_service.py` 신규)
 
 **Checkpoint**: 3가지 판별 방식 서비스 로직 완료
 
@@ -45,8 +45,8 @@
 
 **Purpose**: 제개정이유 조회, 판별 결과 조회, 판별 실행 API
 
-- [ ] T012 [US3] 법령 제개정이유 API — GET /api/v1/laws/{id}/revision-reason: DB 캐시(LawRevisionReason) 확인→미스 시 MolegClient 호출→저장→반환. 에러: 404 법령 미발견, 502 API 오류, 204 데이터 없음 (`backend/api/v1/laws.py`)
-- [ ] T013 [P] [US1] [US2] [US3] 판별 결과 조회/실행 API — GET /api/v1/ordinances/{id}/detection-results: 3탭 결과 통합 조회 (캐시). POST /api/v1/ordinances/{id}/detect: 판별 실행 (methods 파라미터로 선택적), 결과 DB 저장 (`backend/api/v1/ordinances.py`)
+- [x] T012 [US3] 법령 제개정이유 API — GET /api/v1/laws/{id}/revision-reason: DB 캐시(LawRevisionReason) 확인→미스 시 MolegClient 호출→저장→반환. 에러: 404 법령 미발견, 502 API 오류, 204 데이터 없음 (`backend/api/v1/laws.py`)
+- [x] T013 [P] [US1] [US2] [US3] 판별 결과 조회/실행 API — GET /api/v1/ordinances/{id}/detection-results: 3탭 결과 통합 조회 (캐시). POST /api/v1/ordinances/{id}/detect: 판별 실행 (methods 파라미터로 선택적), 결과 DB 저장 (`backend/api/v1/ordinances.py`)
 
 **Checkpoint**: 3개 신규 API 엔드포인트 동작 확인
 
@@ -58,9 +58,9 @@
 
 **Independent Test**: 공포일자가 이후인 법령은 "개정 검토 필요" 표시, 이전이면 "최신 상태"
 
-- [ ] T014 [P] [US1] [US2] [US3] 프론트엔드 API 서비스 확장 — getRevisionReason(lawId), getDetectionResults(ordinanceId), runDetection(ordinanceId, methods?) 함수 추가. TanStack Query 훅: useRevisionReason, useDetectionResults, useRunDetection (`frontend/src/services/api.ts`)
-- [ ] T015 [US1] TabA_LawCompare 컴포넌트 — 공포일자 기반 판별 결과 표시: 상위법령 목록+공포일자 비교, 변경 감지 Badge (Ant Design Tag), 차이 일수 표시, 가장 최근 개정 법령 상단 정렬. 로딩/에러 상태, 결과 없을 시 "판별 실행" 버튼 (`frontend/src/components/detection/TabA_LawCompare.tsx` 신규)
-- [ ] T016 [US1] OrdinanceDetail 개정검토 탭에 서브탭 구조 추가 — Ant Design Tabs로 법령비교/조문비교/개정이유비교 3개 서브탭 구성, lazy loading (탭 클릭 시 최초 1회 fetch), TabA_LawCompare 연결, TabB/TabC는 placeholder (`frontend/src/pages/OrdinanceDetail.tsx`)
+- [x] T014 [P] [US1] [US2] [US3] 프론트엔드 API 서비스 확장 — getRevisionReason(lawId), getDetectionResults(ordinanceId), runDetection(ordinanceId, methods?) 함수 추가. TanStack Query 훅: useRevisionReason, useDetectionResults, useRunDetection (`frontend/src/services/api.ts`)
+- [x] T015 [US1] TabA_LawCompare 컴포넌트 — 공포일자 기반 판별 결과 표시: 상위법령 목록+공포일자 비교, 변경 감지 Badge (Ant Design Tag), 차이 일수 표시, 가장 최근 개정 법령 상단 정렬. 로딩/에러 상태, 결과 없을 시 "판별 실행" 버튼 (`frontend/src/components/detection/TabA_LawCompare.tsx` 신규)
+- [x] T016 [US1] OrdinanceDetail 개정검토 탭에 서브탭 구조 추가 — Ant Design Tabs로 법령비교/조문비교/개정이유비교 3개 서브탭 구성, lazy loading (탭 클릭 시 최초 1회 fetch), TabA_LawCompare 연결, TabB/TabC는 placeholder (`frontend/src/pages/OrdinanceDetail.tsx`)
 
 **Checkpoint**: 법령비교 서브탭에서 공포일자 비교 결과 정상 표시
 
@@ -72,7 +72,7 @@
 
 **Independent Test**: 변경된 조문(change_flag=Y) 목록 표시, 매핑 조문 중 변경된 것 강조
 
-- [ ] T017 [US2] TabB_ArticleCompare 컴포넌트 — 조문 변경 기반 판별 결과: 변경된 조문 목록 (조문번호/제개정유형/변경여부), revision_type_detail 표시 (신설/일부개정/전부개정), change_flag 기반 하이라이트, 매핑 조문 변경 감지 강조, 신설 조문 별도 섹션. OrdinanceDetail 탭B placeholder 교체 (`frontend/src/components/detection/TabB_ArticleCompare.tsx` 신규)
+- [x] T017 [US2] TabB_ArticleCompare 컴포넌트 — 조문 변경 기반 판별 결과: 변경된 조문 목록 (조문번호/제개정유형/변경여부), revision_type_detail 표시 (신설/일부개정/전부개정), change_flag 기반 하이라이트, 매핑 조문 변경 감지 강조, 신설 조문 별도 섹션. OrdinanceDetail 탭B placeholder 교체 (`frontend/src/components/detection/TabB_ArticleCompare.tsx` 신규)
 
 **Checkpoint**: 조문비교 서브탭에서 변경 조문 목록 및 제개정유형 표시
 
@@ -84,7 +84,7 @@
 
 **Independent Test**: 개정문에서 조문번호 자동 추출 → 매핑 대조 → 검토 필요/참고 분류
 
-- [ ] T018 [US3] TabC_ReasonCompare 컴포넌트 — 제개정이유 원문 (Typography.Paragraph, 접기/펼치기), 개정문 원문, 추출된 조문번호 목록 (Tag), 매핑 대조 결과: 매핑 조문="검토 필요" 하이라이트+비매핑="참고(매핑 검토)" (FR-011), 타법개정 시 "상세 확인 필요" 안내, useRevisionReason 훅 사용. OrdinanceDetail 탭C placeholder 교체 (`frontend/src/components/detection/TabC_ReasonCompare.tsx` 신규)
+- [x] T018 [US3] TabC_ReasonCompare 컴포넌트 — 제개정이유 원문 (Typography.Paragraph, 접기/펼치기), 개정문 원문, 추출된 조문번호 목록 (Tag), 매핑 대조 결과: 매핑 조문="검토 필요" 하이라이트+비매핑="참고(매핑 검토)" (FR-011), 타법개정 시 "상세 확인 필요" 안내, useRevisionReason 훅 사용. OrdinanceDetail 탭C placeholder 교체 (`frontend/src/components/detection/TabC_ReasonCompare.tsx` 신규)
 
 **Checkpoint**: 개정이유비교 서브탭에서 제개정이유+개정문+조문추출 표시, 매핑 대조 정상
 
@@ -96,8 +96,8 @@
 
 **Independent Test**: 동일 조례에 대해 3탭 결과 비교 → 일치/불일치 분석
 
-- [ ] T019 [US4] DetectionSummary 컴포넌트 — 3탭 판별 결과 요약 카드: 방식별 needs_revision 아이콘 (CheckCircle/CloseCircle), 일치/불일치 하이라이트, Ant Design Descriptions/카드 그리드 (`frontend/src/components/detection/DetectionSummary.tsx` 신규)
-- [ ] T020 [US4] DetectionCompare 페이지 + 메뉴 등록 — 관리자 전용 3탭 비교 뷰 페이지. 조례 선택(검색/드롭다운), DetectionSummary 상단, 3탭 결과 나란히 비교 (Row+Col 그리드), TabA/B/C 컴포넌트 재사용, "전체 판별 실행" 버튼. MainLayout 관리자 메뉴에 "탭 비교" 추가, 라우트 /admin/detection-compare (`frontend/src/pages/DetectionCompare.tsx` 신규, `frontend/src/components/layout/MainLayout.tsx` 수정)
+- [x] T019 [US4] DetectionSummary 컴포넌트 — 3탭 판별 결과 요약 카드: 방식별 needs_revision 아이콘 (CheckCircle/CloseCircle), 일치/불일치 하이라이트, Ant Design Descriptions/카드 그리드 (`frontend/src/components/detection/DetectionSummary.tsx` 신규)
+- [x] T020 [US4] DetectionCompare 페이지 + 메뉴 등록 — 관리자 전용 3탭 비교 뷰 페이지. 조례 선택(검색/드롭다운), DetectionSummary 상단, 3탭 결과 나란히 비교 (Row+Col 그리드), TabA/B/C 컴포넌트 재사용, "전체 판별 실행" 버튼. MainLayout 관리자 메뉴에 "탭 비교" 추가, 라우트 /admin/detection-compare (`frontend/src/pages/DetectionCompare.tsx` 신규, `frontend/src/components/layout/MainLayout.tsx` 수정)
 
 **Checkpoint**: 관리자 비교 뷰에서 3탭 나란히 비교 가능
 
@@ -109,8 +109,8 @@
 
 **Independent Test**: 한 주간 감지 건 누적 → 주간 리포트 생성 → 인앱 알림함 확인
 
-- [ ] T021 [US5] 판별 결과 기반 알림 생성 로직 — detect_all() 완료 후 변경 감지 시 Notification 생성, 알림 내용: 어떤 방식에서 변경 감지되었는지 요약, 중복 알림 방지 (동일 ordinance+동일 결과), 주간 집계를 위한 기반 로직 (`backend/services/revision_detection_service.py` 수정)
-- [ ] T022 [US5] 프론트엔드 알림 표시 — 판별 결과에 변경 감지 시 Alert 배너 표시 (Ant Design Alert type=warning "새로운 변경이 감지되었습니다"), dismiss 가능 (`frontend/src/pages/OrdinanceDetail.tsx` 수정)
+- [x] T021 [US5] 판별 결과 기반 알림 생성 로직 — detect_all() 완료 후 변경 감지 시 Notification 생성, 알림 내용: 어떤 방식에서 변경 감지되었는지 요약, 중복 알림 방지 (동일 ordinance+동일 결과), 주간 집계를 위한 기반 로직 (`backend/services/revision_detection_service.py` 수정)
+- [x] T022 [US5] 프론트엔드 알림 표시 — 판별 결과에 변경 감지 시 Alert 배너 표시 (Ant Design Alert type=warning "새로운 변경이 감지되었습니다"), dismiss 가능 (`frontend/src/pages/OrdinanceDetail.tsx` 수정)
 
 **Checkpoint**: 판별 결과 변경 감지 시 알림 생성 및 프론트 표시
 
@@ -120,8 +120,8 @@
 
 **Purpose**: 통합 점검 및 최적화
 
-- [ ] T023 탭 전환 최적화 — lazy loading 동작 확인, 탭 간 상태 유지 (리렌더 방지), 로딩 스피너/스켈레톤 일관성, 3탭 로딩 3초 이내 (SC-003) (`frontend/src/pages/OrdinanceDetail.tsx`, 관련 컴포넌트)
-- [ ] T024 타입 정합성 및 에러 핸들링 — 백엔드 스키마↔프론트엔드 타입 일치 확인, API 에러 핸들링 일관성, 탭C API 장애 시 탭C만 비활성화+탭A/B 정상 동작 보장 (Constitution III)
+- [x] T023 탭 전환 최적화 — lazy loading 동작 확인, 탭 간 상태 유지 (리렌더 방지), 로딩 스피너/스켈레톤 일관성, 3탭 로딩 3초 이내 (SC-003) (`frontend/src/pages/OrdinanceDetail.tsx`, 관련 컴포넌트)
+- [x] T024 타입 정합성 및 에러 핸들링 — 백엔드 스키마↔프론트엔드 타입 일치 확인, API 에러 핸들링 일관성, 탭C API 장애 시 탭C만 비활성화+탭A/B 정상 동작 보장 (Constitution III)
 
 ---
 

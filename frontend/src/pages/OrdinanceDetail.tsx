@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Descriptions,
   Table,
   Card,
+  Tabs,
   Button,
   Space,
   Typography,
@@ -17,12 +18,16 @@ import {
   List,
   Tag,
   Timeline,
+  Alert,
 } from 'antd'
 import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, LinkOutlined, UserOutlined, BankOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ordinanceApi, lawsApi } from '../services/api'
+import { ordinanceApi, lawsApi, useDetectionResults, useRevisionReason } from '../services/api'
 import dayjs from 'dayjs'
 import { useAuth } from '../contexts/AuthContext'
+import TabA_LawCompare from '../components/detection/TabA_LawCompare'
+import TabB_ArticleCompare from '../components/detection/TabB_ArticleCompare'
+import TabC_ReasonCompare from '../components/detection/TabC_ReasonCompare'
 
 const { Title } = Typography
 
@@ -71,6 +76,11 @@ export default function OrdinanceDetail() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingParentLaw, setEditingParentLaw] = useState<ParentLaw | null>(null)
   const [form] = Form.useForm()
+  const [activeDetectionTab, setActiveDetectionTab] = useState('law_compare')
+  const [loadedDetectionTabs, setLoadedDetectionTabs] = useState<Record<string, boolean>>({
+    law_compare: true,
+  })
+  const [detectionAlertDismissed, setDetectionAlertDismissed] = useState(false)
 
   // 검토이력 상태
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
@@ -88,6 +98,12 @@ export default function OrdinanceDetail() {
     queryFn: () => ordinanceApi.getParentLaws(Number(id)),
     enabled: !!id,
   })
+
+  const { data: detectionResults } = useDetectionResults(Number(id), !!id)
+  const firstParentLawId = parentLaws?.[0]?.law_internal_id
+  const {
+    isError: isRevisionReasonApiError,
+  } = useRevisionReason(firstParentLawId, !!firstParentLawId && !!loadedDetectionTabs.reason_compare)
 
   // 검토이력 조회
   const { data: reviews } = useQuery({
@@ -326,6 +342,17 @@ export default function OrdinanceDetail() {
     }
   }
 
+  const handleDetectionTabChange = (key: string) => {
+    setActiveDetectionTab(key)
+    setLoadedDetectionTabs((prev) => (prev[key] ? prev : { ...prev, [key]: true }))
+  }
+
+  useEffect(() => {
+    if (isRevisionReasonApiError && activeDetectionTab === 'reason_compare') {
+      setActiveDetectionTab('law_compare')
+    }
+  }, [activeDetectionTab, isRevisionReasonApiError])
+
   const reviewResultColor: Record<string, string> = {
     '개정필요': 'red',
     '개정불필요': 'green',
@@ -423,6 +450,18 @@ export default function OrdinanceDetail() {
 
       <Title level={4}>{ordinance?.name}</Title>
 
+      {!detectionAlertDismissed && !!detectionResults?.results?.some((result) => result.needs_revision) && (
+        <Alert
+          type="warning"
+          showIcon
+          closable
+          onClose={() => setDetectionAlertDismissed(true)}
+          style={{ marginBottom: 16 }}
+          message="새로운 변경이 감지되었습니다."
+          description="판별 결과에서 개정 검토 필요 항목이 확인되었습니다."
+        />
+      )}
+
       <Card title="기본 정보" style={{ marginBottom: 16 }}>
         <Descriptions column={2}>
           <Descriptions.Item label="자치법규 코드">{ordinance?.code}</Descriptions.Item>
@@ -481,6 +520,39 @@ export default function OrdinanceDetail() {
           columns={parentLawColumns}
           locale={{ emptyText: ordinance?.no_parent_law ? '상위법령 없음 (확인됨)' : '상위법령 없음' }}
         />
+      </Card>
+
+      <Card title="개정검토" style={{ marginBottom: 16 }}>
+        <Tabs activeKey={activeDetectionTab} onChange={handleDetectionTabChange}>
+          <Tabs.TabPane tab="법령비교" key="law_compare">
+            <TabA_LawCompare
+              ordinanceId={Number(id)}
+              parentLaws={parentLaws || []}
+              enabled={loadedDetectionTabs.law_compare}
+            />
+          </Tabs.TabPane>
+          <Tabs.TabPane tab="조문비교" key="article_compare">
+            {loadedDetectionTabs.article_compare ? (
+              <TabB_ArticleCompare ordinanceId={Number(id)} enabled={loadedDetectionTabs.article_compare} />
+            ) : null}
+          </Tabs.TabPane>
+          <Tabs.TabPane tab="개정이유비교" key="reason_compare" disabled={isRevisionReasonApiError}>
+            {loadedDetectionTabs.reason_compare && !isRevisionReasonApiError ? (
+              <TabC_ReasonCompare
+                ordinanceId={Number(id)}
+                parentLaws={parentLaws || []}
+                enabled={loadedDetectionTabs.reason_compare}
+              />
+            ) : isRevisionReasonApiError ? (
+              <Alert
+                type="error"
+                showIcon
+                message="개정이유비교 탭을 사용할 수 없습니다."
+                description="탭C API 장애로 인해 해당 탭이 비활성화되었습니다. 탭A/B는 계속 사용할 수 있습니다."
+              />
+            ) : null}
+          </Tabs.TabPane>
+        </Tabs>
       </Card>
 
       {/* 검토이력 카드 */}

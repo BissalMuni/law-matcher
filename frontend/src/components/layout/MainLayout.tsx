@@ -13,6 +13,7 @@ import {
   LogoutOutlined,
   DownOutlined,
   WarningOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -54,6 +55,11 @@ const adminMenuItems = [
     key: '/dashboard',
     icon: <DashboardOutlined />,
     label: '대시보드',
+  },
+  {
+    key: '/admin/detection-compare',
+    icon: <ApartmentOutlined />,
+    label: '탭 비교',
   },
 ]
 

@@ -32,10 +32,17 @@ class DetectionResultOut(BaseModel):
     detected_at: datetime
 
 
+class DetectionNotificationOut(BaseModel):
+    message: str
+    changed_methods: List[str] = Field(default_factory=list)
+    created_at: str
+
+
 class DetectionResultsOut(BaseModel):
     ordinance_id: int
     ordinance_name: str
     results: List[DetectionResultOut] = Field(default_factory=list)
+    notification: Optional[DetectionNotificationOut] = None
 
 
 class DetectRequest(BaseModel):

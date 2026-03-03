@@ -1,9 +1,16 @@
 import axios from 'axios'
-import { RevisionNeededListResponse } from '../types/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  DetectionMethodType,
+  DetectionResultsResponse,
+  RevisionNeededListResponse,
+  RevisionReasonResponse,
+} from '../types/api'
 import { LoginRequest, TokenResponse, User } from '../types/auth'
 
 const api = axios.create({
   baseURL: '/api/v1',
+  timeout: 120000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -236,6 +243,20 @@ export const ordinanceApi = {
       article_ids: articleIds,
       mapping_reason: mappingReason || '근거 조문',
     })
+    return data
+  },
+
+  getDetectionResults: async (ordinanceId: number): Promise<DetectionResultsResponse> => {
+    const { data } = await api.get(`/ordinances/${ordinanceId}/detection-results`)
+    return data
+  },
+
+  runDetection: async (
+    ordinanceId: number,
+    methods?: DetectionMethodType[]
+  ): Promise<DetectionResultsResponse> => {
+    const payload = methods && methods.length > 0 ? { methods } : {}
+    const { data } = await api.post(`/ordinances/${ordinanceId}/detect`, payload)
     return data
   },
 }
@@ -529,6 +550,16 @@ export const lawsApi = {
     return data
   },
 
+  getRevisionReason: async (lawId: number): Promise<RevisionReasonResponse | null> => {
+    const response = await api.get(`/laws/${lawId}/revision-reason`, {
+      validateStatus: (status) => (status >= 200 && status < 300) || status === 204,
+    })
+    if (response.status === 204) {
+      return null
+    }
+    return response.data
+  },
+
   getOrdinances: async (id: number) => {
     const { data } = await api.get(`/laws/${id}/ordinances`)
     return data
@@ -548,6 +579,35 @@ export const lawsApi = {
     const { data } = await api.post('/laws/bulk-delete', { law_ids: lawIds })
     return data
   },
+}
+
+export function useRevisionReason(lawId?: number, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['revision-reason', lawId],
+    queryFn: () => lawsApi.getRevisionReason(lawId as number),
+    enabled: !!lawId && enabled,
+    retry: false,
+  })
+}
+
+export function useDetectionResults(ordinanceId?: number, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['detection-results', ordinanceId],
+    queryFn: () => ordinanceApi.getDetectionResults(ordinanceId as number),
+    enabled: !!ordinanceId && enabled,
+    retry: false,
+  })
+}
+
+export function useRunDetection(ordinanceId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (methods?: DetectionMethodType[]) => ordinanceApi.runDetection(ordinanceId, methods),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['detection-results', ordinanceId], data)
+      queryClient.invalidateQueries({ queryKey: ['detection-results', ordinanceId] })
+    },
+  })
 }
 
 // Ordinance Management API (추가 기능)

@@ -21,6 +21,7 @@ import ReviewList from './pages/ReviewList'
 import ReviewDetail from './pages/ReviewDetail'
 import Statistics from './pages/Statistics'
 import Maintenance from './pages/Maintenance'
+import DetectionCompare from './pages/DetectionCompare'
 import { maintenanceApi } from './services/api'
 
 function App() {
@@ -88,6 +89,7 @@ function App() {
                 <Route path="reviews" element={<ReviewList />} />
                 <Route path="reviews/:id" element={<ReviewDetail />} />
                 <Route path="statistics" element={<Statistics />} />
+                <Route path="admin/detection-compare" element={<DetectionCompare />} />
               </Route>
             </Route>
 
