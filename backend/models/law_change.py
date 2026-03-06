@@ -1,10 +1,10 @@
 """
-LawChange model - 법령 변경 이력 관리
-동기화 시 감지된 법령 변경사항을 저장하고 부서별로 관리
+LawChange model - 법령 변경 감지 로그
+동기화 시 감지된 법령 변경사항을 기록 (감지 로그 전용, 승인/반려 워크플로우 없음)
 """
-from datetime import datetime, date
+from datetime import datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, Text, Date, DateTime, Integer, BigInteger, ForeignKey, Enum as SQLEnum, JSON
+from sqlalchemy import String, DateTime, Integer, ForeignKey, Enum as SQLEnum, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
@@ -12,15 +12,6 @@ from backend.core.database import Base
 
 if TYPE_CHECKING:
     from backend.models.law import Law
-    from backend.models.department import Department
-
-
-class ChangeStatus(str, enum.Enum):
-    """변경사항 처리 상태"""
-    PENDING = "pending"          # 대기 (검토 필요)
-    REVIEWING = "reviewing"      # 검토 중
-    APPROVED = "approved"        # 승인됨 (laws 테이블 업데이트 완료)
-    REJECTED = "rejected"        # 반려됨 (변경사항 무시)
 
 
 class ApiStatus(str, enum.Enum):
@@ -32,12 +23,15 @@ class ApiStatus(str, enum.Enum):
 
 class LawChange(Base):
     """
-    법령 변경 이력 테이블
+    법령 변경 감지 로그 테이블
 
-    동기화 시 감지된 변경사항을 저장하고,
-    부서 담당자가 검토 후 laws 테이블에 반영할 수 있도록 관리
+    동기화 시 감지된 변경사항을 기록한다.
+    감지 로그 전용이며, 승인/반려 워크플로우는 없다.
     """
     __tablename__ = "law_changes"
+    __table_args__ = (
+        UniqueConstraint('law_id', 'sync_batch_id', name='uq_law_changes_law_batch'),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
@@ -45,8 +39,8 @@ class LawChange(Base):
     law_id: Mapped[int] = mapped_column(ForeignKey("laws.id"), nullable=False, index=True)
 
     # 동기화 정보
-    sync_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)  # 동기화 실시 일자
-    sync_batch_id: Mapped[Optional[str]] = mapped_column(String(50), index=True)  # 동기화 배치 ID (같은 배치로 묶기)
+    sync_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    sync_batch_id: Mapped[Optional[str]] = mapped_column(String(50), index=True)
 
     # API 응답 상태
     api_status: Mapped[ApiStatus] = mapped_column(
@@ -56,43 +50,19 @@ class LawChange(Base):
     )
     api_message: Mapped[Optional[str]] = mapped_column(String(500))
 
-    # 변경 전 값 (JSON)
+    # 변경 전/후 값 (JSON)
     old_values: Mapped[Optional[dict]] = mapped_column(JSON)
-    # {
-    #   "proclaimed_date": "2024-01-01",
-    #   "enforced_date": "2024-03-01",
-    #   "revision_type": "일부개정",
-    #   "law_id": 123456
-    # }
-
-    # 변경 후 값 (JSON) - API에서 받은 새로운 값
     new_values: Mapped[Optional[dict]] = mapped_column(JSON)
 
     # 부서 정보 (소관부처)
-    dept_name: Mapped[Optional[str]] = mapped_column(String(200), index=True)  # 소관부처명
-    dept_code: Mapped[Optional[int]] = mapped_column(Integer)  # 소관부처코드
-
-    # 처리 상태
-    status: Mapped[ChangeStatus] = mapped_column(
-        SQLEnum(ChangeStatus, values_callable=lambda x: [e.value for e in x]),
-        nullable=False,
-        default=ChangeStatus.PENDING,
-        index=True
-    )
-
-    # 처리 정보
-    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)  # 처리 일시
-    processed_by: Mapped[Optional[str]] = mapped_column(String(100))  # 처리자
-    process_note: Mapped[Optional[str]] = mapped_column(Text)  # 처리 메모
+    dept_name: Mapped[Optional[str]] = mapped_column(String(200), index=True)
+    dept_code: Mapped[Optional[int]] = mapped_column(Integer)
 
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
 
     # Relationships
     law: Mapped["Law"] = relationship("Law", backref="changes")
 
     def __repr__(self) -> str:
-        return f"<LawChange(id={self.id}, law_id={self.law_id}, status={self.status})>"
+        return f"<LawChange(id={self.id}, law_id={self.law_id}, api_status={self.api_status})>"

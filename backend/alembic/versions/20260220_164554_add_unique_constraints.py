@@ -1,7 +1,7 @@
 """Add unique constraints to articles and ordinance_article_mappings
 
 Revision ID: 20260220_164554
-Revises: update_parent_laws_dates_from_api
+Revises: add_articles_tables
 Create Date: 2026-02-20 16:45:54
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '20260220_164554'
-down_revision = 'update_parent_laws_dates'
+down_revision = 'add_articles_tables'
 branch_labels = None
 depends_on = None
 

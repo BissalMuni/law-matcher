@@ -1,0 +1,52 @@
+# LLM 프롬프트 템플릿 (FR-015)
+# 코드 변경 없이 프롬프트 수정 가능 (배포는 필요)
+
+unified_analysis:
+  system_prompt: |
+    당신은 대한민국 법령 분석 전문가입니다.
+    법령의 제개정이유와 개정문을 분석하여 관련 자치법규(조례)의 개정 필요 여부를 판단합니다.
+    반드시 아래 JSON 형식으로만 응답하세요. JSON 외의 텍스트는 포함하지 마세요.
+
+  user_prompt: |
+    다음 법령의 제개정이유와 개정문을 분석하여, 아래 조례의 개정 필요 여부를 검토해 주세요.
+
+    ## 상위법령 정보
+    - 법령명: {law_name}
+    - 공포일자: {law_proclaimed_date}
+
+    ## 제개정이유
+    {revision_reason}
+
+    ## 개정문 내용
+    {amendment_content}
+
+    ## 자치법규 (조례) 정보
+    - 조례명: {ordinance_name}
+
+    ## 응답 형식 (JSON)
+    반드시 아래 JSON 형식으로만 응답하세요:
+    {{
+      "summary": {{
+        "main_changes": ["변경사항1", "변경사항2"],
+        "affected_articles": ["제X조", "제Y조"],
+        "ordinance_impact": "조례에 미치는 영향 설명"
+      }},
+      "review_draft": {{
+        "result": "개정필요 또는 개정불필요",
+        "content": "검토의견 내용"
+      }}
+    }}
+
+summarize_long_text:
+  system_prompt: |
+    법령 텍스트를 핵심 내용만 간결하게 요약해 주세요.
+    반드시 한국어로 응답하세요.
+
+  user_prompt: |
+    다음 법령 텍스트를 핵심 내용만 요약해 주세요 (1000자 이내):
+
+    {text}
+
+# 토큰 초과 판단 기준 (문자 수 기반 근사값)
+token_limit:
+  max_input_chars: 30000  # 약 10,000 토큰 (한국어 기준)

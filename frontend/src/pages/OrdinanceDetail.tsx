@@ -22,12 +22,14 @@ import {
 } from 'antd'
 import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, LinkOutlined, UserOutlined, BankOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ordinanceApi, lawsApi, useDetectionResults, useRevisionReason } from '../services/api'
+import { ordinanceApi, lawsApi, aiApi, useDetectionResults, useRevisionReason } from '../services/api'
 import dayjs from 'dayjs'
 import { useAuth } from '../contexts/AuthContext'
-import TabA_LawCompare from '../components/detection/TabA_LawCompare'
-import TabB_ArticleCompare from '../components/detection/TabB_ArticleCompare'
-import TabC_ReasonCompare from '../components/detection/TabC_ReasonCompare'
+import type { LlmAnalysisResult, AiResultsResponse } from '../types/api'
+import AiAnalysisButton from '../components/ai/AiAnalysisButton'
+import AiSummaryPanel from '../components/ai/AiSummaryPanel'
+import AiDraftModal from '../components/ai/AiDraftModal'
+import DetectionTabs from '../components/detection/DetectionTabs'
 
 const { Title } = Typography
 
@@ -109,6 +111,24 @@ export default function OrdinanceDetail() {
   const { data: reviews } = useQuery({
     queryKey: ['ordinance', id, 'reviews'],
     queryFn: () => ordinanceApi.getReviews(Number(id)),
+    enabled: !!id,
+  })
+
+  // AI 분석 관련 상태
+  const [aiDraftModalOpen, setAiDraftModalOpen] = useState(false)
+  const [selectedAiResult, setSelectedAiResult] = useState<LlmAnalysisResult | null>(null)
+
+  // AI 분석 결과 조회
+  const { data: aiResults } = useQuery<AiResultsResponse>({
+    queryKey: ['ai-results', id],
+    queryFn: () => aiApi.getResults(Number(id)),
+    enabled: !!id,
+  })
+
+  // 근거 조문 매핑 조회 (삭제 경고용)
+  const { data: mappedArticlesData } = useQuery({
+    queryKey: ['ordinance', id, 'mapped-articles'],
+    queryFn: () => ordinanceApi.getMappedArticles(Number(id)),
     enabled: !!id,
   })
 
@@ -255,9 +275,34 @@ export default function OrdinanceDetail() {
     onSuccess: (_, variables) => {
       message.success(variables.approval_status === 'approved' ? '승인되었습니다.' : '반려되었습니다.')
       queryClient.invalidateQueries({ queryKey: ['ordinance', id, 'reviews'] })
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id] })
     },
     onError: () => {
       message.error('처리에 실패했습니다.')
+    },
+  })
+
+  // 검토 시작 mutation (revision_status: 검토대기→검토중)
+  const startReviewMutation = useMutation({
+    mutationFn: () => ordinanceApi.startReview(Number(id)),
+    onSuccess: () => {
+      message.success('검토가 시작되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id] })
+    },
+    onError: (error: any) => {
+      message.error(error?.response?.data?.detail || '검토 시작에 실패했습니다.')
+    },
+  })
+
+  // 개정확정 해제 mutation (revision_status: 개정확정→null)
+  const clearRevisionMutation = useMutation({
+    mutationFn: () => ordinanceApi.clearRevisionStatus(Number(id)),
+    onSuccess: () => {
+      message.success('개정확정이 해제되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id] })
+    },
+    onError: (error: any) => {
+      message.error(error?.response?.data?.detail || '해제에 실패했습니다.')
     },
   })
 
@@ -356,8 +401,6 @@ export default function OrdinanceDetail() {
   const reviewResultColor: Record<string, string> = {
     '개정필요': 'red',
     '개정불필요': 'green',
-    '검토중': 'orange',
-    '보류': 'default',
   }
 
   const parentLawColumns = [
@@ -423,11 +466,26 @@ export default function OrdinanceDetail() {
         <Space size="small">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           <Popconfirm
-            title="삭제 확인"
-            description="이 상위법령 매핑을 삭제하시겠습니까?"
+            title={parentLaws?.length === 1 ? '⚠️ 마지막 상위법령 삭제' : '삭제 확인'}
+            description={(() => {
+              const isLastLaw = parentLaws?.length === 1
+              const affected = (mappedArticlesData?.items || []).filter(
+                (m: any) => m.law_id === record.law_internal_id
+              )
+              const parts: string[] = []
+              if (isLastLaw) {
+                parts.push('이 조례의 마지막 상위법령입니다. 삭제하면 상위법령 연결이 모두 해제되어 개정 검토 대상에서 제외됩니다.')
+              }
+              if (affected.length > 0) {
+                parts.push(`연계된 근거 조문 ${affected.length}건의 매핑도 함께 삭제됩니다.`)
+              }
+              parts.push('계속하시겠습니까?')
+              return parts.join(' ')
+            })()}
             onConfirm={() => deleteMutation.mutate(record.id)}
             okText="삭제"
             cancelText="취소"
+            okButtonProps={{ danger: true }}
           >
             <Button type="text" danger icon={<DeleteOutlined />} />
           </Popconfirm>
@@ -467,11 +525,56 @@ export default function OrdinanceDetail() {
           <Descriptions.Item label="자치법규 코드">{ordinance?.code}</Descriptions.Item>
           <Descriptions.Item label="분류">{ordinance?.category}</Descriptions.Item>
           <Descriptions.Item label="소관부서">{ordinance?.department}</Descriptions.Item>
-          <Descriptions.Item label="상태">{ordinance?.status}</Descriptions.Item>
+          <Descriptions.Item label="상태">
+            <Tag color={ordinance?.status === 'ABOLISHED' ? 'error' : 'success'}>
+              {ordinance?.status === 'ABOLISHED' ? '폐지' : '시행중'}
+            </Tag>
+          </Descriptions.Item>
           <Descriptions.Item label="제정일">{ordinance?.enacted_date}</Descriptions.Item>
           <Descriptions.Item label="시행일">{ordinance?.enforced_date}</Descriptions.Item>
           <Descriptions.Item label="상위법령 없음">
             {ordinance?.no_parent_law ? '확인됨' : '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label="검토 상태">
+            <Space>
+              {ordinance?.revision_status ? (
+                <Tag color={
+                  ordinance.revision_status === '검토대기' ? 'warning' :
+                  ordinance.revision_status === '검토중' ? 'processing' :
+                  ordinance.revision_status === '개정확정' ? 'error' : 'default'
+                }>
+                  {ordinance.revision_status}
+                </Tag>
+              ) : (
+                <Tag color="success">정상</Tag>
+              )}
+              {ordinance?.revision_status === '검토대기' && (
+                <Popconfirm
+                  title="검토 시작"
+                  description="이 조례의 검토를 시작하시겠습니까?"
+                  onConfirm={() => startReviewMutation.mutate()}
+                  okText="시작"
+                  cancelText="취소"
+                >
+                  <Button type="primary" size="small" loading={startReviewMutation.isPending}>
+                    검토 시작
+                  </Button>
+                </Popconfirm>
+              )}
+              {ordinance?.revision_status === '개정확정' && user?.user_type === 'ADMIN' && (
+                <Popconfirm
+                  title="개정확정 해제"
+                  description="조례 개정이 완료되어 빨간불을 해제하시겠습니까?"
+                  onConfirm={() => clearRevisionMutation.mutate()}
+                  okText="해제"
+                  cancelText="취소"
+                >
+                  <Button size="small" loading={clearRevisionMutation.isPending}>
+                    개정확정 해제
+                  </Button>
+                </Popconfirm>
+              )}
+            </Space>
           </Descriptions.Item>
         </Descriptions>
       </Card>
@@ -522,47 +625,97 @@ export default function OrdinanceDetail() {
         />
       </Card>
 
-      <Card title="개정검토" style={{ marginBottom: 16 }}>
-        <Tabs activeKey={activeDetectionTab} onChange={handleDetectionTabChange}>
-          <Tabs.TabPane tab="법령비교" key="law_compare">
-            <TabA_LawCompare
-              ordinanceId={Number(id)}
-              parentLaws={parentLaws || []}
-              enabled={loadedDetectionTabs.law_compare}
-            />
-          </Tabs.TabPane>
-          <Tabs.TabPane tab="조문비교" key="article_compare">
-            {loadedDetectionTabs.article_compare ? (
-              <TabB_ArticleCompare ordinanceId={Number(id)} enabled={loadedDetectionTabs.article_compare} />
-            ) : null}
-          </Tabs.TabPane>
-          <Tabs.TabPane tab="개정이유비교" key="reason_compare" disabled={isRevisionReasonApiError}>
-            {loadedDetectionTabs.reason_compare && !isRevisionReasonApiError ? (
-              <TabC_ReasonCompare
-                ordinanceId={Number(id)}
-                parentLaws={parentLaws || []}
-                enabled={loadedDetectionTabs.reason_compare}
-              />
-            ) : isRevisionReasonApiError ? (
-              <Alert
-                type="error"
-                showIcon
-                message="개정이유비교 탭을 사용할 수 없습니다."
-                description="탭C API 장애로 인해 해당 탭이 비활성화되었습니다. 탭A/B는 계속 사용할 수 있습니다."
-              />
-            ) : null}
-          </Tabs.TabPane>
-        </Tabs>
-      </Card>
+      {/* AI 분석 카드 — 법령별 AI 분석 결과 및 버튼 */}
+      {parentLaws && parentLaws.length > 0 && (
+        <Card title="AI 개정이유분석" style={{ marginBottom: 16 }}>
+          {parentLaws.map((law: ParentLaw) => {
+            const lawResult = aiResults?.results?.find(
+              (r: LlmAnalysisResult) => r.law_id === law.law_internal_id
+            )
+            const hasSuccess = lawResult?.status === 'success'
+            const hasFailed = lawResult?.status === 'failed'
+
+            return (
+              <div key={law.id} style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Typography.Text strong>{law.law_name}</Typography.Text>
+                  <Space>
+                    <AiAnalysisButton
+                      ordinanceId={Number(id)}
+                      lawId={law.law_internal_id}
+                      hasExistingResult={hasSuccess ?? false}
+                      hasFailedResult={hasFailed ?? false}
+                      onSuccess={() => {
+                        queryClient.invalidateQueries({ queryKey: ['ai-results', id] })
+                      }}
+                    />
+                    {hasSuccess && (
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setSelectedAiResult(lawResult ?? null)
+                          setAiDraftModalOpen(true)
+                        }}
+                      >
+                        AI 초안으로 검토의견 작성
+                      </Button>
+                    )}
+                  </Space>
+                </div>
+                <AiSummaryPanel result={lawResult ?? null} />
+              </div>
+            )
+          })}
+        </Card>
+      )}
+
+      {/* AI 초안 기반 검토의견 작성 모달 */}
+      <AiDraftModal
+        open={aiDraftModalOpen}
+        onClose={() => {
+          setAiDraftModalOpen(false)
+          setSelectedAiResult(null)
+        }}
+        aiResult={selectedAiResult}
+        loading={createReviewMutation.isPending}
+        onSubmit={(data) => {
+          createReviewMutation.mutate({
+            reviewer_type: user?.user_type === 'ADMIN' ? 'GENERAL' : 'DEPARTMENT',
+            reviewer_name: user?.full_name || user?.username || '',
+            reviewer_department: (user as any)?.department_name || undefined,
+            review_content: data.review_content,
+            review_result: data.review_result,
+            is_ai_generated: data.is_ai_generated,
+            ai_modified: data.ai_modified,
+            ai_analysis_id: data.ai_analysis_id,
+          } as any)
+          setAiDraftModalOpen(false)
+          setSelectedAiResult(null)
+        }}
+      />
+
+      {/* 개정 판별 탭 */}
+      {parentLaws && parentLaws.length > 0 && (
+        <Card title="개정 검토 판별" style={{ marginBottom: 16 }}>
+          <DetectionTabs
+            ordinanceId={Number(id)}
+            lawMap={Object.fromEntries(
+              parentLaws.map((law: ParentLaw) => [law.law_internal_id, law.law_name])
+            )}
+          />
+        </Card>
+      )}
 
       {/* 검토이력 카드 */}
       <Card
         title="검토결과"
         style={{ marginBottom: 16 }}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAddReview}>
-            검토의견 추가
-          </Button>
+          ordinance?.revision_status === '검토중' ? (
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddReview}>
+              검토의견 추가
+            </Button>
+          ) : null
         }
       >
         {reviews?.items?.length > 0 ? (
@@ -724,15 +877,12 @@ export default function OrdinanceDetail() {
           >
             <Input.TextArea rows={4} placeholder="검토의견을 입력하세요" />
           </Form.Item>
-          <Form.Item name="review_result" label="검토결과">
+          <Form.Item name="review_result" label="검토결과" rules={[{ required: true, message: '검토결과를 선택하세요' }]}>
             <Select
               placeholder="결과 선택"
-              allowClear
               options={[
                 { value: '개정필요', label: '개정필요' },
                 { value: '개정불필요', label: '개정불필요' },
-                { value: '검토중', label: '검토중' },
-                { value: '보류', label: '보류' },
               ]}
             />
           </Form.Item>

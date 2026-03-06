@@ -31,8 +31,8 @@ class LawArticle(BaseModel):
     article_title: Optional[str] = None
     article_content: str
     paragraphs: List[Dict[str, Any]] = Field(default_factory=list)
-    revision_type_detail: Optional[str] = None
-    change_flag: Optional[str] = None
+    revision_type_detail: Optional[str] = None  # 조문제개정유형: 신설/일부개정/전부개정
+    change_flag: Optional[str] = None  # 조문변경여부: Y/N
 
 
 class LawDetail(BaseModel):
@@ -44,8 +44,8 @@ class LawDetail(BaseModel):
     proclaimed_date: Optional[str] = None
     enforced_date: Optional[str] = None
     revision_type: Optional[str] = None
-    revision_reason: Optional[str] = None
-    amendment_content: Optional[str] = None
+    revision_reason: Optional[str] = None  # 제개정이유내용
+    amendment_content: Optional[str] = None  # 개정문내용
     articles: List[LawArticle] = Field(default_factory=list)
 
 
@@ -56,6 +56,32 @@ class MolegClient:
         self.api_key = api_key
         self.base_url = base_url
         self.client = httpx.AsyncClient(timeout=30.0)
+        self.max_retries = 2
+        self.base_delay = 1.0  # 초기 대기시간 1초
+
+    async def _request_with_retry(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """지수 백오프 재시도가 포함된 HTTP 요청"""
+        last_exc = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = await self.client.request(method, url, **kwargs)
+                response.raise_for_status()
+                return response
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                last_exc = e
+                if attempt < self.max_retries:
+                    delay = self.base_delay * (2 ** attempt)
+                    logger.warning("법제처 API 요청 실패 (시도 %d/%d), %s초 후 재시도: %s", attempt + 1, self.max_retries + 1, delay, str(e))
+                    await asyncio.sleep(delay)
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code >= 500 and attempt < self.max_retries:
+                    delay = self.base_delay * (2 ** attempt)
+                    logger.warning("법제처 API 서버 오류 %d (시도 %d/%d), %s초 후 재시도", e.response.status_code, attempt + 1, self.max_retries + 1, delay)
+                    await asyncio.sleep(delay)
+                    last_exc = e
+                else:
+                    raise
+        raise last_exc  # type: ignore
 
     async def get_law_list(
         self,
@@ -75,11 +101,11 @@ class MolegClient:
         if law_type:
             params["lsClscd"] = law_type
 
-        response = await self.client.get(
+        response = await self._request_with_retry(
+            "GET",
             f"{self.base_url}/lawSearch.do",
             params=params,
         )
-        response.raise_for_status()
 
         data = response.json()
         return data.get("LawSearch", {}).get("law", [])
@@ -112,17 +138,25 @@ class MolegClient:
             "type": "JSON",
         }
 
-        response = await self.client.get(
+        response = await self._request_with_retry(
+            "GET",
             f"{self.base_url}/lawService.do",
             params=params,
         )
-        response.raise_for_status()
 
         data = response.json()
         law_data = data.get("법령", {})
         basic_info = law_data.get("기본정보", {})
         law_type_raw = basic_info.get("법종구분", {})
         law_type = law_type_raw.get("content", "") if isinstance(law_type_raw, dict) else law_type_raw
+
+        # 제개정이유/개정문 파싱
+        revision_reason = self._parse_nested_text(
+            law_data.get("제개정이유", {}).get("제개정이유내용")
+        )
+        amendment_content = self._parse_nested_text(
+            law_data.get("개정문", {}).get("개정문내용")
+        )
 
         return LawDetail(
             law_id=self._normalize_text(basic_info.get("법령ID", "")),
@@ -132,12 +166,8 @@ class MolegClient:
             proclaimed_date=self._normalize_text(basic_info.get("공포일자")) or None,
             enforced_date=self._normalize_text(basic_info.get("시행일자")) or None,
             revision_type=self._normalize_text(basic_info.get("제개정구분")) or None,
-            revision_reason=self._extract_nested_text(
-                law_data.get("제개정이유", {}).get("제개정이유내용")
-            ),
-            amendment_content=self._extract_nested_text(
-                law_data.get("개정문", {}).get("개정문내용")
-            ),
+            revision_reason=revision_reason,
+            amendment_content=amendment_content,
             articles=self._parse_articles(law_data.get("조문", {}).get("조문단위", [])),
         )
 
@@ -199,14 +229,30 @@ class MolegClient:
             "type": "JSON",
         }
 
-        response = await self.client.get(
+        response = await self._request_with_retry(
+            "GET",
             f"{self.base_url}/lawHistService.do",
             params=params,
         )
-        response.raise_for_status()
 
         data = response.json()
         return data.get("법령연혁", {}).get("연혁정보", [])
+
+    def _parse_nested_text(self, data: Any) -> Optional[str]:
+        """
+        법제처 API의 list[list[str]] 구조를 텍스트로 변환.
+        예: [["문장1", "문장2"]] → "문장1\n문장2"
+        """
+        if data is None:
+            return None
+        if isinstance(data, str):
+            return data.strip() or None
+        if isinstance(data, list):
+            if len(data) > 0 and isinstance(data[0], list):
+                return "\n".join(str(s) for s in data[0]).strip() or None
+            elif len(data) > 0 and isinstance(data[0], str):
+                return "\n".join(str(s) for s in data).strip() or None
+        return self._normalize_text(data) or None
 
     def _parse_articles(self, articles_data: List[Dict]) -> List[LawArticle]:
         """Parse articles from API response"""
@@ -379,16 +425,19 @@ class MolegClient:
                 "page": page,
             }
 
-            response = await self.client.get(
-                f"{self.base_url}/lawSearch.do",
-                params=params,
-            )
+            try:
+                response = await self._request_with_retry(
+                    "GET",
+                    f"{self.base_url}/lawSearch.do",
+                    params=params,
+                )
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError):
+                logger.warning("연계 조례 조회 실패 (page=%d), 중단합니다", page)
+                break
 
             # HTML 응답 체크 (에러 페이지)
             if response.text.strip().startswith('<!DOCTYPE'):
                 break
-
-            response.raise_for_status()
             data = response.json()
 
             lnk_org_search = data.get("lnkOrgSearch", {})

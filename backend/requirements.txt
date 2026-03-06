@@ -32,3 +32,9 @@ bcrypt==4.1.2
 # Excel
 pandas>=2.0.0
 openpyxl>=3.1.0
+
+# LLM Providers (006-llm-review-assistant)
+anthropic>=0.39.0
+openai>=1.50.0
+google-generativeai>=0.8.0
+pyyaml>=6.0.0

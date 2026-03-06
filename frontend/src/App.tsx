@@ -21,7 +21,10 @@ import LawChangeList from './pages/LawChangeList'
 import ReviewList from './pages/ReviewList'
 import ReviewDetail from './pages/ReviewDetail'
 import Maintenance from './pages/Maintenance'
+import AdminSettings from './pages/AdminSettings'
+import AiAnalytics from './pages/AiAnalytics'
 import DetectionCompare from './pages/DetectionCompare'
+import ChangePassword from './pages/ChangePassword'
 import { maintenanceApi } from './services/api'
 
 function App() {
@@ -81,16 +84,6 @@ function App() {
                 <Route path="ordinances" element={<OrdinanceList />} />
                 <Route path="ordinances/:id" element={<OrdinanceDetail />} />
                 <Route path="revision-needed" element={<RevisionNeededList />} />
-<<<<<<< HEAD
-                <Route path="laws" element={<LawList />} />
-                <Route path="departments" element={<DepartmentList />} />
-                <Route path="departments/:id" element={<DepartmentDetail />} />
-                <Route path="amendments" element={<LawChangeList />} />
-                <Route path="reviews" element={<ReviewList />} />
-                <Route path="reviews/:id" element={<ReviewDetail />} />
-                <Route path="statistics" element={<Statistics />} />
-                <Route path="admin/detection-compare" element={<DetectionCompare />} />
-=======
                 <Route path="dashboard" element={<Dashboard />} />
 
                 {/* ADMIN only routes */}
@@ -103,8 +96,11 @@ function App() {
                   <Route path="articles/:id" element={<ArticleDetail />} />
                   <Route path="reviews" element={<ReviewList />} />
                   <Route path="reviews/:id" element={<ReviewDetail />} />
+                  <Route path="admin/settings" element={<AdminSettings />} />
+                  <Route path="admin/ai-analytics" element={<AiAnalytics />} />
+                  <Route path="admin/detection-compare" element={<DetectionCompare />} />
+                  <Route path="change-password" element={<ChangePassword />} />
                 </Route>
->>>>>>> origin/main
               </Route>
             </Route>
 

@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     CELERY_BEAT_SYNC_HOUR: int = 9
     CELERY_BEAT_SYNC_MINUTE: int = 0
 
+    # LLM API Keys (006-llm-review-assistant)
+    ANTHROPIC_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+    GOOGLE_AI_API_KEY: str = ""
+    LLM_TIMEOUT: int = 30  # LLM API 호출 타임아웃 (초)
+    LLM_MAX_RETRIES: int = 2  # LLM API 최대 재시도 횟수
+
     class Config:
         env_file = str(PROJECT_ROOT / ".env")  # 프로젝트 루트의 .env (절대 경로)
         case_sensitive = True

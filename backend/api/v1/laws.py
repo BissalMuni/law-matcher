@@ -215,7 +215,7 @@ async def get_law(
     result = await db.execute(select(Law).where(Law.id == law_id))
     law = result.scalar_one_or_none()
     if not law:
-        raise HTTPException(status_code=404, detail="Law not found")
+        raise HTTPException(status_code=404, detail="법령을 찾을 수 없습니다.")
     return law
 
 
@@ -312,6 +312,50 @@ async def get_law_ordinances(
     ]
 
 
+@router.get("/{law_id}/revision-reason")
+async def get_law_revision_reason(
+    law_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """법령 제개정이유 조회 (DB 캐시 → API 폴백)"""
+    from backend.models.law_revision_reason import LawRevisionReason
+    from backend.schemas.revision import RevisionReasonOut
+
+    law = await db.get(Law, law_id)
+    if not law:
+        raise HTTPException(status_code=404, detail="법령을 찾을 수 없습니다.")
+
+    # DB 캐시 확인
+    result = await db.execute(
+        select(LawRevisionReason).where(LawRevisionReason.law_id == law_id)
+    )
+    cached = result.scalar_one_or_none()
+
+    if cached:
+        return cached
+
+    # API에서 조회 후 캐시
+    from backend.external.moleg_client import MolegClient
+    from backend.services.amendment_parser import parse_amendment_articles
+    from datetime import datetime
+
+    client = MolegClient()
+    detail = await client.get_law_detail(str(law.law_serial_no))
+
+    reason = LawRevisionReason(
+        law_id=law_id,
+        law_mst=str(law.law_serial_no),
+        revision_reason=detail.revision_reason,
+        amendment_content=detail.amendment_content,
+        extracted_articles=parse_amendment_articles(detail.amendment_content or ""),
+        fetched_at=datetime.utcnow(),
+    )
+    db.add(reason)
+    await db.commit()
+    await db.refresh(reason)
+    return reason
+
+
 @router.post("/sync", response_model=LawSyncResponse)
 async def sync_laws(
     request: LawSyncRequest,
@@ -336,7 +380,7 @@ async def sync_laws(
             message=f"동기화 완료: 법령 {result['synced_laws']}건, 매핑 {result['synced_mappings']}건",
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"법령 동기화 중 오류가 발생했습니다: {str(e)}")
 
 
 @router.post("/check-amendments", response_model=List[AmendmentCheckResponse])
@@ -371,7 +415,7 @@ async def check_amendments(
 
         return response
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"개정 감지 중 오류가 발생했습니다: {str(e)}")
 
 
 @router.post("/check-amendments/create-targets")
@@ -400,7 +444,7 @@ async def create_amendment_targets(
             "message": f"개정 대상 {len(amendments)}건 생성 완료",
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"개정 대상 생성 중 오류가 발생했습니다: {str(e)}")
 
 
 @router.post("/search", response_model=LawSearchResponse)
@@ -628,7 +672,7 @@ async def get_law_articles(
     )
     law = law_result.scalar_one_or_none()
     if not law:
-        raise HTTPException(status_code=404, detail="Law not found")
+        raise HTTPException(status_code=404, detail="법령을 찾을 수 없습니다.")
 
     # Total count
     count_result = await db.execute(

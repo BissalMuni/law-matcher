@@ -6,7 +6,7 @@ Celery tasks for Law Matcher
    └─ 법령(Law) 메타데이터 동기화 (LawSyncService.update_all_law_info)
    └─ 각 법령별 조문 동기화 (ArticleService.sync_articles_for_law)
         └─ 변경된 조문 감지 → ArticleChange 기록
-        └─ 연계 조례에 needs_revision=True 플래그 설정
+        └─ 연계 조례에 revision_status="검토대기" 자동 플래깅
 """
 import asyncio
 import logging

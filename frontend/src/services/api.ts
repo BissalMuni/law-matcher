@@ -68,6 +68,14 @@ export const authApi = {
     const response = await api.get('/auth/me')
     return response.data
   },
+
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const { data } = await api.put('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    })
+    return data
+  },
 }
 
 // Ordinance API
@@ -83,6 +91,7 @@ export const ordinanceApi = {
     revision_type?: string  // 제개정구분 필터
     exclude_other_law_revision?: boolean  // 타법개정 제외
     review_result_filter?: string  // 검토결과 필터
+    status?: string  // "ACTIVE" | "ABOLISHED"
   }) => {
     const { data } = await api.get('/ordinances', { params })
     return data
@@ -171,7 +180,7 @@ export const ordinanceApi = {
     reviewer_name?: string
     reviewer_department?: string
     review_content: string
-    review_result?: string  // 개정필요/개정불필요/검토중/보류
+    review_result?: string  // 개정필요/개정불필요
   }) => {
     const { data } = await api.post(`/ordinances/${ordinanceId}/reviews`, reviewData)
     return data
@@ -204,7 +213,7 @@ export const ordinanceApi = {
     page?: number
     size?: number
     approval_status?: string   // pending | approved | rejected
-    review_result?: string     // 개정필요 | 개정불필요 | 검토중 | 보류
+    review_result?: string     // 개정필요 | 개정불필요
     reviewer_type?: string     // DEPARTMENT | GENERAL
   }) => {
     const { data } = await api.get('/ordinances/reviews-all', { params })
@@ -246,15 +255,26 @@ export const ordinanceApi = {
     return data
   },
 
-  getDetectionResults: async (ordinanceId: number): Promise<DetectionResultsResponse> => {
+  // 검토 시작: revision_status "검토대기"→"검토중"
+  startReview: async (ordinanceId: number) => {
+    const { data } = await api.post(`/ordinances/${ordinanceId}/start-review`)
+    return data
+  },
+
+  // 개정확정 해제: revision_status "개정확정"→null (관리자 전용)
+  clearRevisionStatus: async (ordinanceId: number) => {
+    const { data } = await api.post(`/ordinances/${ordinanceId}/clear-revision`)
+    return data
+  },
+
+  // 개정 판별 결과 조회
+  getDetectionResults: async (ordinanceId: number) => {
     const { data } = await api.get(`/ordinances/${ordinanceId}/detection-results`)
     return data
   },
 
-  runDetection: async (
-    ordinanceId: number,
-    methods?: DetectionMethodType[]
-  ): Promise<DetectionResultsResponse> => {
+  // 개정 판별 실행 (3가지 방식)
+  runDetection: async (ordinanceId: number, methods?: DetectionMethodType[]) => {
     const payload = methods && methods.length > 0 ? { methods } : {}
     const { data } = await api.post(`/ordinances/${ordinanceId}/detect`, payload)
     return data
@@ -475,6 +495,42 @@ export const maintenanceApi = {
   },
 }
 
+// AI Analysis API (006-llm-review-assistant)
+export const aiApi = {
+  analyze: async (ordinanceId: number, lawId: number) => {
+    const { data } = await api.post(`/ordinances/${ordinanceId}/ai-analyze`, { law_id: lawId })
+    return data
+  },
+
+  getResults: async (ordinanceId: number, lawId?: number) => {
+    const params = lawId ? { law_id: lawId } : {}
+    const { data } = await api.get(`/ordinances/${ordinanceId}/ai-results`, { params })
+    return data
+  },
+}
+
+// Admin API (LLM 프로바이더 관리)
+export const adminApi = {
+  getLlmProviders: async () => {
+    const { data } = await api.get('/admin/llm-providers')
+    return data
+  },
+
+  updateLlmProvider: async (id: number, updateData: {
+    model_name?: string
+    is_active?: boolean
+    rate_limit_per_minute?: number
+  }) => {
+    const { data } = await api.patch(`/admin/llm-providers/${id}`, updateData)
+    return data
+  },
+
+  getAiAnalytics: async (params?: { start_date?: string; end_date?: string }) => {
+    const { data } = await api.get('/admin/ai-analytics', { params })
+    return data
+  },
+}
+
 export default api
 
 
@@ -656,12 +712,11 @@ export const ordinanceManagementApi = {
   },
 }
 
-// Law Changes API (법령 변경 이력 관리)
+// Law Changes API (법령 변경 감지 로그)
 export const lawChangesApi = {
   getList: async (params: {
     page?: number
     size?: number
-    status?: string  // pending, reviewing, approved, rejected
     api_status?: string  // success, no_response, not_found
     dept_name?: string
     sync_batch_id?: string
@@ -674,13 +729,11 @@ export const lawChangesApi = {
     return data
   },
 
-  // 제개정구분 목록 조회 (드롭다운용)
   getRevisionTypes: async () => {
     const { data } = await api.get('/law-changes/revision-types')
     return data
   },
 
-  // 동기화 날짜 목록 조회 (드롭다운용)
   getSyncDates: async () => {
     const { data } = await api.get('/law-changes/sync-dates')
     return data
@@ -706,41 +759,17 @@ export const lawChangesApi = {
     return data
   },
 
-  approve: async (id: number, request?: { process_note?: string; processed_by?: string }) => {
-    const { data } = await api.post(`/law-changes/${id}/approve`, request || {})
-    return data
-  },
-
-  reject: async (id: number, request: { process_note: string; processed_by?: string }) => {
-    const { data } = await api.post(`/law-changes/${id}/reject`, request)
-    return data
-  },
-
-  bulkApprove: async (ids: number[], request?: { process_note?: string; processed_by?: string }) => {
-    const { data } = await api.post('/law-changes/bulk-approve', { ids, ...request })
-    return data
-  },
-
-  bulkReject: async (ids: number[], request: { process_note: string; processed_by?: string }) => {
-    const { data } = await api.post('/law-changes/bulk-reject', { ids, ...request })
-    return data
-  },
-
-  // 특정 법령의 변경 연혁 조회
   getHistory: async (lawId: number, params?: { page?: number; size?: number }) => {
     const { data } = await api.get(`/law-changes/history/${lawId}`, { params })
     return data
   },
 
-  // 법령별 변경 연혁 요약 조회
   getHistorySummary: async () => {
     const { data } = await api.get('/law-changes/history-summary')
     return data
   },
 
-  // 엑셀 다운로드
   exportExcel: async (params: {
-    status?: string
     api_status?: string
     dept_name?: string
     sync_date?: string
@@ -750,7 +779,6 @@ export const lawChangesApi = {
       params,
       responseType: 'blob',
     })
-    // 파일 다운로드 처리
     const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')
     link.href = url

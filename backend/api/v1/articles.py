@@ -438,7 +438,7 @@ async def sync_articles(
             # 개별 법령 동기화 실패 시 로깅만 하고 계속 진행
             import logging
 
-            logging.error(f"Failed to sync articles for law {law.id}: {e}")
+            logging.error(f"법령 {law.id} 조문 동기화 실패: {e}")
 
     return ArticleSyncResponse(
         success=True,
@@ -785,67 +785,84 @@ async def get_auto_mapping_recommendations(
     - **min_score**: 최소 유사도 점수 (0.0 ~ 1.0, 기본값: 0.5)
     - **limit**: 최대 추천 개수 (기본값: 20)
     """
+    import logging
     from backend.models.ordinance import Ordinance
     from backend.models.law import Law
     from sqlalchemy import select
 
+    logger = logging.getLogger(__name__)
+
     # 간단한 키워드 기반 추천 (추후 고도화 가능)
     recommendations = []
+    has_error = False
+    error_message = None
 
-    # 조문 조회
-    article_query = select(Article).join(Law)
-    if law_id:
-        article_query = article_query.where(Article.law_id == law_id)
+    try:
+        # 조문 조회
+        article_query = select(Article).join(Law)
+        if law_id:
+            article_query = article_query.where(Article.law_id == law_id)
 
-    # 조례 조회
-    ordinance_query = select(Ordinance)
-    if ordinance_id:
-        ordinance_query = ordinance_query.where(Ordinance.id == ordinance_id)
+        # 조례 조회
+        ordinance_query = select(Ordinance)
+        if ordinance_id:
+            ordinance_query = ordinance_query.where(Ordinance.id == ordinance_id)
 
-    articles = await db.execute(article_query.limit(100))
-    articles = articles.scalars().all()
+        articles = await db.execute(article_query.limit(100))
+        articles = articles.scalars().all()
 
-    ordinances = await db.execute(ordinance_query.limit(100))
-    ordinances = ordinances.scalars().all()
+        ordinances = await db.execute(ordinance_query.limit(100))
+        ordinances = ordinances.scalars().all()
 
-    # 간단한 키워드 매칭 (TODO: 더 정교한 알고리즘으로 개선)
-    for article in articles:
-        article_keywords = set(article.article_content[:200].split())
+        # 간단한 키워드 매칭
+        for article in articles:
+            try:
+                article_keywords = set(article.article_content[:200].split())
 
-        for ordinance in ordinances:
-            # 이미 매핑된 경우 제외
-            from sqlalchemy import and_
-            existing = await db.scalar(
-                select(OrdinanceArticleMapping).where(
-                    and_(
-                        OrdinanceArticleMapping.article_id == article.id,
-                        OrdinanceArticleMapping.ordinance_id == ordinance.id
+                for ordinance in ordinances:
+                    # 이미 매핑된 경우 제외
+                    from sqlalchemy import and_
+                    existing = await db.scalar(
+                        select(OrdinanceArticleMapping).where(
+                            and_(
+                                OrdinanceArticleMapping.article_id == article.id,
+                                OrdinanceArticleMapping.ordinance_id == ordinance.id
+                            )
+                        )
                     )
-                )
-            )
-            if existing:
+                    if existing:
+                        continue
+
+                    ordinance_keywords = set(ordinance.content[:200].split() if ordinance.content else [])
+
+                    # 유사도 계산 (Jaccard Similarity)
+                    if len(article_keywords) > 0 and len(ordinance_keywords) > 0:
+                        intersection = article_keywords & ordinance_keywords
+                        union = article_keywords | ordinance_keywords
+                        similarity = len(intersection) / len(union) if len(union) > 0 else 0.0
+
+                        if similarity >= min_score:
+                            recommendations.append(AutoMappingRecommendation(
+                                article_id=article.id,
+                                article_no=article.article_no,
+                                article_title=article.article_title,
+                                article_content=article.article_content[:200] + "...",
+                                ordinance_id=ordinance.id,
+                                ordinance_name=ordinance.name,
+                                category=ordinance.category,
+                                similarity_score=round(similarity, 3),
+                                reason=f"키워드 일치율: {len(intersection)}개 공통 키워드",
+                            ))
+            except Exception as e:
+                # 개별 조문 계산 실패 시 건너뛰기
+                logger.warning(f"자동 추천 계산 중 오류 (조문 {article.id}): {e}")
+                has_error = True
                 continue
 
-            ordinance_keywords = set(ordinance.content[:200].split() if ordinance.content else [])
-
-            # 유사도 계산 (Jaccard Similarity)
-            if len(article_keywords) > 0 and len(ordinance_keywords) > 0:
-                intersection = article_keywords & ordinance_keywords
-                union = article_keywords | ordinance_keywords
-                similarity = len(intersection) / len(union) if len(union) > 0 else 0.0
-
-                if similarity >= min_score:
-                    recommendations.append(AutoMappingRecommendation(
-                        article_id=article.id,
-                        article_no=article.article_no,
-                        article_title=article.article_title,
-                        article_content=article.article_content[:200] + "...",
-                        ordinance_id=ordinance.id,
-                        ordinance_name=ordinance.name,
-                        category=ordinance.category,  # category -> category
-                        similarity_score=round(similarity, 3),
-                        reason=f"키워드 일치율: {len(intersection)}개 공통 키워드",
-                    ))
+    except Exception as e:
+        logger.error(f"자동 추천 계산 중 오류가 발생했습니다: {e}")
+        has_error = True
+        error_message = "자동 추천 계산 중 오류가 발생했습니다. 수동으로 매핑해 주세요."
 
     # 유사도 순으로 정렬
     recommendations.sort(key=lambda x: x.similarity_score, reverse=True)

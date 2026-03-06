@@ -1,17 +1,26 @@
 """
 Admin API endpoints for management tasks
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import text
+import os
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import Optional
 
 import redis.asyncio as aioredis
 
-from backend.api.deps import get_db, verify_admin_password
+from backend.api.deps import get_db, get_current_user, verify_admin_password
 from backend.core.config import settings
+from backend.models.user import User
+from backend.models.llm_provider import LlmProvider
+from backend.schemas.llm import (
+    LlmProviderResponse,
+    LlmProviderListResponse,
+    LlmProviderUpdate,
+    AiAnalyticsResponse,
+)
 
 router = APIRouter()
 
@@ -272,3 +281,106 @@ async def seed_departments(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         await db.rollback()
         return {"error": str(e)}
+
+
+# ==================== LLM 프로바이더 관리 (006-llm-review-assistant) ====================
+
+
+@router.get("/llm-providers", response_model=LlmProviderListResponse)
+async def get_llm_providers(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """LLM 프로바이더 목록 조회 (관리자 전용). API 키 존재 여부만 마스킹 표시."""
+    result = await db.execute(
+        select(LlmProvider).order_by(LlmProvider.id)
+    )
+    providers = list(result.scalars().all())
+
+    items = []
+    for p in providers:
+        api_key_configured = bool(os.getenv(p.api_key_env_name, ""))
+        items.append(LlmProviderResponse(
+            id=p.id,
+            provider_name=p.provider_name,
+            display_name=p.display_name,
+            model_name=p.model_name,
+            api_key_env_name=p.api_key_env_name,
+            api_key_configured=api_key_configured,
+            is_active=p.is_active,
+            rate_limit_per_minute=p.rate_limit_per_minute,
+            updated_at=p.updated_at,
+        ))
+
+    return LlmProviderListResponse(providers=items)
+
+
+@router.patch("/llm-providers/{provider_id}", response_model=LlmProviderResponse)
+async def update_llm_provider(
+    provider_id: int,
+    body: LlmProviderUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """LLM 프로바이더 설정 변경 (모델명/활성 상태/Rate Limit)"""
+    result = await db.execute(
+        select(LlmProvider).where(LlmProvider.id == provider_id)
+    )
+    provider = result.scalar_one_or_none()
+    if not provider:
+        raise HTTPException(status_code=404, detail="프로바이더를 찾을 수 없습니다")
+
+    # 활성화 시 API 키 존재 검증
+    if body.is_active is True:
+        api_key = os.getenv(provider.api_key_env_name, "")
+        if not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail=f"API 키가 설정되지 않았습니다 ({provider.api_key_env_name}). 환경변수를 먼저 설정하세요.",
+            )
+        # 기존 활성 프로바이더 비활성화 (동시 1개만 active)
+        await db.execute(
+            text("UPDATE llm_providers SET is_active = FALSE WHERE is_active = TRUE AND id != :id"),
+            {"id": provider_id},
+        )
+
+    if body.model_name is not None:
+        provider.model_name = body.model_name
+    if body.is_active is not None:
+        provider.is_active = body.is_active
+    if body.rate_limit_per_minute is not None:
+        provider.rate_limit_per_minute = body.rate_limit_per_minute
+
+    provider.updated_at = datetime.utcnow()
+    await db.commit()
+
+    api_key_configured = bool(os.getenv(provider.api_key_env_name, ""))
+    return LlmProviderResponse(
+        id=provider.id,
+        provider_name=provider.provider_name,
+        display_name=provider.display_name,
+        model_name=provider.model_name,
+        api_key_env_name=provider.api_key_env_name,
+        api_key_configured=api_key_configured,
+        is_active=provider.is_active,
+        rate_limit_per_minute=provider.rate_limit_per_minute,
+        updated_at=provider.updated_at,
+    )
+
+
+@router.get("/ai-analytics")
+async def get_ai_analytics(
+    start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """AI 분석 이력/통계 (관리자 전용)"""
+    from backend.services.llm_analysis_service import LlmAnalysisService
+
+    now = datetime.utcnow()
+    start = datetime.strptime(start_date, "%Y-%m-%d") if start_date else now - timedelta(days=30)
+    end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1) if end_date else now
+
+    service = LlmAnalysisService(db)
+    return await service.get_ai_analytics(start, end)

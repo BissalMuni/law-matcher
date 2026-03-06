@@ -3,7 +3,7 @@ Ordinance Review models - 자치법규 검토이력
 """
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, Text, DateTime, ForeignKey, Integer
+from sqlalchemy import String, Text, DateTime, ForeignKey, Integer, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.database import Base
@@ -11,6 +11,7 @@ from backend.core.database import Base
 if TYPE_CHECKING:
     from backend.models.ordinance import Ordinance
     from backend.models.user import User
+    from backend.models.llm_analysis_result import LlmAnalysisResult
 
 
 class OrdinanceReview(Base):
@@ -29,7 +30,7 @@ class OrdinanceReview(Base):
 
     # 검토 내용
     review_content: Mapped[str] = mapped_column(Text, nullable=False)  # 검토의견
-    review_result: Mapped[Optional[str]] = mapped_column(String(50))  # 검토결과: 개정필요/개정불필요/검토중/보류
+    review_result: Mapped[Optional[str]] = mapped_column(String(50))  # 검토결과: 개정필요/개정불필요
 
     # 작성자 및 수정자 추적 (User FK)
     created_by_id: Mapped[Optional[int]] = mapped_column(
@@ -49,6 +50,13 @@ class OrdinanceReview(Base):
     approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     approval_note: Mapped[Optional[str]] = mapped_column(Text)  # 승인/반려 사유
 
+    # AI 메타데이터 (006-llm-review-assistant)
+    is_ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)  # AI 초안 기반 작성 여부
+    ai_modified: Mapped[bool] = mapped_column(Boolean, default=False)  # AI 초안 수정 여부
+    ai_analysis_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("llm_analysis_results.id", ondelete="SET NULL")
+    )  # 참조한 AI 분석 결과
+
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -57,6 +65,7 @@ class OrdinanceReview(Base):
 
     # Relationships
     ordinance: Mapped["Ordinance"] = relationship(back_populates="ordinance_reviews")
+    ai_analysis: Mapped[Optional["LlmAnalysisResult"]] = relationship(foreign_keys=[ai_analysis_id])
     created_by: Mapped[Optional["User"]] = relationship(
         back_populates="created_reviews", foreign_keys=[created_by_id]
     )

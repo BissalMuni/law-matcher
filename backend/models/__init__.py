@@ -9,11 +9,13 @@ from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.models.law_snapshot import LawSnapshot
 from backend.models.amendment import LawAmendment
 from backend.models.review import AmendmentReview
-from backend.models.law_change import LawChange, ChangeStatus, ApiStatus
+from backend.models.law_change import LawChange, ApiStatus
 from backend.models.ordinance_review import OrdinanceReview
 from backend.models.article import Article
 from backend.models.ordinance_article_mapping import OrdinanceArticleMapping
 from backend.models.article_change import ArticleChange
+from backend.models.llm_provider import LlmProvider
+from backend.models.llm_analysis_result import LlmAnalysisResult
 from backend.models.law_revision_reason import LawRevisionReason
 from backend.models.revision_detection_result import RevisionDetectionResult
 
@@ -27,12 +29,13 @@ __all__ = [
     "LawAmendment",
     "AmendmentReview",
     "LawChange",
-    "ChangeStatus",
     "ApiStatus",
     "OrdinanceReview",
     "Article",
     "OrdinanceArticleMapping",
     "ArticleChange",
+    "LlmProvider",
+    "LlmAnalysisResult",
     "LawRevisionReason",
     "RevisionDetectionResult",
 ]

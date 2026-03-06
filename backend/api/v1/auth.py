@@ -2,6 +2,7 @@
 Authentication API endpoints
 Database-based user authentication
 """
+import logging
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -9,9 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.core.security import create_access_token, decode_access_token, verify_password
-from backend.api.deps import get_db
+from backend.core.security import create_access_token, decode_access_token, verify_password, get_password_hash
+from backend.api.deps import get_db, get_current_user
 from backend.models.user import User
+from backend.schemas.auth import PasswordChangeRequest
+
+logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 
@@ -46,25 +50,38 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     - username: 사용자명 또는 부서명
     - password: 비밀번호
     """
-    # Find user by username
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.department))
-        .where(User.username == data.username)
-    )
-    user = result.scalar_one_or_none()
+    if not data.username or not data.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="아이디와 비밀번호를 모두 입력하세요.",
+        )
+
+    try:
+        result = await db.execute(
+            select(User)
+            .options(selectinload(User.department))
+            .where(User.username == data.username)
+        )
+        user = result.scalar_one_or_none()
+    except Exception:
+        logger.exception("로그인 처리 중 DB 오류")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="서버 오류가 발생했습니다. 잠시 후 다시 시도하세요.",
+        )
 
     if not user or not verify_password(data.password, user.hashed_password):
+        logger.info("로그인 실패: username=%s", data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="아이디 또는 비밀번호가 올바르지 않습니다",
+            detail="아이디 또는 비밀번호가 올바르지 않습니다.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="비활성화된 계정입니다",
+            detail="비활성화된 계정입니다. 관리자에게 문의하세요.",
         )
 
     # Determine user type for frontend
@@ -122,3 +139,21 @@ async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depe
         full_name="관리자" if payload.get("user_type") == "ADMIN" else payload.get("username", ""),
         department_name=payload.get("department_name"),
     )
+
+
+@router.put("/change-password")
+async def change_password(
+    data: PasswordChangeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """비밀번호 변경 (인증 필요)"""
+    if not verify_password(data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="현재 비밀번호가 일치하지 않습니다.",
+        )
+
+    current_user.hashed_password = get_password_hash(data.new_password)
+    await db.commit()
+    return {"message": "비밀번호가 변경되었습니다."}

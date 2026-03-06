@@ -42,9 +42,14 @@ class OrdinanceService:
         revision_type: Optional[str] = None,
         exclude_other_law_revision: bool = False,
         review_result_filter: Optional[str] = None,
+        status_filter: Optional[str] = None,
     ) -> dict:
         """Get paginated list of ordinances"""
-        query = select(Ordinance).where(Ordinance.status == "ACTIVE")
+        query = select(Ordinance)
+        if status_filter:
+            query = query.where(Ordinance.status == status_filter)
+        else:
+            query = query.where(Ordinance.status == "ACTIVE")
 
         if category:
             query = query.where(Ordinance.category == category)
@@ -300,7 +305,7 @@ class OrdinanceService:
         )
         ordinance = result.scalar_one_or_none()
         if not ordinance:
-            raise NotFoundError(f"Ordinance {ordinance_id} not found")
+            raise NotFoundError(f"조례를 찾을 수 없습니다 (ID: {ordinance_id})")
         return ordinance
 
     async def get_parent_laws(self, ordinance_id: int) -> List[dict]:
@@ -422,6 +427,11 @@ class OrdinanceService:
         )
         if existing.scalar_one_or_none():
             raise ValueError(f"'{law_name}' 법령은 이미 매핑되어 있습니다.")
+
+        # no_parent_law 플래그 자동 해제 (FR-006a)
+        ordinance = await self.get_by_id(ordinance_id)
+        if ordinance.no_parent_law:
+            ordinance.no_parent_law = False
 
         # 매핑 생성
         mapping = OrdinanceLawMapping(
@@ -562,6 +572,22 @@ class OrdinanceService:
                 self.db.add(new_ordinance)
                 created += 1
 
+        # 폐지 감지: API 응답에 없는 ACTIVE 조례를 ABOLISHED 처리 (소프트 삭제)
+        abolished = 0
+        api_codes = {ordin.get('자치법규ID') for ordin in all_ordinances if ordin.get('자치법규ID')}
+        if api_codes:
+            active_result = await self.db.execute(
+                select(Ordinance).where(
+                    and_(
+                        Ordinance.status == "ACTIVE",
+                        Ordinance.code.notin_(api_codes),
+                    )
+                )
+            )
+            for ord_to_abolish in active_result.scalars().all():
+                ord_to_abolish.status = "ABOLISHED"
+                abolished += 1
+
         await self.db.commit()
 
         # 상위법령 동기화도 함께 수행
@@ -572,8 +598,9 @@ class OrdinanceService:
             "total_fetched": len(all_ordinances),
             "created": created,
             "updated": updated,
+            "abolished": abolished,
             "parent_laws": parent_law_result,
-            "message": f"법제처 API 동기화 완료: {created}건 생성, {updated}건 갱신, 상위법령 {parent_law_result.get('created', 0)}건 매핑",
+            "message": f"법제처 API 동기화 완료: {created}건 생성, {updated}건 갱신, {abolished}건 폐지, 상위법령 {parent_law_result.get('created', 0)}건 매핑",
         }
 
     async def sync_parent_laws(self, org: str = "6110000", sborg: str = "3220000") -> dict:
@@ -697,7 +724,7 @@ class OrdinanceService:
         )
         law = law_result.scalar_one_or_none()
         if not law:
-            raise NotFoundError(f"Law {law_id} not found")
+            raise NotFoundError(f"법령을 찾을 수 없습니다 (ID: {law_id})")
 
         # 중복 체크
         existing = await self.db.execute(
@@ -710,6 +737,11 @@ class OrdinanceService:
         )
         if existing.scalar_one_or_none():
             raise ValueError(f"이미 매핑된 상위법령입니다: {law.law_name}")
+
+        # no_parent_law 플래그 자동 해제 (FR-006a)
+        ordinance = await self.get_by_id(ordinance_id)
+        if ordinance.no_parent_law:
+            ordinance.no_parent_law = False
 
         mapping = OrdinanceLawMapping(
             ordinance_id=ordinance_id,
@@ -740,7 +772,7 @@ class OrdinanceService:
         )
         mapping = result.scalar_one_or_none()
         if not mapping:
-            raise NotFoundError(f"Mapping {mapping_id} not found")
+            raise NotFoundError(f"매핑을 찾을 수 없습니다 (ID: {mapping_id})")
 
         # 기존 매핑된 Law 레코드를 직접 수정 (새 레코드 생성 방지)
         if law_name is not None or law_type is not None:
@@ -785,7 +817,7 @@ class OrdinanceService:
         )
         mapping = result.scalar_one_or_none()
         if not mapping:
-            raise NotFoundError(f"Mapping {mapping_id} not found")
+            raise NotFoundError(f"매핑을 찾을 수 없습니다 (ID: {mapping_id})")
 
         await self.db.delete(mapping)
         await self.db.commit()
@@ -1046,7 +1078,7 @@ class OrdinanceService:
                     await asyncio.sleep(0.3)
 
                 except Exception as e:
-                    print(f"Failed to update ordinance '{ordinance.name}': {e}")
+                    print(f"조례 '{ordinance.name}' 업데이트 실패: {e}")
                     failed += 1
 
         await self.db.commit()
@@ -1056,6 +1088,59 @@ class OrdinanceService:
             "updated": updated,
             "failed": failed,
         }
+
+    # ========== revision_status 전환 ==========
+
+    async def start_review(self, ordinance_id: int, user: "User") -> Ordinance:
+        """
+        검토 시작: revision_status "검토대기"→"검토중" 전환
+        - FR-010: 명시적 버튼 클릭으로만 전환
+        - FR-017: 부서 담당자 본인 소관 조례만 접근 가능
+        """
+        from backend.models.user import User
+
+        ordinance = await self.get_by_id(ordinance_id)
+
+        # 부서 담당자 권한 체크: 본인 부서 소관 조례만
+        if user.user_type == "DEPARTMENT":
+            if not user.department_id or user.department_id != ordinance.department_id:
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=403,
+                    detail="본인 부서 소관 조례만 검토할 수 있습니다.",
+                )
+
+        # 상태 전환 유효성 검증
+        if ordinance.revision_status != "검토대기":
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail=f"'검토대기' 상태에서만 검토를 시작할 수 있습니다. (현재: {ordinance.revision_status or 'null'})",
+            )
+
+        ordinance.revision_status = "검토중"
+        await self.db.commit()
+        await self.db.refresh(ordinance)
+        return ordinance
+
+    async def clear_revision_status(self, ordinance_id: int) -> Ordinance:
+        """
+        관리자가 개정확정 상태를 수동 해제 (FR-015)
+        revision_status "개정확정"→null
+        """
+        ordinance = await self.get_by_id(ordinance_id)
+
+        if ordinance.revision_status != "개정확정":
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail=f"'개정확정' 상태에서만 해제할 수 있습니다. (현재: {ordinance.revision_status or 'null'})",
+            )
+
+        ordinance.revision_status = None
+        await self.db.commit()
+        await self.db.refresh(ordinance)
+        return ordinance
 
     # ========== 검토이력 CRUD ==========
 
@@ -1093,6 +1178,10 @@ class OrdinanceService:
             review_content=data.review_content,
             review_result=data.review_result,
             created_by_id=user_id,
+            # AI 메타데이터 (006-llm-review-assistant)
+            is_ai_generated=getattr(data, 'is_ai_generated', False),
+            ai_modified=getattr(data, 'ai_modified', False),
+            ai_analysis_id=getattr(data, 'ai_analysis_id', None),
         )
 
         self.db.add(review)
@@ -1122,7 +1211,7 @@ class OrdinanceService:
         )
         review = result.scalar_one_or_none()
         if not review:
-            raise NotFoundError(f"Review {review_id} not found")
+            raise NotFoundError(f"검토이력을 찾을 수 없습니다 (ID: {review_id})")
 
         if data.reviewer_name is not None:
             review.reviewer_name = data.reviewer_name
@@ -1157,18 +1246,35 @@ class OrdinanceService:
         user_id: int,
         approval_note: Optional[str] = None,
     ) -> OrdinanceReview:
-        """검토의견 승인/반려 (관리자 전용)"""
+        """
+        검토의견 승인/반려 (관리자 전용)
+        승인 후 조례 revision_status 자동 처리:
+        - 개정필요 + 승인 → "개정확정" (FR-012)
+        - 개정불필요 + 승인 → null (FR-013)
+        - 반려 → "검토대기" (FR-014)
+        """
         result = await self.db.execute(
             select(OrdinanceReview).where(OrdinanceReview.id == review_id)
         )
         review = result.scalar_one_or_none()
         if not review:
-            raise NotFoundError(f"Review {review_id} not found")
+            raise NotFoundError(f"검토이력을 찾을 수 없습니다 (ID: {review_id})")
 
         review.approval_status = approval_status
         review.approved_by_id = user_id
         review.approved_at = datetime.utcnow()
         review.approval_note = approval_note
+
+        # 조례 revision_status 자동 처리
+        ordinance = await self.db.get(Ordinance, review.ordinance_id)
+        if ordinance:
+            if approval_status == "approved":
+                if review.review_result == "개정필요":
+                    ordinance.revision_status = "개정확정"
+                elif review.review_result == "개정불필요":
+                    ordinance.revision_status = None
+            elif approval_status == "rejected":
+                ordinance.revision_status = "검토대기"
 
         await self.db.commit()
 
@@ -1191,7 +1297,7 @@ class OrdinanceService:
         )
         review = result.scalar_one_or_none()
         if not review:
-            raise NotFoundError(f"Review {review_id} not found")
+            raise NotFoundError(f"검토이력을 찾을 수 없습니다 (ID: {review_id})")
 
         await self.db.delete(review)
         await self.db.commit()

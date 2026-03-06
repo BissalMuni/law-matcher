@@ -41,6 +41,10 @@ class Article(Base):
     # 변경 감지용
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
+    # 조문 제개정 메타데이터
+    revision_type_detail: Mapped[Optional[str]] = mapped_column(String(50))  # 조문제개정유형: 신설/일부개정/전부개정
+    change_flag: Mapped[Optional[str]] = mapped_column(String(5))  # 조문변경여부: Y/N
+
     # 법제처 API 원본 정보
     mst_seq: Mapped[Optional[int]] = mapped_column(Integer)
     jo_seq: Mapped[Optional[int]] = mapped_column(Integer)

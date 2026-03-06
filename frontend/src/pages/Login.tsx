@@ -39,14 +39,32 @@ const Login = () => {
     }
   }
 
+  const handleLoginError = (error: unknown) => {
+    const err = error as any
+    const status = err?.response?.status
+    const detail = err?.response?.data?.detail
+
+    if (status === 401) {
+      message.error(detail || '아이디 또는 비밀번호가 올바르지 않습니다.')
+    } else if (status === 403) {
+      message.error(detail || '비활성화된 계정입니다. 관리자에게 문의하세요.')
+    } else if (status === 400) {
+      message.error(detail || '입력값을 확인해주세요.')
+    } else if (!err?.response) {
+      message.error('서버에 연결할 수 없습니다. 네트워크를 확인하세요.')
+    } else {
+      message.error('로그인 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.')
+    }
+  }
+
   const onFinishAdmin = async (values: { password: string }) => {
     setLoading(true)
     try {
       await login('admin', values.password)
       message.success('관리자 로그인 성공!')
       navigate('/ordinances')
-    } catch {
-      message.error('비밀번호가 올바르지 않습니다.')
+    } catch (error) {
+      handleLoginError(error)
     } finally {
       setLoading(false)
     }
@@ -62,8 +80,8 @@ const Login = () => {
       await login('user', values.password, deptName)
       message.success('로그인 성공!')
       navigate('/ordinances')
-    } catch {
-      message.error('비밀번호가 올바르지 않습니다.')
+    } catch (error) {
+      handleLoginError(error)
     } finally {
       setLoading(false)
     }

@@ -43,8 +43,6 @@ interface ReviewItem {
 const REVIEW_RESULT_COLOR: Record<string, string> = {
   '개정필요': 'red',
   '개정불필요': 'green',
-  '검토중': 'orange',
-  '보류': 'default',
 }
 
 const APPROVAL_COLOR: Record<string, string> = {
@@ -75,7 +73,8 @@ export default function ReviewList() {
     open: boolean
     reviewId: number | null
     action: 'approved' | 'rejected' | null
-  }>({ open: false, reviewId: null, action: null })
+    reviewResult: string | null
+  }>({ open: false, reviewId: null, action: null, reviewResult: null })
   const [approveForm] = Form.useForm()
 
   const { data, isLoading } = useQuery({
@@ -105,7 +104,7 @@ export default function ReviewList() {
   })
 
   const handleApproveClick = (review: ReviewItem, action: 'approved' | 'rejected') => {
-    setApproveModal({ open: true, reviewId: review.id, action })
+    setApproveModal({ open: true, reviewId: review.id, action, reviewResult: review.review_result || null })
   }
 
   const handleApproveSubmit = async () => {
@@ -255,8 +254,6 @@ export default function ReviewList() {
           options={[
             { value: '개정필요', label: '개정필요' },
             { value: '개정불필요', label: '개정불필요' },
-            { value: '검토중', label: '검토중' },
-            { value: '보류', label: '보류' },
           ]}
         />
         <Select
@@ -293,7 +290,7 @@ export default function ReviewList() {
         open={approveModal.open}
         onOk={handleApproveSubmit}
         onCancel={() => {
-          setApproveModal({ open: false, reviewId: null, action: null })
+          setApproveModal({ open: false, reviewId: null, action: null, reviewResult: null })
           approveForm.resetFields()
         }}
         okText={approveModal.action === 'approved' ? '승인' : '반려'}
@@ -302,6 +299,18 @@ export default function ReviewList() {
           loading: approveMutation.isPending,
         }}
       >
+        {/* 승인/반려 결과 미리보기 */}
+        <div style={{ marginBottom: 16, padding: 12, background: '#f6f8fa', borderRadius: 6, fontSize: 13 }}>
+          {approveModal.action === 'approved' && approveModal.reviewResult === '개정필요' && (
+            <span>승인 시 해당 조례는 <Tag color="error">개정확정</Tag> 상태로 전환됩니다.</span>
+          )}
+          {approveModal.action === 'approved' && approveModal.reviewResult === '개정불필요' && (
+            <span>승인 시 해당 조례는 <Tag color="success">정상</Tag> 상태로 전환됩니다. (빨간불 해제)</span>
+          )}
+          {approveModal.action === 'rejected' && (
+            <span>반려 시 해당 조례는 <Tag color="warning">검토대기</Tag> 상태로 되돌아갑니다.</span>
+          )}
+        </div>
         <Form form={approveForm} layout="vertical">
           <Form.Item
             name="approval_note"

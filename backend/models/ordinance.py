@@ -32,7 +32,14 @@ class Ordinance(Base):
     revision_date: Mapped[Optional[date]] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), default="ACTIVE")
     no_parent_law: Mapped[bool] = mapped_column(default=False)  # 상위법령 없음 확인 여부
-    needs_revision: Mapped[Optional[bool]] = mapped_column(default=None)  # 조문 변경 감지 시 자동 설정
+    revision_status: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True, index=True
+    )  # 검토 상태: null/검토대기/검토중/개정확정
+
+    @property
+    def has_revision_flag(self) -> bool:
+        """빨간불 표시 여부 (revision_status가 null이 아니면 빨간불)"""
+        return self.revision_status is not None
 
     # 법제처 API 추가 필드
     serial_no: Mapped[Optional[str]] = mapped_column(String(50))  # 자치법규일련번호

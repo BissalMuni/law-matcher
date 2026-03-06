@@ -3,7 +3,7 @@ API v1 Router - Aggregates all endpoint routers
 """
 from fastapi import APIRouter
 
-from backend.api.v1 import ordinances, sync, amendments, reviews, dashboard, departments, laws, law_changes, auth, admin, articles
+from backend.api.v1 import ordinances, sync, amendments, reviews, dashboard, departments, laws, law_changes, auth, admin, articles, llm_analysis
 
 api_router = APIRouter()
 
@@ -71,4 +71,10 @@ api_router.include_router(
     admin.router,
     prefix="/admin",
     tags=["admin"]
+)
+
+api_router.include_router(
+    llm_analysis.router,
+    prefix="/ordinances",
+    tags=["ai-analysis"]
 )

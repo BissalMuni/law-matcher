@@ -350,6 +350,7 @@ class ArticleService:
             "updated": len(result["updated"]),
             "deleted": len(result["deleted"]),
             "changes_detected": len(result["updated"]),
+            "affected_mappings": result.get("affected_mappings", []),
         }
 
     async def detect_article_changes(
@@ -415,6 +416,9 @@ class ArticleService:
                         change_flag=api_data["change_flag"],
                     )
                 )
+                # 제개정 메타 저장
+                new_article.revision_type_detail = api_data.get("revision_type_detail")
+                new_article.change_flag = api_data.get("change_flag")
                 result["created"].append(new_article)
 
                 # 변경 이력 생성 (신규)
@@ -442,6 +446,8 @@ class ArticleService:
                     db_article.article_title = api_data["title"]
                     db_article.paragraphs = {"paragraphs": api_data["paragraphs"]}
                     db_article.content_hash = api_data["hash"]
+                    db_article.revision_type_detail = api_data.get("revision_type_detail")
+                    db_article.change_flag = api_data.get("change_flag")
                     db_article.last_synced_at = datetime.utcnow()
                     db_article.updated_at = datetime.utcnow()
 
@@ -458,13 +464,25 @@ class ArticleService:
                         change_date=proclaimed_date or datetime.utcnow().date(),
                     )
 
-                    # 연계된 조례의 needs_revision 업데이트
+                    # 연계된 조례의 revision_status 자동 플래깅
                     await self.notify_affected_ordinances(db_article.id)
+
+                else:
+                    # 내용 변경 없어도 제개정 메타는 갱신
+                    db_article.revision_type_detail = api_data.get("revision_type_detail")
+                    db_article.change_flag = api_data.get("change_flag")
 
         # 5. 삭제된 조문 감지
         for article_no, db_article in db_article_map.items():
             if article_no not in api_article_map:
                 result["deleted"].append(db_article)
+
+                # 삭제 전 영향받는 매핑 정보 수집
+                affected = await self.get_affected_mappings(db_article.id)
+                if affected:
+                    result.setdefault("affected_mappings", []).extend(affected)
+                    # 연계된 조례 revision_status 자동 플래깅
+                    await self.notify_affected_ordinances(db_article.id)
 
                 # 변경 이력 생성 (삭제)
                 await self.create_article_change(
@@ -531,9 +549,45 @@ class ArticleService:
 
         return change
 
+    async def get_affected_mappings(self, article_id: int) -> List[Dict[str, Any]]:
+        """
+        조문 삭제 시 영향받는 매핑 정보 반환
+
+        Args:
+            article_id: 삭제 대상 조문 ID
+
+        Returns:
+            영향받는 매핑 목록 [{ordinance_id, ordinance_name, article_no, ...}]
+        """
+        query = (
+            select(
+                OrdinanceArticleMapping.id.label("mapping_id"),
+                OrdinanceArticleMapping.ordinance_id,
+                Ordinance.name.label("ordinance_name"),
+                Article.article_no,
+                Article.article_title,
+            )
+            .join(Ordinance, OrdinanceArticleMapping.ordinance_id == Ordinance.id)
+            .join(Article, OrdinanceArticleMapping.article_id == Article.id)
+            .where(OrdinanceArticleMapping.article_id == article_id)
+        )
+        result = await self.db.execute(query)
+        rows = result.all()
+
+        return [
+            {
+                "mapping_id": row.mapping_id,
+                "ordinance_id": row.ordinance_id,
+                "ordinance_name": row.ordinance_name,
+                "article_no": row.article_no,
+                "article_title": row.article_title,
+            }
+            for row in rows
+        ]
+
     async def notify_affected_ordinances(self, article_id: int):
         """
-        변경된 조문과 연계된 조례들의 needs_revision 플래그 업데이트
+        변경된 조문과 연계된 조례들의 revision_status 자동 플래깅
 
         Args:
             article_id: 변경된 조문 ID
@@ -548,9 +602,10 @@ class ArticleService:
         result = await self.db.execute(query)
         ordinances = result.scalars().all()
 
-        # 2. needs_revision 업데이트
+        # 2. revision_status가 null인 조례만 "검토대기"로 플래깅
         for ordinance in ordinances:
-            ordinance.needs_revision = True
+            if ordinance.revision_status is None:
+                ordinance.revision_status = "검토대기"
 
         # Commit은 호출자에서 처리
 

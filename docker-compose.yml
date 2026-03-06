@@ -20,6 +20,11 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY:-}
+      - LLM_TIMEOUT=${LLM_TIMEOUT:-30}
+      - LLM_MAX_RETRIES=${LLM_MAX_RETRIES:-2}
     depends_on:
       db:
         condition: service_healthy
@@ -51,6 +56,11 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - USER_PASSWORD=${USER_PASSWORD:-user123}
       - MOLEG_API_KEY=${MOLEG_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY:-}
+      - LLM_TIMEOUT=${LLM_TIMEOUT:-30}
+      - LLM_MAX_RETRIES=${LLM_MAX_RETRIES:-2}
     depends_on:
       db:
         condition: service_healthy
@@ -104,6 +114,9 @@ services:
       - VITE_USER_PASSWORD=${USER_PASSWORD:-user123}
     depends_on:
       - backend
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
     command: npm run dev -- --host
     restart: unless-stopped
     networks:

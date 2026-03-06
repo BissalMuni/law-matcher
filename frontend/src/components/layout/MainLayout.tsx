@@ -10,13 +10,12 @@ import {
   UserOutlined,
   LogoutOutlined,
   DownOutlined,
-<<<<<<< HEAD
-  WarningOutlined,
-  ApartmentOutlined,
-=======
   SyncOutlined,
   AuditOutlined,
->>>>>>> origin/main
+  SettingOutlined,
+  ExperimentOutlined,
+  DiffOutlined,
+  LockOutlined,
 } from '@ant-design/icons'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -24,6 +23,16 @@ const { Header, Sider, Content } = Layout
 
 // Menu items for admin users (6 tabs)
 const adminMenuItems = [
+   {
+    key: '/amendments',
+    icon: <SyncOutlined />,
+    label: '변경감지',
+  },
+  {
+    key: '/revision-needed',
+    icon: <AuditOutlined />,
+    label: '개정검토',
+  },
   {
     key: '/ordinances',
     icon: <FileTextOutlined />,
@@ -34,16 +43,7 @@ const adminMenuItems = [
     icon: <BookOutlined />,
     label: '법령관리',
   },
-  {
-    key: '/amendments',
-    icon: <SyncOutlined />,
-    label: '변경감지',
-  },
-  {
-    key: '/revision-needed',
-    icon: <AuditOutlined />,
-    label: '개정검토',
-  },
+ 
   {
     key: '/departments',
     icon: <TeamOutlined />,
@@ -55,8 +55,18 @@ const adminMenuItems = [
     label: '현황',
   },
   {
+    key: '/admin/settings',
+    icon: <SettingOutlined />,
+    label: 'LLM 설정',
+  },
+  {
+    key: '/admin/ai-analytics',
+    icon: <ExperimentOutlined />,
+    label: 'AI 이력',
+  },
+  {
     key: '/admin/detection-compare',
-    icon: <ApartmentOutlined />,
+    icon: <DiffOutlined />,
     label: '탭 비교',
   },
 ]
@@ -100,10 +110,10 @@ export default function MainLayout() {
 
   const userDropdownItems: MenuProps['items'] = [
     {
-      key: 'profile',
-      icon: <UserOutlined />,
-      label: '프로필',
-      disabled: true,
+      key: 'change-password',
+      icon: <LockOutlined />,
+      label: '비밀번호 변경',
+      onClick: () => navigate('/change-password'),
     },
     {
       type: 'divider',

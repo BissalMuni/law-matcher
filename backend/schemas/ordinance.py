@@ -34,9 +34,10 @@ class OrdinanceResponse(OrdinanceBase):
     updated_at: datetime
     parent_law_count: Optional[int] = None  # 상위법령 연결 개수
     no_parent_law: bool = False  # 상위법령 없음 확인 여부
-    needs_revision: Optional[int] = None  # 개정여부 (1: 법령이 더 최신, 0: 조례가 더 최신)
+    revision_status: Optional[str] = None  # 검토 상태: null/검토대기/검토중/개정확정
+    needs_revision: Optional[int] = None  # 개정여부 (1: 법령이 더 최신, 0: 조례가 더 최신) — 계산 필드
     law_revision_types: Optional[List[str]] = None  # 상위법령 제개정구분 목록
-    latest_review_result: Optional[str] = None  # 최신 검토결과 (개정필요/개정불필요/검토중/보류)
+    latest_review_result: Optional[str] = None  # 최신 검토결과 (개정필요/개정불필요)
 
     class Config:
         from_attributes = True
@@ -286,7 +287,7 @@ class OrdinanceInfoUpdateResponse(BaseModel):
 # ==================== LawChange 스키마 ====================
 
 class LawChangeResponse(BaseModel):
-    """법령 변경 이력 응답"""
+    """법령 변경 감지 로그 응답"""
     id: int
     law_id: int
     law_name: str  # law 테이블에서 조인
@@ -299,12 +300,7 @@ class LawChangeResponse(BaseModel):
     new_values: Optional[dict] = None
     dept_name: Optional[str] = None
     dept_code: Optional[int] = None
-    status: str  # pending, reviewing, approved, rejected
-    processed_at: Optional[datetime] = None
-    processed_by: Optional[str] = None
-    process_note: Optional[str] = None
     created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -318,39 +314,10 @@ class LawChangeListResponse(BaseModel):
     items: List[LawChangeResponse]
 
 
-class LawChangeApproveRequest(BaseModel):
-    """법령 변경 승인 요청"""
-    process_note: Optional[str] = None  # 처리 메모
-    processed_by: Optional[str] = None  # 처리자
-
-
-class LawChangeRejectRequest(BaseModel):
-    """법령 변경 반려 요청"""
-    process_note: str  # 반려 사유 (필수)
-    processed_by: Optional[str] = None  # 처리자
-
-
-class LawChangeBulkApproveRequest(BaseModel):
-    """법령 변경 일괄 승인 요청"""
-    ids: List[int]  # 승인할 변경 ID 목록
-    process_note: Optional[str] = None
-    processed_by: Optional[str] = None
-
-
-class LawChangeBulkRejectRequest(BaseModel):
-    """법령 변경 일괄 반려 요청"""
-    ids: List[int]  # 반려할 변경 ID 목록
-    process_note: str  # 반려 사유 (필수)
-    processed_by: Optional[str] = None
-
-
 class LawChangeStatsResponse(BaseModel):
     """법령 변경 통계 응답"""
     total: int
-    pending: int
-    reviewing: int
-    approved: int
-    rejected: int
+    by_api_status: dict  # {"success": n, "no_response": n, "not_found": n}
     by_dept: List[dict]  # 부서별 통계
 
 
@@ -362,8 +329,6 @@ class LawChangeSyncStatsResponse(BaseModel):
     success: int
     no_response: int
     not_found: int
-    pending: int
-    approved: int
 
 
 # ==================== OrdinanceReview 스키마 ====================
@@ -374,12 +339,15 @@ class OrdinanceReviewBase(BaseModel):
     reviewer_name: Optional[str] = None
     reviewer_department: Optional[str] = None
     review_content: str
-    review_result: Optional[str] = None  # 개정필요/개정불필요/검토중/보류
+    review_result: Optional[str] = None  # 개정필요/개정불필요
 
 
 class OrdinanceReviewCreate(OrdinanceReviewBase):
     """자치법규 검토이력 생성"""
-    pass
+    # AI 메타데이터 (006-llm-review-assistant)
+    is_ai_generated: bool = False
+    ai_modified: bool = False
+    ai_analysis_id: Optional[int] = None
 
 
 class OrdinanceReviewUpdate(BaseModel):
@@ -400,6 +368,10 @@ class OrdinanceReviewResponse(OrdinanceReviewBase):
     approved_by: Optional[UserBriefResponse] = None
     approved_at: Optional[datetime] = None
     approval_note: Optional[str] = None
+    # AI 메타데이터 (006-llm-review-assistant)
+    is_ai_generated: bool = False
+    ai_modified: bool = False
+    ai_analysis_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

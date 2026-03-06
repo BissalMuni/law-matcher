@@ -54,6 +54,8 @@ class ArticleResponse(ArticleBase):
     change_count: Optional[int] = None  # 변경 이력 개수
     last_changed_date: Optional[date] = None  # 최근 변경일
     has_recent_change: Optional[bool] = None  # 30일 이내 변경 여부
+    revision_type_detail: Optional[str] = None  # 조문제개정유형
+    change_flag: Optional[str] = None  # 조문변경여부 (Y/N)
     last_synced_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

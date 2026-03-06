@@ -1,3 +1,5 @@
+export type OrdinanceStatusType = 'ACTIVE' | 'ABOLISHED' | 'EXCLUDED'
+
 export interface RevisionNeededItem {
   ordinance_id: number
   ordinance_name: string
@@ -7,7 +9,7 @@ export interface RevisionNeededItem {
   law_type: string
   law_proclaimed_date: string | null
   days_diff: number
-  revision_status: 'NEEDS_REVISION' | 'UNDER_REVIEW' | 'COMPLETED'
+  revision_status: '검토대기' | '검토중' | '개정확정' | null
   department: string | null
 }
 
@@ -28,14 +30,56 @@ export interface DashboardSummary {
   revision_completed_count: number
 }
 
-export type DetectionMethodType =
-  | 'proclaimed_date'
-  | 'article_change'
-  | 'revision_reason'
+// === 006-llm-review-assistant ===
+
+export interface LlmAnalysisResult {
+  id: number
+  ordinance_id: number
+  law_id: number
+  law_name?: string
+  law_proclaimed_date: string | null
+  status: 'pending' | 'success' | 'failed'
+  summary_text: string | null
+  review_draft_text: string | null
+  review_draft_result: string | null  // '개정필요' | '개정불필요'
+  provider_name: string
+  model_name: string
+  token_usage: { input_tokens: number; output_tokens: number } | null
+  error_message: string | null
+  created_at: string
+}
+
+export interface AiAnalyzeResponse extends LlmAnalysisResult {}
+
+export interface AiResultsResponse {
+  ordinance_id: number
+  results: LlmAnalysisResult[]
+}
+
+export interface LlmProvider {
+  id: number
+  provider_name: string
+  display_name: string
+  model_name: string
+  api_key_env_name: string
+  api_key_configured: boolean
+  is_active: boolean
+  rate_limit_per_minute: number
+  updated_at: string | null
+}
+
+export interface LlmProviderListResponse {
+  providers: LlmProvider[]
+}
+
+// === 005-revision-detection-tabs ===
+
+export type DetectionMethodType = 'A_PROCLAIMED_DATE' | 'B_ARTICLE_CHANGE' | 'C_REVISION_REASON'
 
 export interface RevisionReasonResponse {
+  id: number
   law_id: number
-  law_mst: string
+  law_mst: string | null
   revision_reason: string | null
   amendment_content: string | null
   extracted_articles: string[]
@@ -43,25 +87,36 @@ export interface RevisionReasonResponse {
 }
 
 export interface DetectionResult {
-  method: DetectionMethodType
+  id: number
+  ordinance_id: number
+  law_id: number
+  detection_method: DetectionMethodType
   needs_revision: boolean
-  detail: Record<string, unknown>
+  detail: Record<string, any>
   detected_at: string
 }
 
 export interface DetectionResultsResponse {
   ordinance_id: number
-  ordinance_name: string
   results: DetectionResult[]
-  notification?: {
-    message: string
-    changed_methods: string[]
-    created_at: string
-  } | null
 }
 
 export interface DetectionSummaryItem {
-  method: DetectionMethodType
-  needs_revision: boolean
-  label: string
+  law_id: number
+  law_name: string
+  method_a: DetectionResult | null
+  method_b: DetectionResult | null
+  method_c: DetectionResult | null
+}
+
+export interface AiAnalyticsData {
+  period: { start: string; end: string }
+  total_analyses: number
+  success_count: number
+  failed_count: number
+  draft_adoption_rate: number
+  draft_modified_rate: number
+  draft_unused_rate: number
+  average_token_usage: { input_tokens: number; output_tokens: number } | null
+  by_provider: Record<string, { count: number; model: string }>
 }

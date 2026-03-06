@@ -12,6 +12,7 @@ from backend.core.database import Base
 if TYPE_CHECKING:
     from backend.models.ordinance_law_mapping import OrdinanceLawMapping
     from backend.models.article import Article
+    from backend.models.law_revision_reason import LawRevisionReason
 
 
 class Law(Base):
@@ -68,6 +69,9 @@ class Law(Base):
     )
     articles: Mapped[List["Article"]] = relationship(
         back_populates="law", cascade="all, delete-orphan"
+    )
+    revision_reason: Mapped[Optional["LawRevisionReason"]] = relationship(
+        back_populates="law", uselist=False, cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

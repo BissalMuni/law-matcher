@@ -54,7 +54,8 @@ async def get_ordinances(
     needs_revision_filter: Optional[str] = None,  # "needs_revision" | "no_revision" | None
     revision_type: Optional[str] = None,  # 제개정구분 필터
     exclude_other_law_revision: bool = False,  # 타법개정 제외 여부
-    review_result_filter: Optional[str] = None,  # 검토결과 필터: "개정필요" | "개정불필요" | "검토중" | "보류" | "미검토"
+    review_result_filter: Optional[str] = None,  # 검토결과 필터: "개정필요" | "개정불필요" | "미검토"
+    status: Optional[str] = None,  # 조례 상태 필터: "ACTIVE" | "ABOLISHED" | None(기본=ACTIVE만)
     db: AsyncSession = Depends(get_db),
 ):
     """Get list of ordinances"""
@@ -70,6 +71,7 @@ async def get_ordinances(
         revision_type=revision_type,
         exclude_other_law_revision=exclude_other_law_revision,
         review_result_filter=review_result_filter,
+        status_filter=status,
     )
 
 
@@ -424,6 +426,83 @@ async def get_all_ordinance_reviews(
         items.append(item)
 
     return AllOrdinanceReviewsResponse(total=total, page=page, size=size, items=items)
+
+
+@router.post("/{ordinance_id}/start-review")
+async def start_ordinance_review(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    검토 시작 (FR-010)
+    revision_status "검토대기"→"검토중" 전환
+    부서 담당자 본인 소관 조례만 접근 가능 (FR-017)
+    """
+    service = OrdinanceService(db)
+    ordinance = await service.start_review(ordinance_id, current_user)
+    return {
+        "success": True,
+        "revision_status": ordinance.revision_status,
+        "message": "검토가 시작되었습니다.",
+    }
+
+
+@router.post("/{ordinance_id}/clear-revision")
+async def clear_ordinance_revision(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    개정확정 해제 (FR-015, 관리자 전용)
+    revision_status "개정확정"→null
+    """
+    if current_user.user_type not in ("ADMIN", "GENERAL"):
+        raise HTTPException(status_code=403, detail="관리자만 개정확정을 해제할 수 있습니다.")
+
+    service = OrdinanceService(db)
+    ordinance = await service.clear_revision_status(ordinance_id)
+    return {
+        "success": True,
+        "revision_status": ordinance.revision_status,
+        "message": "개정확정이 해제되었습니다.",
+    }
+
+
+@router.get("/{ordinance_id}/detection-results")
+async def get_detection_results(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """개정 검토 대상 판별 결과 조회"""
+    from backend.services.revision_detection_service import RevisionDetectionService
+    from backend.schemas.revision import DetectionResultOut
+
+    service = RevisionDetectionService(db)
+    results = await service.get_cached_results(ordinance_id)
+    return {
+        "ordinance_id": ordinance_id,
+        "results": [DetectionResultOut.model_validate(r) for r in results],
+    }
+
+
+@router.post("/{ordinance_id}/detect")
+async def run_detection(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """개정 검토 대상 판별 실행 (3가지 방식)"""
+    from backend.services.revision_detection_service import RevisionDetectionService
+    from backend.schemas.revision import DetectRequest, DetectionResultOut
+
+    service = RevisionDetectionService(db)
+    results = await service.detect_all(ordinance_id)
+    return {
+        "ordinance_id": ordinance_id,
+        "results": [DetectionResultOut.model_validate(r) for r in results],
+    }
 
 
 @router.get("/{ordinance_id}", response_model=OrdinanceResponse)

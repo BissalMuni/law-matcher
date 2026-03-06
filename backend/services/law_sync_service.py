@@ -17,7 +17,7 @@ from backend.models.law import Law
 from backend.models.ordinance import Ordinance
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.models.amendment import LawAmendment
-from backend.models.law_change import LawChange, ChangeStatus, ApiStatus
+from backend.models.law_change import LawChange, ApiStatus
 from backend.core.config import settings
 from backend.external.moleg_client import MolegClient
 from backend.services.article_service import ArticleService
@@ -234,7 +234,7 @@ class LawSyncService:
                 else:
                     failed += 1
             except Exception as e:
-                print(f"Failed to sync law '{law_name}': {e}")
+                print(f"법령 '{law_name}' 동기화 실패: {e}")
                 failed += 1
             await asyncio.sleep(0.3)
 
@@ -399,7 +399,7 @@ class LawSyncService:
                     synced_laws += 1
                 await asyncio.sleep(0.2)
             except Exception as e:
-                errors.append(f"Failed to sync law {info['law_name']}: {e}")
+                errors.append(f"법령 '{info['law_name']}' 동기화 실패: {e}")
 
         await self.db.commit()
 
@@ -457,7 +457,7 @@ class LawSyncService:
                     synced_mappings += 1
 
             except Exception as e:
-                errors.append(f"Failed to create mapping: {e}")
+                errors.append(f"매핑 생성 실패: {e}")
 
         await self.db.commit()
 
@@ -677,7 +677,7 @@ class LawSyncService:
                     await asyncio.sleep(0.3)
 
                 except Exception as e:
-                    print(f"Failed to update law '{law.law_name}': {e}")
+                    print(f"법령 '{law.law_name}' 업데이트 실패: {e}")
                     failed += 1
         finally:
             await moleg_client.close()
@@ -799,7 +799,6 @@ class LawSyncService:
                                 new_values=None,
                                 dept_name=law.dept_name,
                                 dept_code=law.dept_code,
-                                status=ChangeStatus.PENDING,
                             )
                             self.db.add(law_change)
 
@@ -961,8 +960,7 @@ class LawSyncService:
                                     },
                                     dept_name=exact_match.dept_name,
                                     dept_code=exact_match.dept_code,
-                                    status=ChangeStatus.PENDING,
-                                )
+                                    )
                                 self.db.add(law_change)
 
                             yield {
@@ -1027,7 +1025,6 @@ class LawSyncService:
                                 new_values=None,
                                 dept_name=law.dept_name,
                                 dept_code=law.dept_code,
-                                status=ChangeStatus.PENDING,
                             )
                             self.db.add(law_change)
 
@@ -1065,6 +1062,13 @@ class LawSyncService:
 
             await self.db.commit()
 
+            # 자동 플래깅: 변경 감지된 법령에 연계된 조례의 revision_status를 "검토대기"로 설정
+            flagged_count = 0
+            if changed_laws:
+                changed_law_ids = [cl["id"] for cl in changed_laws if cl.get("api_status") == "success"]
+                if changed_law_ids:
+                    flagged_count = await self._auto_flag_ordinances(changed_law_ids)
+
             yield {
                 "type": "complete",
                 "total": total_laws,
@@ -1072,6 +1076,7 @@ class LawSyncService:
                 "failed": failed,
                 "changed_count": len(changed_laws),
                 "changed_laws": changed_laws,
+                "flagged_ordinances": flagged_count,
                 "article_synced_laws": article_sync_stats["synced_laws"],
                 "article_synced_articles": article_sync_stats["synced_articles"],
                 "article_created": article_sync_stats["created"],
@@ -1081,8 +1086,51 @@ class LawSyncService:
                 "article_sync_failed": article_sync_stats["failed"],
                 "message": (
                     f"동기화 완료: 총 {total_laws}건 중 {updated}건 성공, {failed}건 실패, "
-                    f"{len(changed_laws)}건 변경, 조문 변경 {article_sync_stats['changes_detected']}건"
+                    f"{len(changed_laws)}건 변경, 조문 변경 {article_sync_stats['changes_detected']}건, "
+                    f"검토대상 조례 {flagged_count}건 플래깅"
                 ),
             }
         finally:
             await moleg_client.close()
+
+    async def _auto_flag_ordinances(self, changed_law_ids: List[int]) -> int:
+        """
+        변경 감지된 법령에 연계된 조례를 자동으로 "검토대기" 상태로 설정
+
+        - revision_status가 null인 조례만 "검토대기"로 변경
+        - 이미 "검토중"/"개정확정" 상태인 조례는 덮어쓰지 않음
+        """
+        # 변경된 법령에 연계된 조례 ID 조회
+        mapping_stmt = (
+            select(OrdinanceLawMapping.ordinance_id)
+            .where(OrdinanceLawMapping.law_id.in_(changed_law_ids))
+            .distinct()
+        )
+        mapping_result = await self.db.execute(mapping_stmt)
+        ordinance_ids = [row[0] for row in mapping_result.all()]
+
+        if not ordinance_ids:
+            return 0
+
+        # revision_status가 null인 조례만 "검토대기"로 업데이트
+        ordinance_stmt = (
+            select(Ordinance)
+            .where(
+                and_(
+                    Ordinance.id.in_(ordinance_ids),
+                    Ordinance.revision_status.is_(None),
+                )
+            )
+        )
+        result = await self.db.execute(ordinance_stmt)
+        ordinances = result.scalars().all()
+
+        flagged = 0
+        for ordinance in ordinances:
+            ordinance.revision_status = "검토대기"
+            flagged += 1
+
+        if flagged > 0:
+            await self.db.commit()
+
+        return flagged
