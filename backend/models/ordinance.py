@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from backend.models.department import Department
     from backend.models.ordinance_law_mapping import OrdinanceLawMapping
     from backend.models.ordinance_review import OrdinanceReview
-    from backend.models.ordinance_article_mapping import OrdinanceArticleMapping
 
 
 class Ordinance(Base):
@@ -65,8 +64,5 @@ class Ordinance(Base):
         back_populates="ordinance"
     )
     ordinance_reviews: Mapped[List["OrdinanceReview"]] = relationship(
-        back_populates="ordinance", cascade="all, delete-orphan"
-    )
-    article_mappings: Mapped[List["OrdinanceArticleMapping"]] = relationship(
         back_populates="ordinance", cascade="all, delete-orphan"
     )

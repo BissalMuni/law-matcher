@@ -1,15 +1,9 @@
 import { Alert, Button, Empty, Select, Space, Spin, Tag, Typography } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
-import { useDetectionResults, useRevisionReason, useRunDetection } from '../../services/api'
+import { useRevisionReason, useRunDetection } from '../../services/api'
+import type { DetectionResult } from '../../types/api'
 
 const { Paragraph, Text, Title } = Typography
-
-interface ParentLawItem {
-  id: number
-  law_internal_id: number
-  law_name: string
-  revision_type?: string
-}
 
 interface MatchDetail {
   extracted_articles?: string[]
@@ -29,14 +23,22 @@ interface ReasonDetail {
 
 interface TabCReasonCompareProps {
   ordinanceId: number
-  parentLaws: ParentLawItem[]
-  enabled?: boolean
+  results: DetectionResult[]
+  lawMap: Record<number, string>  // law_id → law_name
 }
 
-export default function TabC_ReasonCompare({ ordinanceId, parentLaws, enabled = true }: TabCReasonCompareProps) {
-  const { data, isLoading, isError, error } = useDetectionResults(ordinanceId, enabled)
+export default function TabC_ReasonCompare({ ordinanceId, results, lawMap }: TabCReasonCompareProps) {
   const runDetection = useRunDetection(ordinanceId)
   const [selectedLawId, setSelectedLawId] = useState<number | undefined>(undefined)
+
+  // lawMap에서 Select 옵션 목록 생성
+  const parentLaws = useMemo(() =>
+    Object.entries(lawMap).map(([id, name]) => ({
+      law_internal_id: Number(id),
+      law_name: name,
+    })),
+    [lawMap]
+  )
 
   useEffect(() => {
     if (!selectedLawId && parentLaws.length > 0) {
@@ -46,11 +48,12 @@ export default function TabC_ReasonCompare({ ordinanceId, parentLaws, enabled = 
 
   const { data: revisionReason, isLoading: isReasonLoading, isError: isReasonError } = useRevisionReason(
     selectedLawId,
-    enabled && !!selectedLawId
+    !!selectedLawId
   )
 
+  // 판별 결과에서 revision_reason 방식 추출
   const reasonResultByLaw = useMemo(() => {
-    const reasonResult = data?.results?.find((result) => result.method === 'revision_reason')
+    const reasonResult = results.find(r => r.method === 'revision_reason')
     const byLaw = (reasonResult?.detail?.by_law as ReasonDetail[] | undefined) || []
     const map = new Map<number, ReasonDetail>()
     byLaw.forEach((item) => {
@@ -59,26 +62,7 @@ export default function TabC_ReasonCompare({ ordinanceId, parentLaws, enabled = 
       }
     })
     return map
-  }, [data])
-
-  if (!enabled) {
-    return null
-  }
-
-  if (isLoading) {
-    return <Spin />
-  }
-
-  if (isError) {
-    return (
-      <Alert
-        type="error"
-        showIcon
-        message="개정이유비교 결과를 불러오지 못했습니다."
-        description={error instanceof Error ? error.message : '알 수 없는 오류'}
-      />
-    )
-  }
+  }, [results])
 
   const selectedDetected = selectedLawId ? reasonResultByLaw.get(selectedLawId) : undefined
   const match = selectedDetected?.match

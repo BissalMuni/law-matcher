@@ -74,7 +74,7 @@ export interface LlmProviderListResponse {
 
 // === 005-revision-detection-tabs ===
 
-export type DetectionMethodType = 'A_PROCLAIMED_DATE' | 'B_ARTICLE_CHANGE' | 'C_REVISION_REASON'
+export type DetectionMethodType = 'proclaimed_date' | 'revision_reason'
 
 export interface RevisionReasonResponse {
   id: number
@@ -87,10 +87,7 @@ export interface RevisionReasonResponse {
 }
 
 export interface DetectionResult {
-  id: number
-  ordinance_id: number
-  law_id: number
-  detection_method: DetectionMethodType
+  method: DetectionMethodType
   needs_revision: boolean
   detail: Record<string, any>
   detected_at: string
@@ -105,7 +102,6 @@ export interface DetectionSummaryItem {
   law_id: number
   law_name: string
   method_a: DetectionResult | null
-  method_b: DetectionResult | null
   method_c: DetectionResult | null
 }
 

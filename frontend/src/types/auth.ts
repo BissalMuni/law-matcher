@@ -5,7 +5,7 @@
 export interface User {
   id: number
   username: string
-  user_type: 'ADMIN' | 'USER'
+  user_type: 'ADMIN' | 'USER' | 'GENERAL' | 'DEPARTMENT'
   full_name?: string
   department_name?: string
 }

@@ -13,8 +13,6 @@ import DepartmentList from './pages/DepartmentList'
 import DepartmentDetail from './pages/DepartmentDetail'
 import OrdinanceList from './pages/OrdinanceList'
 import OrdinanceDetail from './pages/OrdinanceDetail'
-import ArticleList from './pages/ArticleList'
-import ArticleDetail from './pages/ArticleDetail'
 import RevisionNeededList from './pages/RevisionNeededList'
 import LawList from './pages/LawList'
 import LawChangeList from './pages/LawChangeList'
@@ -92,8 +90,6 @@ function App() {
                   <Route path="amendments" element={<LawChangeList />} />
                   <Route path="departments" element={<DepartmentList />} />
                   <Route path="departments/:id" element={<DepartmentDetail />} />
-                  <Route path="articles" element={<ArticleList />} />
-                  <Route path="articles/:id" element={<ArticleDetail />} />
                   <Route path="reviews" element={<ReviewList />} />
                   <Route path="reviews/:id" element={<ReviewDetail />} />
                   <Route path="admin/settings" element={<AdminSettings />} />

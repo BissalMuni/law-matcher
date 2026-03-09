@@ -12,11 +12,9 @@ from sqlalchemy.orm import joinedload
 
 from backend.core.config import settings
 from backend.external.moleg_client import MolegClient
-from backend.models.article import Article
 from backend.models.law import Law
 from backend.models.law_revision_reason import LawRevisionReason
 from backend.models.ordinance import Ordinance
-from backend.models.ordinance_article_mapping import OrdinanceArticleMapping
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.models.revision_detection_result import RevisionDetectionResult
 from backend.services.amendment_parser import parse_amendment_articles, match_articles_to_ordinance
@@ -27,7 +25,7 @@ logger = logging.getLogger(__name__)
 class RevisionDetectionService:
     """3가지 방식(공포일자/조문변경/개정이유) 개정 판별 서비스"""
 
-    DEFAULT_METHODS = ("proclaimed_date", "article_change", "revision_reason")
+    DEFAULT_METHODS = ("proclaimed_date", "revision_reason")
 
     def __init__(self, db: AsyncSession, moleg_client: Optional[MolegClient] = None):
         self.db = db
@@ -57,72 +55,21 @@ class RevisionDetectionService:
             "detected_at": detected_at,
         }
 
-    async def detect_by_article_change(self, ordinance: Ordinance, law: Law) -> Dict[str, Any]:
-        mapped_articles = await self._get_mapped_articles(ordinance.id, law.id)
-
-        stmt = (
-            select(Article.article_no, Article.revision_type_detail, Article.change_flag)
-            .where(Article.law_id == law.id)
-            .where(
-                or_(
-                    Article.change_flag == "Y",
-                    Article.revision_type_detail.isnot(None),
-                )
-            )
-        )
-        rows = (await self.db.execute(stmt)).all()
-
-        changed_article_nos: List[str] = []
-        changed_articles: List[Dict[str, Any]] = []
-        for article_no, revision_type_detail, change_flag in rows:
-            if not article_no:
-                continue
-            normalized_no = self._normalize_article_no(article_no)
-            if not normalized_no:
-                continue
-            changed_article_nos.append(normalized_no)
-            changed_articles.append(
-                {
-                    "article_no": normalized_no,
-                    "revision_type_detail": revision_type_detail,
-                    "change_flag": change_flag,
-                }
-            )
-
-        changed_unique = sorted(set(changed_article_nos), key=self._article_sort_key)
-        mapped_changed = sorted(set(changed_unique) & set(mapped_articles), key=self._article_sort_key)
-        new_articles = sorted(
-            {
-                self._normalize_article_no(item["article_no"])
-                for item in changed_articles
-                if item.get("revision_type_detail") == "신설"
-            },
-            key=self._article_sort_key,
-        )
-        new_articles = [item for item in new_articles if item]
-
-        detected_at = datetime.utcnow()
-        return {
-            "method": "article_change",
-            "needs_revision": len(mapped_changed) > 0,
-            "detail": {
-                "law_id": law.id,
-                "law_name": law.law_name,
-                "ordinance_id": ordinance.id,
-                "ordinance_name": ordinance.name,
-                "mapped_articles": mapped_articles,
-                "changed_article_nos": changed_unique,
-                "mapped_changed_articles": mapped_changed,
-                "new_articles": new_articles,
-                "changed_articles": changed_articles,
-            },
-            "detected_at": detected_at,
-        }
-
     async def detect_by_revision_reason(self, ordinance: Ordinance, law: Law) -> Dict[str, Any]:
         reason = await self._get_or_fetch_revision_reason(law)
         extracted_articles = self._extract_articles_from_reason(reason)
-        mapped_articles = await self._get_mapped_articles(ordinance.id, law.id)
+        # 연계 조문 목록: OrdinanceLawMapping.related_articles 필드 사용
+        law_mapping_stmt = select(OrdinanceLawMapping.related_articles).where(
+            and_(
+                OrdinanceLawMapping.ordinance_id == ordinance.id,
+                OrdinanceLawMapping.law_id == law.id,
+            )
+        )
+        related_articles_str = (await self.db.execute(law_mapping_stmt)).scalar_one_or_none()
+        mapped_articles = sorted(
+            {self._normalize_article_no(c) for c in self._split_related_articles(related_articles_str) if c},
+            key=self._article_sort_key,
+        )
         matched = match_articles_to_ordinance(extracted_articles, mapped_articles)
 
         note = None
@@ -251,8 +198,6 @@ class RevisionDetectionService:
     async def _run_method(self, method: str, ordinance: Ordinance, law: Law) -> Dict[str, Any]:
         if method == "proclaimed_date":
             return await self.detect_by_proclaimed_date(ordinance, law)
-        if method == "article_change":
-            return await self.detect_by_article_change(ordinance, law)
         if method == "revision_reason":
             return await self.detect_by_revision_reason(ordinance, law)
         raise ValueError(f"Unsupported method: {method}")
@@ -329,39 +274,6 @@ class RevisionDetectionService:
         self.db.add(record)
         await self.db.flush()
         return record
-
-    async def _get_mapped_articles(self, ordinance_id: int, law_id: int) -> List[str]:
-        mapped: set[str] = set()
-
-        mapping_stmt = (
-            select(OrdinanceArticleMapping.related_article_nos, Article.article_no)
-            .join(Article, OrdinanceArticleMapping.article_id == Article.id)
-            .where(OrdinanceArticleMapping.ordinance_id == ordinance_id)
-            .where(Article.law_id == law_id)
-        )
-        for related_article_nos, article_no in (await self.db.execute(mapping_stmt)).all():
-            if article_no:
-                normalized = self._normalize_article_no(article_no)
-                if normalized:
-                    mapped.add(normalized)
-            for candidate in self._split_related_articles(related_article_nos):
-                normalized = self._normalize_article_no(candidate)
-                if normalized:
-                    mapped.add(normalized)
-
-        law_mapping_stmt = select(OrdinanceLawMapping.related_articles).where(
-            and_(
-                OrdinanceLawMapping.ordinance_id == ordinance_id,
-                OrdinanceLawMapping.law_id == law_id,
-            )
-        )
-        related_articles = (await self.db.execute(law_mapping_stmt)).scalar_one_or_none()
-        for candidate in self._split_related_articles(related_articles):
-            normalized = self._normalize_article_no(candidate)
-            if normalized:
-                mapped.add(normalized)
-
-        return sorted(mapped, key=self._article_sort_key)
 
     def _extract_articles_from_reason(self, reason: LawRevisionReason) -> List[str]:
         if reason.extracted_articles and isinstance(reason.extracted_articles, dict):

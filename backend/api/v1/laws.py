@@ -178,15 +178,28 @@ async def sync_laws_stream():
     - 진행 상황 (요청/수신/비교)
     - 변경된 법령 정보
     - 최종 결과
+
+    heartbeat(: 주석)를 15초마다 전송하여 프록시/브라우저 타임아웃 방지
     """
+    import asyncio
     from backend.core.database import async_session
 
     async def event_generator():
         async with async_session() as db:
             try:
                 service = LawSyncService(db)
-                async for event in service.sync_all_laws_with_progress():
-                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                sync_gen = service.sync_all_laws_with_progress()
+
+                while True:
+                    try:
+                        # 15초 이내에 다음 이벤트를 기다림, 없으면 heartbeat 전송
+                        event = await asyncio.wait_for(sync_gen.__anext__(), timeout=15.0)
+                        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    except asyncio.TimeoutError:
+                        # heartbeat: SSE 주석으로 전송 (클라이언트 EventSource가 무시)
+                        yield ": heartbeat\n\n"
+                    except StopAsyncIteration:
+                        break
             except Exception as e:
                 error_event = {
                     "type": "error",
@@ -644,66 +657,3 @@ async def delete_law(
         "message": f"법령 '{law_name}' 및 관련 데이터가 삭제되었습니다.",
     }
 
-
-@router.get("/{law_id}/articles")
-async def get_law_articles(
-    law_id: int,
-    page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    특정 법령의 조문 목록 조회
-
-    Args:
-        law_id: 법령 ID
-        page: 페이지 번호
-        size: 페이지 크기
-
-    Returns:
-        조문 목록 (페이지네이션)
-    """
-    from backend.models.article import Article
-    from backend.schemas.article import ArticleResponse, ArticleListResponse
-
-    # Law 존재 확인
-    law_result = await db.execute(
-        select(Law).where(Law.id == law_id)
-    )
-    law = law_result.scalar_one_or_none()
-    if not law:
-        raise HTTPException(status_code=404, detail="법령을 찾을 수 없습니다.")
-
-    # Total count
-    count_result = await db.execute(
-        select(func.count()).select_from(Article).where(Article.law_id == law_id)
-    )
-    total = count_result.scalar() or 0
-
-    # Articles query
-    articles_result = await db.execute(
-        select(Article)
-        .where(Article.law_id == law_id)
-        .order_by(Article.article_no)
-        .offset((page - 1) * size)
-        .limit(size)
-    )
-    articles = articles_result.scalars().all()
-
-    # Build response
-    items = []
-    for article in articles:
-        article_dict = ArticleResponse.model_validate(article).model_dump()
-        article_dict['law_name'] = law.law_name
-        article_dict['law_type'] = law.law_type
-        items.append(ArticleResponse(**article_dict))
-
-    pages = (total + size - 1) // size
-
-    return ArticleListResponse(
-        items=items,
-        total=total,
-        page=page,
-        size=size,
-        pages=pages,
-    )

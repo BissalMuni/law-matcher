@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Table,
   Tag,
@@ -17,7 +17,8 @@ import {
 } from 'antd'
 import { SyncOutlined, CheckCircleOutlined, LoadingOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { amendmentApi, lawSearchApi, lawChangesApi } from '../services/api'
+import { amendmentApi, lawChangesApi } from '../services/api'
+import { useSync, type ChangedLaw } from '../contexts/SyncContext'
 import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
@@ -29,77 +30,25 @@ interface SyncDate {
   pending: number
 }
 
-// 동기화 진행 상태 인터페이스
-interface SyncProgress {
-  type: string
-  current?: number
-  total?: number
-  law_name?: string
-  status?: string
-  result?: string
-  message?: string
-  law?: any
-  error?: string
-  changed_count?: number
-  updated?: number
-  failed?: number
-  reconnecting?: boolean
-}
-
-interface ChangedLaw {
-  id: number
-  law_id: number
-  law_name: string
-  law_type: string
-  proclaimed_date: string | null
-  enforced_date: string | null
-  revision_type: string | null
-  dept_name: string | null
-  changes: Record<string, { old: string | null; new: string | null }>
-  api_status?: 'success' | 'no_response' | 'not_found'
-  api_message?: string
-  article_sync?: {
-    synced_articles: number
-    created: number
-    updated: number
-    deleted: number
-    changes_detected: number
-  }
-}
-
-interface SyncResult {
-  total: number
-  updated: number
-  failed: number
-  changedCount: number
-  changedLaws: ChangedLaw[]
-  articleSyncedLaws: number
-  articleSyncedArticles: number
-  articleCreated: number
-  articleUpdated: number
-  articleDeleted: number
-  articleChangesDetected: number
-  articleSyncFailed: number
-}
-
 export default function AmendmentList() {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [selectedSyncDate, setSelectedSyncDate] = useState<string>()
   const [apiStatusFilter, setApiStatusFilter] = useState<string>()
 
-  // 동기화 모달 상태
-  const [syncModalOpen, setSyncModalOpen] = useState(false)
-  const [syncing, setSyncing] = useState(false)
-  const [progress, setProgress] = useState<SyncProgress | null>(null)
-  const [logs, setLogs] = useState<string[]>([])
-  const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
+  // 전역 동기화 상태 (탭 전환에도 유지)
+  const { syncing, progress, logs, syncResult, changedLaws, startSync, stopSync, clearResult } = useSync()
 
-  // content 영역에 표시할 변경된 법령 (모달 바깥)
-  const [changedLaws, setChangedLaws] = useState<ChangedLaw[]>([])
+  // 동기화 모달 표시 여부 (로컬 UI 상태)
+  const [syncModalOpen, setSyncModalOpen] = useState(false)
   const [resultFilter, setResultFilter] = useState<string>('all')
 
-  const eventSourceRef = useRef<EventSource | null>(null)
+  // 동기화 중이면 자동으로 모달 열기 (다른 탭에서 돌아왔을 때)
+  useEffect(() => {
+    if (syncing) {
+      setSyncModalOpen(true)
+    }
+  }, [syncing])
 
   // 동기화 날짜 목록 조회
   const { data: syncDates } = useQuery({
@@ -164,105 +113,17 @@ export default function AmendmentList() {
   // 동기화 시작
   const handleStartSync = () => {
     setSyncModalOpen(true)
-    setSyncing(true)
-    setProgress(null)
-    setLogs([])
-    setSyncResult(null)
-    setChangedLaws([])  // content 영역 초기화
-
-    const eventSource = lawSearchApi.syncLawsStream()
-    eventSourceRef.current = eventSource
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-
-        switch (data.type) {
-          case 'start':
-            setLogs((prev) => [...prev, data.message])
-            break
-
-          case 'progress':
-            setProgress({
-              type: data.type,
-              current: data.current,
-              total: data.total,
-              law_name: data.law_name,
-              status: data.status,
-              result: data.result,
-            })
-            // 비교 완료 시에만 로그 추가 (너무 많은 로그 방지)
-            if (data.status === 'compared') {
-              setLogs((prev) => {
-                const newLogs = [...prev, data.message]
-                // 최근 50개만 유지
-                return newLogs.slice(-50)
-              })
-            }
-            break
-
-          case 'changed':
-            // content 영역에 변경된 법령 추가
-            setChangedLaws((prev) => [...prev, data.law])
-            setLogs((prev) => [...prev.slice(-49), `[변경] ${data.law.law_name}`])
-            break
-
-          case 'error':
-            setLogs((prev) => [...prev, `[오류] ${data.message}`])
-            break
-
-          case 'complete':
-            setSyncing(false)
-            setSyncResult({
-              total: data.total,
-              updated: data.updated,
-              failed: data.failed,
-              changedCount: data.changed_count,
-              changedLaws: data.changed_laws,
-              articleSyncedLaws: data.article_synced_laws || 0,
-              articleSyncedArticles: data.article_synced_articles || 0,
-              articleCreated: data.article_created || 0,
-              articleUpdated: data.article_updated || 0,
-              articleDeleted: data.article_deleted || 0,
-              articleChangesDetected: data.article_changes_detected || 0,
-              articleSyncFailed: data.article_sync_failed || 0,
-            })
-            setLogs((prev) => [...prev, data.message])
-            eventSource.close()
-            // 데이터 새로고침
-            queryClient.invalidateQueries({ queryKey: ['amendments'] })
-            queryClient.invalidateQueries({ queryKey: ['law-changes'] })
-            queryClient.invalidateQueries({ queryKey: ['law-changes-stats'] })
-            queryClient.invalidateQueries({ queryKey: ['law-changes-sync-dates'] })
-            break
-        }
-      } catch (e) {
-        console.error('SSE parse error:', e)
-      }
-    }
-
-    eventSource.onerror = () => {
-      // EventSource는 내부적으로 재연결을 시도할 수 있다.
-      // 다만 이 엔드포인트는 재연결 시 새 동기화가 시작되므로 사용자에게 명확히 안내하고 종료한다.
-      setSyncing(false)
-      setProgress((prev) => ({
-        ...(prev || { type: 'progress' }),
-        reconnecting: false,
-      }))
-      setLogs((prev) => [
-        ...prev,
-        '[오류] 동기화 스트림 연결이 종료되었습니다. 서버 재시작(--reload) 또는 인증 만료 가능성이 있습니다.',
-      ])
-      eventSource.close()
-    }
+    startSync()
   }
 
   const handleCloseModal = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-    }
     setSyncModalOpen(false)
-    setSyncing(false)
+    // 동기화 중에 모달을 닫아도 동기화는 계속 진행 (전역 상태)
+  }
+
+  const handleStopSync = () => {
+    stopSync()
+    setSyncModalOpen(false)
   }
 
   // 테이블용 간결한 변경내용 렌더링
@@ -351,7 +212,6 @@ export default function AmendmentList() {
       key: 'action',
       width: 120,
       render: (_: any, record: any) => {
-        // 해당 법령과 연계된 조례가 있는지 확인
         const hasLinkedOrdinance = amendmentsData?.items?.some(
           (a: any) => a.law_name === record.law_name && !a.processed
         )
@@ -415,11 +275,9 @@ export default function AmendmentList() {
       key: 'changes',
       width: 350,
       render: (_: any, record: ChangedLaw) => {
-        // API 실패인 경우 오류 메시지 표시
         if (record.api_status === 'no_response' || record.api_status === 'not_found') {
           return <Text type="danger">{record.api_message}</Text>
         }
-        // 변경 내용 표시 (공포일, 시행일, 제개정구분 신구비교)
         const changeItems = Object.entries(record.changes || {}).map(([field, change]) => {
           return (
             <div key={field} style={{ marginBottom: 2 }}>
@@ -469,9 +327,16 @@ export default function AmendmentList() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>법령 개정 목록</Title>
-        <Button type="primary" icon={<SyncOutlined />} onClick={handleStartSync}>
-          법령 동기화
-        </Button>
+        <Space>
+          {syncing && !syncModalOpen && (
+            <Button icon={<LoadingOutlined spin />} onClick={() => setSyncModalOpen(true)}>
+              동기화 진행 중 ({progress?.current || 0}/{progress?.total || 0})
+            </Button>
+          )}
+          <Button type="primary" icon={<SyncOutlined />} onClick={handleStartSync} disabled={syncing}>
+            법령 동기화
+          </Button>
+        </Space>
       </div>
 
       {/* 통계 카드 */}
@@ -538,7 +403,7 @@ export default function AmendmentList() {
                   { value: 'changed', label: '변경만 보기' },
                 ]}
               />
-              <Button type="link" danger onClick={() => { setChangedLaws([]); setResultFilter('all'); }}>
+              <Button type="link" danger onClick={() => { clearResult(); setResultFilter('all'); }}>
                 결과 지우기
               </Button>
             </Space>
@@ -616,14 +481,19 @@ export default function AmendmentList() {
         scroll={{ x: 1100 }}
       />
 
-      {/* 동기화 진행 모달 - 경과만 표시 */}
+      {/* 동기화 진행 모달 */}
       <Modal
         title="법령 동기화"
         open={syncModalOpen}
         onCancel={handleCloseModal}
         footer={[
-          <Button key="close" onClick={handleCloseModal} disabled={syncing}>
-            닫기
+          syncing && (
+            <Button key="stop" danger onClick={handleStopSync}>
+              중지
+            </Button>
+          ),
+          <Button key="close" onClick={handleCloseModal}>
+            {syncing ? '백그라운드로' : '닫기'}
           </Button>,
         ]}
         width={700}
@@ -688,7 +558,6 @@ export default function AmendmentList() {
           />
         )}
 
-        {/* 완료 시 안내 메시지 */}
         {syncResult && changedLaws.length > 0 && (
           <Alert
             type="info"

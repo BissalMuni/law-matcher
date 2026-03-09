@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 
 class DetectionMethodEnum(str, Enum):
     proclaimed_date = "proclaimed_date"
-    article_change = "article_change"
     revision_reason = "revision_reason"
 
 

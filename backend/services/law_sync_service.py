@@ -20,7 +20,6 @@ from backend.models.amendment import LawAmendment
 from backend.models.law_change import LawChange, ApiStatus
 from backend.core.config import settings
 from backend.external.moleg_client import MolegClient
-from backend.services.article_service import ArticleService
 
 
 class LawSearchResult:
@@ -165,14 +164,14 @@ class LawSyncService:
         Returns:
             저장/업데이트된 Law 객체
         """
-        # 기존 레코드 조회
-        stmt = select(Law).where(Law.law_serial_no == search_result.law_serial_no)
+        # law_id 기준으로 조회 (법령당 최신 개정본 1건 유지)
+        stmt = select(Law).where(Law.law_id == search_result.law_id)
         result = await self.db.execute(stmt)
         existing_law = result.scalar_one_or_none()
 
         if existing_law:
-            # 업데이트
-            existing_law.law_id = search_result.law_id
+            # 업데이트 (개정 시 law_serial_no도 갱신)
+            existing_law.law_serial_no = search_result.law_serial_no
             existing_law.law_name = search_result.law_name
             existing_law.law_abbr = search_result.law_abbr
             existing_law.law_type = search_result.law_type
@@ -701,7 +700,6 @@ class LawSyncService:
             진행 상황 및 변경된 법령 정보
         """
         moleg_client = MolegClient(api_key=self.api_key, base_url=settings.MOLEG_API_BASE_URL)
-        article_service = ArticleService(self.db, moleg_client)
 
         # 모든 법령 조회
         stmt = select(Law).order_by(Law.id)
@@ -712,16 +710,6 @@ class LawSyncService:
         updated = 0
         failed = 0
         changed_laws = []
-
-        article_sync_stats = {
-            "synced_laws": 0,
-            "synced_articles": 0,
-            "created": 0,
-            "updated": 0,
-            "deleted": 0,
-            "changes_detected": 0,
-            "failed": 0,
-        }
 
         # 동기화 배치 ID 생성 (같은 동기화 작업 묶기용)
         sync_batch_id = str(uuid.uuid4())[:8]
@@ -873,53 +861,8 @@ class LawSyncService:
                             }
                         updated += 1
 
-                        # 조문 동기화 (개정법령 탭 동기화 시 조문 DB 반영)
-                        article_sync_result = None
-                        try:
-                            yield {
-                                "type": "progress",
-                                "current": current,
-                                "total": total_laws,
-                                "law_name": law_name,
-                                "status": "article_syncing",
-                                "message": f"[{current}/{total_laws}] {law_name} - 조문 동기화 중...",
-                            }
-                            article_sync_result = await article_service.sync_articles_for_law(
-                                law_id=law.id,
-                                force=True,
-                            )
-                            article_sync_stats["synced_laws"] += 1
-                            article_sync_stats["synced_articles"] += article_sync_result.get("synced_articles", 0)
-                            article_sync_stats["created"] += article_sync_result.get("created", 0)
-                            article_sync_stats["updated"] += article_sync_result.get("updated", 0)
-                            article_sync_stats["deleted"] += article_sync_result.get("deleted", 0)
-                            article_sync_stats["changes_detected"] += article_sync_result.get("changes_detected", 0)
-
-                            yield {
-                                "type": "progress",
-                                "current": current,
-                                "total": total_laws,
-                                "law_name": law_name,
-                                "status": "article_synced",
-                                "message": (
-                                    f"[{current}/{total_laws}] {law_name} - 조문 동기화 완료 "
-                                    f"(처리 {article_sync_result.get('synced_articles', 0)}건, "
-                                    f"변경 {article_sync_result.get('changes_detected', 0)}건)"
-                                ),
-                            }
-                        except Exception as article_error:
-                            article_sync_stats["failed"] += 1
-                            yield {
-                                "type": "error",
-                                "current": current,
-                                "total": total_laws,
-                                "law_name": law_name,
-                                "error": str(article_error),
-                                "message": f"[{current}/{total_laws}] {law_name} - 조문 동기화 오류: {str(article_error)}",
-                            }
-
                         compare_result = "changed" if changes else "unchanged"
-                        if changes or (article_sync_result and article_sync_result.get("changes_detected", 0) > 0):
+                        if changes:
                             changed_law_info = {
                                 "id": law.id,
                                 "law_id": exact_match.law_id,
@@ -932,13 +875,6 @@ class LawSyncService:
                                 "api_status": "success",
                                 "api_message": "API 성공",
                                 "changes": changes,
-                                "article_sync": {
-                                    "synced_articles": article_sync_result.get("synced_articles", 0) if article_sync_result else 0,
-                                    "created": article_sync_result.get("created", 0) if article_sync_result else 0,
-                                    "updated": article_sync_result.get("updated", 0) if article_sync_result else 0,
-                                    "deleted": article_sync_result.get("deleted", 0) if article_sync_result else 0,
-                                    "changes_detected": article_sync_result.get("changes_detected", 0) if article_sync_result else 0,
-                                },
                             }
                             changed_laws.append(changed_law_info)
 
@@ -1077,17 +1013,9 @@ class LawSyncService:
                 "changed_count": len(changed_laws),
                 "changed_laws": changed_laws,
                 "flagged_ordinances": flagged_count,
-                "article_synced_laws": article_sync_stats["synced_laws"],
-                "article_synced_articles": article_sync_stats["synced_articles"],
-                "article_created": article_sync_stats["created"],
-                "article_updated": article_sync_stats["updated"],
-                "article_deleted": article_sync_stats["deleted"],
-                "article_changes_detected": article_sync_stats["changes_detected"],
-                "article_sync_failed": article_sync_stats["failed"],
                 "message": (
                     f"동기화 완료: 총 {total_laws}건 중 {updated}건 성공, {failed}건 실패, "
-                    f"{len(changed_laws)}건 변경, 조문 변경 {article_sync_stats['changes_detected']}건, "
-                    f"검토대상 조례 {flagged_count}건 플래깅"
+                    f"{len(changed_laws)}건 변경, 검토대상 조례 {flagged_count}건 플래깅"
                 ),
             }
         finally:

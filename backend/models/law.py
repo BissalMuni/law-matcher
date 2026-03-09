@@ -11,7 +11,6 @@ from backend.core.database import Base
 
 if TYPE_CHECKING:
     from backend.models.ordinance_law_mapping import OrdinanceLawMapping
-    from backend.models.article import Article
     from backend.models.law_revision_reason import LawRevisionReason
 
 
@@ -27,8 +26,8 @@ class Law(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     # 법령 식별자
-    law_serial_no: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)  # 법령일련번호
-    law_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)  # 법령ID
+    law_serial_no: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)  # 법령일련번호 (개정마다 변경)
+    law_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)  # 법령ID (법령당 고유, 최신 개정본 1건만 유지)
 
     # 법령 기본 정보
     law_name: Mapped[str] = mapped_column(String(500), nullable=False)  # 법령명한글
@@ -65,9 +64,6 @@ class Law(Base):
 
     # Relationships
     ordinance_mappings: Mapped[List["OrdinanceLawMapping"]] = relationship(
-        back_populates="law", cascade="all, delete-orphan"
-    )
-    articles: Mapped[List["Article"]] = relationship(
         back_populates="law", cascade="all, delete-orphan"
     )
     revision_reason: Mapped[Optional["LawRevisionReason"]] = relationship(

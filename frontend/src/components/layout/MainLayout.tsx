@@ -23,7 +23,12 @@ const { Header, Sider, Content } = Layout
 
 // Menu items for admin users (6 tabs)
 const adminMenuItems = [
-   {
+  {
+    key: '/ordinances',
+    icon: <FileTextOutlined />,
+    label: '자치법규관리',
+  },
+  {
     key: '/amendments',
     icon: <SyncOutlined />,
     label: '변경감지',
@@ -32,11 +37,6 @@ const adminMenuItems = [
     key: '/revision-needed',
     icon: <AuditOutlined />,
     label: '개정검토',
-  },
-  {
-    key: '/ordinances',
-    icon: <FileTextOutlined />,
-    label: '자치법규관리',
   },
   {
     key: '/laws',

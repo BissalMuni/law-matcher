@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ordinanceApi, useDetectionResults, useRunDetection } from '../services/api'
 import TabA_LawCompare from '../components/detection/TabA_LawCompare'
-import TabB_ArticleCompare from '../components/detection/TabB_ArticleCompare'
 import TabC_ReasonCompare from '../components/detection/TabC_ReasonCompare'
 import DetectionSummary from '../components/detection/DetectionSummary'
 
@@ -77,7 +76,7 @@ export default function DetectionCompare() {
             <Spin />
           ) : (
             <Row gutter={[12, 12]}>
-              <Col xs={24} xl={8}>
+              <Col xs={24} xl={12}>
                 <Card title="법령비교">
                   <TabA_LawCompare
                     ordinanceId={selectedOrdinanceId}
@@ -86,17 +85,14 @@ export default function DetectionCompare() {
                   />
                 </Card>
               </Col>
-              <Col xs={24} xl={8}>
-                <Card title="조문비교">
-                  <TabB_ArticleCompare ordinanceId={selectedOrdinanceId} enabled />
-                </Card>
-              </Col>
-              <Col xs={24} xl={8}>
+              <Col xs={24} xl={12}>
                 <Card title="개정이유비교">
                   <TabC_ReasonCompare
                     ordinanceId={selectedOrdinanceId}
-                    parentLaws={parentLaws || []}
-                    enabled
+                    results={detectionResults?.results || []}
+                    lawMap={Object.fromEntries(
+                      (parentLaws || []).map((law: any) => [law.law_internal_id, law.law_name])
+                    )}
                   />
                 </Card>
               </Col>

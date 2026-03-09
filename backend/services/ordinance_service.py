@@ -43,6 +43,7 @@ class OrdinanceService:
         exclude_other_law_revision: bool = False,
         review_result_filter: Optional[str] = None,
         status_filter: Optional[str] = None,
+        revision_status_filter: Optional[str] = None,  # "any" | "검토대기" | "검토중" | "개정확정"
     ) -> dict:
         """Get paginated list of ordinances"""
         query = select(Ordinance)
@@ -131,6 +132,14 @@ class OrdinanceService:
                     Ordinance.enacted_date.isnot(None),
                     Ordinance.id.notin_(revision_subquery),
                 )
+
+        # 검토 상태 필터 (revision_status 컬럼 기반)
+        if revision_status_filter:
+            if revision_status_filter == "any":
+                # revision_status가 설정된 조례 (검토대기/검토중/개정확정)
+                query = query.where(Ordinance.revision_status.isnot(None))
+            else:
+                query = query.where(Ordinance.revision_status == revision_status_filter)
 
         # 검토결과 필터
         if review_result_filter:

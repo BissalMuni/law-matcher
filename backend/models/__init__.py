@@ -11,9 +11,6 @@ from backend.models.amendment import LawAmendment
 from backend.models.review import AmendmentReview
 from backend.models.law_change import LawChange, ApiStatus
 from backend.models.ordinance_review import OrdinanceReview
-from backend.models.article import Article
-from backend.models.ordinance_article_mapping import OrdinanceArticleMapping
-from backend.models.article_change import ArticleChange
 from backend.models.llm_provider import LlmProvider
 from backend.models.llm_analysis_result import LlmAnalysisResult
 from backend.models.law_revision_reason import LawRevisionReason
@@ -31,9 +28,6 @@ __all__ = [
     "LawChange",
     "ApiStatus",
     "OrdinanceReview",
-    "Article",
-    "OrdinanceArticleMapping",
-    "ArticleChange",
     "LlmProvider",
     "LlmAnalysisResult",
     "LawRevisionReason",

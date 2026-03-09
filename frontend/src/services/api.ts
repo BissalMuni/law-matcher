@@ -2,7 +2,6 @@ import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   DetectionMethodType,
-  DetectionResultsResponse,
   RevisionNeededListResponse,
   RevisionReasonResponse,
 } from '../types/api'
@@ -92,6 +91,7 @@ export const ordinanceApi = {
     exclude_other_law_revision?: boolean  // 타법개정 제외
     review_result_filter?: string  // 검토결과 필터
     status?: string  // "ACTIVE" | "ABOLISHED"
+    revision_status_filter?: string  // "any" | "검토대기" | "검토중" | "개정확정"
   }) => {
     const { data } = await api.get('/ordinances', { params })
     return data
@@ -233,25 +233,6 @@ export const ordinanceApi = {
 
   getRevisionTypes: async () => {
     const { data } = await api.get('/ordinances/revision-types')
-    return data
-  },
-
-  // 근거 조문 매핑 관리
-  getMappedArticles: async (ordinanceId: number) => {
-    const { data } = await api.get(`/ordinances/${ordinanceId}/mapped-articles`)
-    return data
-  },
-
-  getAvailableArticles: async (ordinanceId: number) => {
-    const { data } = await api.get(`/ordinances/${ordinanceId}/available-articles`)
-    return data
-  },
-
-  setMappedArticles: async (ordinanceId: number, articleIds: number[], mappingReason?: string) => {
-    const { data } = await api.post(`/ordinances/${ordinanceId}/mapped-articles/bulk`, {
-      article_ids: articleIds,
-      mapping_reason: mappingReason || '근거 조문',
-    })
     return data
   },
 
@@ -788,114 +769,5 @@ export const lawChangesApi = {
     link.click()
     link.remove()
     window.URL.revokeObjectURL(url)
-  },
-}
-
-// Articles API (조문 관리)
-export const articleApi = {
-  // 조문 목록 조회
-  getList: async (params: {
-    page?: number
-    size?: number
-    law_id?: number
-    search?: string
-    has_ordinance?: boolean
-    changed_since?: string  // YYYY-MM-DD
-  }) => {
-    const { data } = await api.get('/articles', { params })
-    return data
-  },
-
-  // 조문 상세 조회
-  getById: async (id: number) => {
-    const { data } = await api.get(`/articles/${id}`)
-    return data
-  },
-
-  // 조문과 연계된 조례 목록 조회
-  getOrdinances: async (id: number) => {
-    const { data } = await api.get(`/articles/${id}/ordinances`)
-    return data
-  },
-
-  // 조문-조례 연계 추가
-  createMapping: async (
-    articleId: number,
-    mappingData: {
-      ordinance_id: number
-      mapping_reason?: string
-      related_article_nos?: string
-    }
-  ) => {
-    const { data } = await api.post(`/articles/${articleId}/mappings`, mappingData)
-    return data
-  },
-
-  // 조문-조례 연계 삭제
-  deleteMapping: async (articleId: number, mappingId: number) => {
-    const { data } = await api.delete(`/articles/${articleId}/mappings/${mappingId}`)
-    return data
-  },
-
-  // 조문 변경 이력 조회
-  getHistory: async (id: number) => {
-    const { data } = await api.get(`/articles/${id}/history`)
-    return data
-  },
-
-  // 조문 동기화 (관리자 전용)
-  sync: async (request?: {
-    law_ids?: number[]
-    force?: boolean
-  }) => {
-    const { data } = await api.post('/articles/sync', request || {})
-    return data
-  },
-
-  // 조문 개수 조회
-  getCount: async (params?: {
-    law_id?: number
-    has_ordinance?: boolean
-    changed_since?: string
-  }) => {
-    const response = await api.get('/articles', {
-      params: { ...params, page: 1, size: 1 }
-    })
-    return response.data.total
-  },
-
-  // ========================================
-  // Phase 4: 추가 API
-  // ========================================
-
-  // 대량 매핑
-  createBulkMappings: async (request: {
-    mappings: Array<{ article_id: number; ordinance_id: number }>
-    notes?: string
-  }) => {
-    const { data } = await api.post('/articles/mappings/bulk', request)
-    return data
-  },
-
-  // 개정 검토 필요 조례 목록
-  getRevisionNeededOrdinances: async (params?: {
-    page?: number
-    size?: number
-    days?: number
-    department?: string
-  }) => {
-    const { data } = await api.get('/articles/revision-needed', { params })
-    return data
-  },
-
-  // 자동 매핑 추천
-  getAutoRecommendations: async (params?: {
-    law_id?: number
-    ordinance_id?: number
-    min_score?: number
-    limit?: number
-  }) => {
-    const { data } = await api.get('/articles/auto-recommendations', { params })
-    return data
   },
 }

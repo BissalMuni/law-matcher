@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Descriptions,
   Table,
   Card,
-  Tabs,
   Button,
   Space,
   Typography,
@@ -22,10 +21,10 @@ import {
 } from 'antd'
 import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, LinkOutlined, UserOutlined, BankOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ordinanceApi, lawsApi, aiApi, useDetectionResults, useRevisionReason } from '../services/api'
+import { ordinanceApi, lawsApi, aiApi, useDetectionResults } from '../services/api'
 import dayjs from 'dayjs'
 import { useAuth } from '../contexts/AuthContext'
-import type { LlmAnalysisResult, AiResultsResponse } from '../types/api'
+import type { LlmAnalysisResult, AiResultsResponse, DetectionResult } from '../types/api'
 import AiAnalysisButton from '../components/ai/AiAnalysisButton'
 import AiSummaryPanel from '../components/ai/AiSummaryPanel'
 import AiDraftModal from '../components/ai/AiDraftModal'
@@ -78,16 +77,16 @@ export default function OrdinanceDetail() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingParentLaw, setEditingParentLaw] = useState<ParentLaw | null>(null)
   const [form] = Form.useForm()
-  const [activeDetectionTab, setActiveDetectionTab] = useState('law_compare')
-  const [loadedDetectionTabs, setLoadedDetectionTabs] = useState<Record<string, boolean>>({
-    law_compare: true,
-  })
   const [detectionAlertDismissed, setDetectionAlertDismissed] = useState(false)
 
   // 검토이력 상태
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
   const [editingReview, setEditingReview] = useState<OrdinanceReview | null>(null)
   const [reviewForm] = Form.useForm()
+
+  // 반려 사유 모달 상태
+  const [rejectModal, setRejectModal] = useState<{ open: boolean; reviewId: number | null }>({ open: false, reviewId: null })
+  const [rejectForm] = Form.useForm()
 
   const { data: ordinance, isLoading } = useQuery({
     queryKey: ['ordinance', id],
@@ -102,10 +101,6 @@ export default function OrdinanceDetail() {
   })
 
   const { data: detectionResults } = useDetectionResults(Number(id), !!id)
-  const firstParentLawId = parentLaws?.[0]?.law_internal_id
-  const {
-    isError: isRevisionReasonApiError,
-  } = useRevisionReason(firstParentLawId, !!firstParentLawId && !!loadedDetectionTabs.reason_compare)
 
   // 검토이력 조회
   const { data: reviews } = useQuery({
@@ -122,13 +117,6 @@ export default function OrdinanceDetail() {
   const { data: aiResults } = useQuery<AiResultsResponse>({
     queryKey: ['ai-results', id],
     queryFn: () => aiApi.getResults(Number(id)),
-    enabled: !!id,
-  })
-
-  // 근거 조문 매핑 조회 (삭제 경고용)
-  const { data: mappedArticlesData } = useQuery({
-    queryKey: ['ordinance', id, 'mapped-articles'],
-    queryFn: () => ordinanceApi.getMappedArticles(Number(id)),
     enabled: !!id,
   })
 
@@ -387,17 +375,6 @@ export default function OrdinanceDetail() {
     }
   }
 
-  const handleDetectionTabChange = (key: string) => {
-    setActiveDetectionTab(key)
-    setLoadedDetectionTabs((prev) => (prev[key] ? prev : { ...prev, [key]: true }))
-  }
-
-  useEffect(() => {
-    if (isRevisionReasonApiError && activeDetectionTab === 'reason_compare') {
-      setActiveDetectionTab('law_compare')
-    }
-  }, [activeDetectionTab, isRevisionReasonApiError])
-
   const reviewResultColor: Record<string, string> = {
     '개정필요': 'red',
     '개정불필요': 'green',
@@ -467,21 +444,11 @@ export default function OrdinanceDetail() {
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           <Popconfirm
             title={parentLaws?.length === 1 ? '⚠️ 마지막 상위법령 삭제' : '삭제 확인'}
-            description={(() => {
-              const isLastLaw = parentLaws?.length === 1
-              const affected = (mappedArticlesData?.items || []).filter(
-                (m: any) => m.law_id === record.law_internal_id
-              )
-              const parts: string[] = []
-              if (isLastLaw) {
-                parts.push('이 조례의 마지막 상위법령입니다. 삭제하면 상위법령 연결이 모두 해제되어 개정 검토 대상에서 제외됩니다.')
-              }
-              if (affected.length > 0) {
-                parts.push(`연계된 근거 조문 ${affected.length}건의 매핑도 함께 삭제됩니다.`)
-              }
-              parts.push('계속하시겠습니까?')
-              return parts.join(' ')
-            })()}
+            description={
+              parentLaws?.length === 1
+                ? '이 조례의 마지막 상위법령입니다. 삭제하면 상위법령 연결이 모두 해제되어 개정 검토 대상에서 제외됩니다. 계속하시겠습니까?'
+                : '계속하시겠습니까?'
+            }
             onConfirm={() => deleteMutation.mutate(record.id)}
             okText="삭제"
             cancelText="취소"
@@ -508,7 +475,7 @@ export default function OrdinanceDetail() {
 
       <Title level={4}>{ordinance?.name}</Title>
 
-      {!detectionAlertDismissed && !!detectionResults?.results?.some((result) => result.needs_revision) && (
+      {!detectionAlertDismissed && !!detectionResults?.results?.some((result: DetectionResult) => result.needs_revision) && (
         <Alert
           type="warning"
           showIcon
@@ -780,7 +747,7 @@ export default function OrdinanceDetail() {
                       )}
                     </span>
                     <Space size="small">
-                      {user?.user_type === 'ADMIN' && (!review.approval_status || review.approval_status === 'pending') && (
+                      {(user?.user_type === 'ADMIN' || user?.user_type === 'GENERAL') && (!review.approval_status || review.approval_status === 'pending') && (
                         <>
                           <Popconfirm
                             title="검토의견 승인"
@@ -796,21 +763,17 @@ export default function OrdinanceDetail() {
                               승인
                             </Button>
                           </Popconfirm>
-                          <Popconfirm
-                            title="검토의견 반려"
-                            description="이 검토의견을 반려하시겠습니까?"
-                            onConfirm={() => approveReviewMutation.mutate({
-                              reviewId: review.id,
-                              approval_status: 'rejected',
-                            })}
-                            okText="반려"
-                            cancelText="취소"
-                            okButtonProps={{ danger: true }}
+                          <Button
+                            danger
+                            size="small"
+                            icon={<CloseCircleOutlined />}
+                            onClick={() => {
+                              rejectForm.resetFields()
+                              setRejectModal({ open: true, reviewId: review.id })
+                            }}
                           >
-                            <Button danger size="small" icon={<CloseCircleOutlined />}>
-                              반려
-                            </Button>
-                          </Popconfirm>
+                            반려
+                          </Button>
                         </>
                       )}
                       {/* 본인 작성 의견만 수정/삭제 가능 */}
@@ -868,7 +831,7 @@ export default function OrdinanceDetail() {
             <Input placeholder="예: 홍길동" disabled={!editingReview} />
           </Form.Item>
           <Form.Item name="reviewer_department" label="소속부서">
-            <Input placeholder="예: 법무담당관" disabled />
+            <Input placeholder="예: 법무담당관" disabled={!editingReview} />
           </Form.Item>
           <Form.Item
             name="review_content"
@@ -885,6 +848,41 @@ export default function OrdinanceDetail() {
                 { value: '개정불필요', label: '개정불필요' },
               ]}
             />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 반려 사유 모달 */}
+      <Modal
+        title="검토의견 반려"
+        open={rejectModal.open}
+        onCancel={() => setRejectModal({ open: false, reviewId: null })}
+        onOk={() => rejectForm.submit()}
+        confirmLoading={approveReviewMutation.isPending}
+        okText="반려"
+        okButtonProps={{ danger: true }}
+        cancelText="취소"
+      >
+        <Form
+          form={rejectForm}
+          layout="vertical"
+          onFinish={(values) => {
+            if (rejectModal.reviewId != null) {
+              approveReviewMutation.mutate({
+                reviewId: rejectModal.reviewId,
+                approval_status: 'rejected',
+                approval_note: values.approval_note,
+              })
+              setRejectModal({ open: false, reviewId: null })
+            }
+          }}
+        >
+          <Form.Item
+            name="approval_note"
+            label="반려 사유"
+            rules={[{ required: true, message: '반려 사유를 입력하세요' }]}
+          >
+            <Input.TextArea rows={3} placeholder="반려 사유를 입력하세요" />
           </Form.Item>
         </Form>
       </Modal>

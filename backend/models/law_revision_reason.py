@@ -2,12 +2,15 @@
 Law revision reason model
 """
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from sqlalchemy import String, Text, DateTime, Integer, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.database import Base
+
+if TYPE_CHECKING:
+    from backend.models.law import Law
 
 
 class LawRevisionReason(Base):
@@ -31,6 +34,9 @@ class LawRevisionReason(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+    # Relationships
+    law: Mapped[Optional["Law"]] = relationship(back_populates="revision_reason")
 
     __table_args__ = (
         UniqueConstraint("law_id", name="uq_law_revision_reasons_law_id"),

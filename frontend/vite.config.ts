@@ -22,6 +22,9 @@ export default defineConfig({
         target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
+        // SSE 스트리밍 지원: 프록시 타임아웃 비활성화
+        timeout: 0,
+        proxyTimeout: 0,
       },
     },
   },

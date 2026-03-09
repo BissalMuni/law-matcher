@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ordinanceApi } from '../../services/api'
 import type { DetectionResult } from '../../types/api'
 import TabA_DateCompare from './TabA_DateCompare'
-import TabB_ArticleCompare from './TabB_ArticleCompare'
 import TabC_ReasonCompare from './TabC_ReasonCompare'
 
 interface Props {
@@ -36,13 +35,11 @@ export default function DetectionTabs({ ordinanceId, lawMap }: Props) {
   const results: DetectionResult[] = data?.results || []
 
   // 탭별 건수 및 경고 여부
-  const countA = results.filter(r => r.detection_method === 'A_PROCLAIMED_DATE')
-  const countB = results.filter(r => r.detection_method === 'B_ARTICLE_CHANGE')
-  const countC = results.filter(r => r.detection_method === 'C_REVISION_REASON')
+  const countA = results.filter(r => r.method === 'proclaimed_date')
+  const countC = results.filter(r => r.method === 'revision_reason')
   const hasWarningA = countA.some(r => r.needs_revision)
-  const hasWarningB = countB.some(r => r.needs_revision)
   const hasWarningC = countC.some(r => r.needs_revision)
-  const hasAnyWarning = hasWarningA || hasWarningB || hasWarningC
+  const hasAnyWarning = hasWarningA || hasWarningC
 
   const tabLabel = (label: string, count: number, hasWarning: boolean) => (
     <Badge dot={hasWarning} offset={[6, 0]}>
@@ -60,7 +57,7 @@ export default function DetectionTabs({ ordinanceId, lawMap }: Props) {
         <Alert
           type="warning"
           message="새로운 변경이 감지되었습니다."
-          description={`${[hasWarningA && 'A.공포일자', hasWarningB && 'B.조문변경', hasWarningC && 'C.제개정이유'].filter(Boolean).join(', ')} 방식에서 검토가 필요합니다.`}
+          description={`${[hasWarningA && 'A.공포일자', hasWarningC && 'C.제개정이유'].filter(Boolean).join(', ')} 방식에서 검토가 필요합니다.`}
           closable
           style={{ marginBottom: 12 }}
         />
@@ -84,14 +81,9 @@ export default function DetectionTabs({ ordinanceId, lawMap }: Props) {
             children: <TabA_DateCompare results={results} lawMap={lawMap} />,
           },
           {
-            key: 'B',
-            label: tabLabel('B. 조문변경', countB.length, hasWarningB),
-            children: <TabB_ArticleCompare results={results} lawMap={lawMap} />,
-          },
-          {
             key: 'C',
             label: tabLabel('C. 제개정이유', countC.length, hasWarningC),
-            children: <TabC_ReasonCompare results={results} lawMap={lawMap} />,
+            children: <TabC_ReasonCompare ordinanceId={ordinanceId} results={results} lawMap={lawMap} />,
           },
         ]}
       />
