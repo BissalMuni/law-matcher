@@ -42,6 +42,8 @@ def upgrade() -> None:
         sa.Column('needs_revision', sa.Boolean(), nullable=False),
         sa.Column('detail', JSONB(), nullable=True),
         sa.Column('detected_at', sa.DateTime(), server_default=sa.func.now()),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.func.now()),
+        sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now()),
     )
     op.create_unique_constraint(
         'uq_detection_ord_law_method',

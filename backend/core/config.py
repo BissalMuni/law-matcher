@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     GOOGLE_AI_API_KEY: str = ""
-    LLM_TIMEOUT: int = 30  # LLM API 호출 타임아웃 (초)
+    LLM_TIMEOUT: int = 60  # LLM API 호출 타임아웃 (초)
     LLM_MAX_RETRIES: int = 2  # LLM API 최대 재시도 횟수
 
     class Config:

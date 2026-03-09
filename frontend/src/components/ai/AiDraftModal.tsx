@@ -117,7 +117,7 @@ export default function AiDraftModal({
           label="검토의견"
           rules={[{ required: true, message: '검토의견을 입력하세요' }]}
         >
-          <TextArea rows={8} placeholder="검토의견을 입력하세요" />
+          <TextArea rows={12} placeholder="검토의견을 입력하세요" />
         </Form.Item>
       </Form>
     </Modal>

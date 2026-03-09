@@ -15,6 +15,7 @@ interface Props {
 export default function DetectionTabs({ ordinanceId, lawMap }: Props) {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('A')
+  const [targetLawId, setTargetLawId] = useState<number | undefined>(undefined)
 
   const { data, isLoading } = useQuery({
     queryKey: ['detection-results', ordinanceId],
@@ -78,12 +79,15 @@ export default function DetectionTabs({ ordinanceId, lawMap }: Props) {
           {
             key: 'A',
             label: tabLabel('A. 공포일자', countA.length, hasWarningA),
-            children: <TabA_DateCompare results={results} lawMap={lawMap} />,
+            children: <TabA_DateCompare results={results} lawMap={lawMap} onLawClick={(lawId) => {
+              setTargetLawId(lawId)
+              setActiveTab('C')
+            }} />,
           },
           {
             key: 'C',
             label: tabLabel('C. 제개정이유', countC.length, hasWarningC),
-            children: <TabC_ReasonCompare ordinanceId={ordinanceId} results={results} lawMap={lawMap} />,
+            children: <TabC_ReasonCompare ordinanceId={ordinanceId} results={results} lawMap={lawMap} initialLawId={targetLawId} />,
           },
         ]}
       />

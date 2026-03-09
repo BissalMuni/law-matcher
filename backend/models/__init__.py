@@ -15,6 +15,7 @@ from backend.models.llm_provider import LlmProvider
 from backend.models.llm_analysis_result import LlmAnalysisResult
 from backend.models.law_revision_reason import LawRevisionReason
 from backend.models.revision_detection_result import RevisionDetectionResult
+from backend.models.ordinance_text import OrdinanceText
 
 __all__ = [
     "User",
@@ -32,4 +33,5 @@ __all__ = [
     "LlmAnalysisResult",
     "LawRevisionReason",
     "RevisionDetectionResult",
+    "OrdinanceText",
 ]

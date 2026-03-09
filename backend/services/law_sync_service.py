@@ -689,6 +689,63 @@ class LawSyncService:
             "failed": failed,
         }
 
+    async def update_laws_by_ids(self, law_ids: List[int]) -> Dict[str, Any]:
+        """
+        특정 법령만 법제처 API로 동기화
+
+        Args:
+            law_ids: laws 테이블의 PK(id) 목록
+
+        Returns:
+            {"total_laws": 전체 법령 수, "updated": 업데이트 수, "failed": 실패 수}
+        """
+        stmt = select(Law).where(Law.id.in_(law_ids))
+        result = await self.db.execute(stmt)
+        laws = list(result.scalars().all())
+
+        total_laws = len(laws)
+        updated = 0
+        failed = 0
+
+        moleg_client = MolegClient(api_key=self.api_key, base_url=settings.MOLEG_API_BASE_URL)
+        try:
+            for law in laws:
+                try:
+                    exact_match, _, _ = await self._resolve_exact_match(law, moleg_client)
+
+                    if exact_match:
+                        law.law_id = exact_match.law_id
+                        law.law_serial_no = exact_match.law_serial_no
+                        law.law_abbr = exact_match.law_abbr
+                        law.proclaimed_date = exact_match.proclaimed_date
+                        law.proclaimed_no = exact_match.proclaimed_no
+                        law.enforced_date = exact_match.enforced_date
+                        law.revision_type = exact_match.revision_type
+                        law.history_code = exact_match.history_code
+                        law.dept_name = exact_match.dept_name
+                        law.dept_code = exact_match.dept_code
+                        law.detail_link = exact_match.detail_link
+                        law.last_synced_at = datetime.utcnow()
+                        updated += 1
+                    else:
+                        failed += 1
+
+                    await asyncio.sleep(0.3)
+
+                except Exception as e:
+                    print(f"법령 '{law.law_name}' 업데이트 실패: {e}")
+                    failed += 1
+        finally:
+            await moleg_client.close()
+
+        await self.db.commit()
+
+        return {
+            "total_laws": total_laws,
+            "updated": updated,
+            "failed": failed,
+        }
+
     async def sync_all_laws_with_progress(self, save_to_db: bool = True):
         """
         모든 상위법령을 법제처 API와 동기화하고 변경사항을 추적 (SSE 스트리밍용 제너레이터)

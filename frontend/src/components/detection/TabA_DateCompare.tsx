@@ -12,9 +12,10 @@ interface ByLawDetail {
 interface Props {
   results: DetectionResult[]
   lawMap: Record<number, string>  // law_id → law_name
+  onLawClick?: (lawId: number) => void
 }
 
-export default function TabA_DateCompare({ results, lawMap }: Props) {
+export default function TabA_DateCompare({ results, lawMap, onLawClick }: Props) {
   const methodResult = results.find(r => r.method === 'proclaimed_date')
   const byLaw: ByLawDetail[] = methodResult?.detail?.by_law || []
 
@@ -30,7 +31,15 @@ export default function TabA_DateCompare({ results, lawMap }: Props) {
         return (
           <div key={item.law_id ?? idx} style={{ marginBottom: 16 }}>
             <Descriptions
-              title={lawMap[item.law_id] || item.law_name || `법령 #${item.law_id}`}
+              title={
+                onLawClick ? (
+                  <a onClick={() => onLawClick(item.law_id)} style={{ color: '#1890ff', cursor: 'pointer' }}>
+                    {lawMap[item.law_id] || item.law_name || `법령 #${item.law_id}`}
+                  </a>
+                ) : (
+                  lawMap[item.law_id] || item.law_name || `법령 #${item.law_id}`
+                )
+              }
               bordered
               size="small"
               column={2}

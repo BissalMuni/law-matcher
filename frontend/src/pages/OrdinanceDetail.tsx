@@ -19,7 +19,7 @@ import {
   Timeline,
   Alert,
 } from 'antd'
-import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, LinkOutlined, UserOutlined, BankOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, LinkOutlined, UserOutlined, BankOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ordinanceApi, lawsApi, aiApi, useDetectionResults } from '../services/api'
 import dayjs from 'dayjs'
@@ -207,6 +207,17 @@ export default function OrdinanceDetail() {
     },
     onError: () => {
       message.error('설정 해제에 실패했습니다.')
+    },
+  })
+
+  const syncParentLawsMutation = useMutation({
+    mutationFn: () => ordinanceApi.syncParentLaws(Number(id)),
+    onSuccess: (data: any) => {
+      message.success(data?.message || '상위법령 동기화가 완료되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['ordinance', id, 'parent-laws'] })
+    },
+    onError: () => {
+      message.error('상위법령 동기화에 실패했습니다.')
     },
   })
 
@@ -551,6 +562,14 @@ export default function OrdinanceDetail() {
         style={{ marginBottom: 16 }}
         extra={
           <Space>
+            <Button
+              icon={<SyncOutlined />}
+              onClick={() => syncParentLawsMutation.mutate()}
+              loading={syncParentLawsMutation.isPending}
+              disabled={!parentLaws || parentLaws.length === 0}
+            >
+              법령 동기화
+            </Button>
             {ordinance?.no_parent_law ? (
               <Popconfirm
                 title="상위법령 없음 해제"

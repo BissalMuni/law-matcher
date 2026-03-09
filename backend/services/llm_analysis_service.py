@@ -5,6 +5,7 @@ Constitution VIII: 1회 실행 원칙, AI 입출력 보존
 import hashlib
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -17,6 +18,7 @@ from backend.core.config import settings
 from backend.models.law import Law
 from backend.models.ordinance import Ordinance
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
+from backend.models.ordinance_text import OrdinanceText
 from backend.models.llm_analysis_result import LlmAnalysisResult
 from backend.models.llm_provider import LlmProvider
 from backend.models.ordinance_review import OrdinanceReview
@@ -40,10 +42,11 @@ def _load_prompts() -> dict:
 
 
 def compute_input_hash(
-    revision_reason: str, amendment_content: str, ordinance_name: str
+    revision_reason: str, amendment_content: str, ordinance_name: str,
+    ordinance_text: str = ""
 ) -> str:
     """입력 데이터만 해시 (프롬프트 제외)"""
-    input_data = f"{revision_reason or ''}\n{amendment_content or ''}\n{ordinance_name or ''}"
+    input_data = f"{revision_reason or ''}\n{amendment_content or ''}\n{ordinance_name or ''}\n{ordinance_text or ''}"
     return hashlib.sha256(input_data.encode("utf-8")).hexdigest()
 
 
@@ -98,9 +101,13 @@ class LlmAnalysisService:
         if not revision_reason and not amendment_content:
             raise ValueError("제개정이유 데이터가 없어 AI 분석을 수행할 수 없습니다")
 
+        # 5-1. 조례 전문 조회 (DB 캐시 or API fetch)
+        ordinance_text_str = await self._get_or_fetch_ordinance_text(ordinance)
+
         # 6. input_hash 계산
         input_hash = compute_input_hash(
-            revision_reason or "", amendment_content or "", ordinance.name
+            revision_reason or "", amendment_content or "", ordinance.name,
+            ordinance_text_str or ""
         )
 
         # 7. 활성 LLM 클라이언트 가져오기
@@ -117,13 +124,13 @@ class LlmAnalysisService:
 
         # 9. 프롬프트 렌더링
         prompts = _load_prompts()
-        token_limit = prompts.get("token_limit", {}).get("max_input_chars", 30000)
+        token_limit = prompts.get("token_limit", {}).get("max_input_chars", 50000)
 
         # 토큰 초과 검사 → 2단계 처리
-        combined_input = f"{revision_reason or ''}{amendment_content or ''}"
+        combined_input = f"{revision_reason or ''}{amendment_content or ''}{ordinance_text_str or ''}"
         if len(combined_input) > token_limit:
-            revision_reason, amendment_content = await self._summarize_long_input(
-                client, prompts, revision_reason, amendment_content
+            revision_reason, amendment_content, ordinance_text_str = await self._summarize_long_input(
+                client, prompts, revision_reason, amendment_content, ordinance_text_str
             )
 
         system_prompt = prompts["unified_analysis"]["system_prompt"]
@@ -133,6 +140,7 @@ class LlmAnalysisService:
             revision_reason=revision_reason or "(제개정이유 없음)",
             amendment_content=amendment_content or "(개정문 없음)",
             ordinance_name=ordinance.name,
+            ordinance_text=ordinance_text_str or "(조례 전문 없음)",
         )
 
         # 10. pending 레코드 생성
@@ -178,11 +186,15 @@ class LlmAnalysisService:
             if ordinance_impact:
                 summary_text += f"\n### 조례 영향\n{ordinance_impact}\n"
 
+            # 개정 필요 조례 조문별 분석 결과
+            affected_ordinance_articles = parsed.get("affected_ordinance_articles", [])
+
             # 결과 업데이트
             result.status = "success"
             result.summary_text = summary_text.strip()
             result.review_draft_text = review_draft.get("content", "")
             result.review_draft_result = review_draft.get("result", "")
+            result.affected_articles_json = affected_ordinance_articles if affected_ordinance_articles else None
             result.token_usage = {
                 "input_tokens": llm_response.input_tokens,
                 "output_tokens": llm_response.output_tokens,
@@ -348,9 +360,80 @@ class LlmAnalysisService:
         except Exception:
             return None
 
+    async def _get_or_fetch_ordinance_text(self, ordinance: Ordinance) -> Optional[str]:
+        """조례 전문 조회 — DB 캐시 확인 → 없으면 법제처 API fetch → 저장"""
+        # DB 캐시 확인
+        result = await self.db.execute(
+            select(OrdinanceText).where(OrdinanceText.ordinance_id == ordinance.id)
+        )
+        cached = result.scalar_one_or_none()
+        if cached and cached.full_text:
+            return cached.full_text
+
+        # serial_no 없으면 API 호출 불가
+        if not ordinance.serial_no:
+            logger.warning("조례 serial_no 없음, 조례 전문 fetch 불가 (ordinance_id=%d)", ordinance.id)
+            return None
+
+        # 법제처 API에서 조례 전문 조회
+        try:
+            from backend.external.moleg_client import MolegClient
+            moleg = MolegClient(api_key=settings.MOLEG_API_KEY)
+            try:
+                detail = await moleg.get_ordinance_detail(ordinance.serial_no)
+            finally:
+                await moleg.close()
+
+            # 조문 텍스트 직렬화
+            full_text = self._build_full_text(detail.articles)
+            articles_json = [
+                {
+                    "article_no": a.article_no,
+                    "article_title": a.article_title,
+                    "article_content": a.article_content,
+                }
+                for a in detail.articles
+            ]
+
+            # DB에 저장 (기존 레코드 있으면 업데이트)
+            if cached:
+                cached.full_text = full_text
+                cached.articles_json = articles_json
+                cached.fetched_at = datetime.utcnow()
+            else:
+                new_text = OrdinanceText(
+                    ordinance_id=ordinance.id,
+                    serial_no=ordinance.serial_no,
+                    full_text=full_text,
+                    articles_json=articles_json,
+                    fetched_at=datetime.utcnow(),
+                )
+                self.db.add(new_text)
+            await self.db.flush()
+
+            return full_text
+
+        except Exception as e:
+            logger.warning("조례 전문 fetch 실패 (ordinance_id=%d): %s", ordinance.id, e)
+            return None
+
+    def _build_full_text(self, articles) -> str:
+        """조문 리스트를 텍스트로 직렬화"""
+        lines = []
+        for art in articles:
+            header = art.article_no
+            if art.article_title:
+                header += f"({art.article_title})"
+            lines.append(header)
+            if art.article_content:
+                lines.append(art.article_content)
+            lines.append("")  # 빈 줄 구분
+        return "\n".join(lines).strip()
+
     async def _summarize_long_input(
-        self, client, prompts: dict, revision_reason: str, amendment_content: str
-    ) -> tuple[str, str]:
+        self, client, prompts: dict, revision_reason: str, amendment_content: str,
+        ordinance_text: str = ""
+    ) -> tuple[str, str, str]:
         """토큰 초과 시 1차 요약 LLM 호출 (2단계 처리)"""
         summarize_prompts = prompts.get("summarize_long_text", {})
         system_prompt = summarize_prompts.get("system_prompt", "법령 텍스트를 요약해 주세요.")
@@ -358,6 +441,7 @@ class LlmAnalysisService:
 
         summarized_reason = revision_reason
         summarized_content = amendment_content
+        summarized_ordinance = ordinance_text
 
         # 제개정이유 요약
         if revision_reason and len(revision_reason) > 15000:
@@ -381,7 +465,18 @@ class LlmAnalysisService:
             except Exception as e:
                 logger.warning(f"개정문 요약 실패, 원본 사용: {e}")
 
-        return summarized_reason, summarized_content
+        # 조례 전문 요약
+        if ordinance_text and len(ordinance_text) > 15000:
+            try:
+                resp = await client.generate(
+                    prompt=user_prompt_template.format(text=ordinance_text),
+                    system_prompt=system_prompt,
+                )
+                summarized_ordinance = resp.content
+            except Exception as e:
+                logger.warning(f"조례 전문 요약 실패, 원본 사용: {e}")
+
+        return summarized_reason, summarized_content, summarized_ordinance
 
 
 class ConflictError(Exception):

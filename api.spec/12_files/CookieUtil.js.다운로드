@@ -1,0 +1,980 @@
+/**********************************************************************
+ *
+ *  cookie 공통 모듈 
+ *
+ **********************************************************************/
+/**
+  * 쿠키정보 가져오기 
+  * @param name  쿠키명
+  */
+function getCookie(name) { 
+	var Found = false; 
+	var start, end;
+	var i = 0;
+	var cookieData = document.cookie;
+	while(i <= cookieData.length) { 
+	  	start = i; 
+	 	end = start + name.length;
+		  
+	 	if(cookieData.substring(start, end) == name) { 
+	   		Found = true; 
+	   		break; 
+	  	} 
+	  	i++; 
+	} 
+	if(Found == true) { 
+	  	start = end + 1; 
+	  	end = cookieData.indexOf(";", start); 
+	  	if(end < start) 
+	   		end = cookieData.length; 
+		  	return unescape(cookieData.substring(start, end)); 
+		 } 
+				 
+	return ""; 
+}
+
+/**
+  * 쿠키 설정
+  * @param cookieName 쿠키명
+  * @param cookieValue 쿠키값
+  * @param expireDay 쿠키 유효날짜
+  */
+function setCookie( cookieName, cookieValue){
+  	var today = new Date();
+  	today.setDate( today.getDate() + 365 );   // 저장 기간 
+  	document.cookie = cookieName + "=" +  escape(cookieValue)  + "; path=/; expires=" + today.toGMTString() + ";";
+}
+
+/**
+  * 쿠키 삭제
+  * @param cookieName 삭제할 쿠키명
+  */
+function deleteCookie(cookieName ){
+  	var expireDate = new Date();
+  
+  	//어제 날짜를 쿠키 소멸 날짜로 설정한다.
+  	expireDate.setDate( expireDate.getDate() - 1 );
+  	document.cookie = cookieName + "=" + "; expires=" + expireDate.toGMTString() + "; path=/";
+	
+}
+
+/**********************************************************************
+ *
+ *  관심자료 cookie
+ *
+ **********************************************************************/
+
+/**
+  * 관심자료 목록 가져오기 
+  * return : list1[]
+  */
+function getCernDatList(){
+	var list =  "";	
+	if (navigator.appName.charAt(0) == 'N') {
+		list = fromUtf8(getCookie('cernDatList'));
+	} else if (navigator.appName.charAt(0) == 'M') {
+		list = getCookie('cernDatList');
+	}	
+	if(list.length>0){
+		list =  list.split("---");
+	}else{
+		list = "";
+	}
+	return list;
+}
+
+
+
+/**
+  * 관심자료 등록  
+  */
+function setCernDatList(url,title){
+	if(title!=""){
+		//1.관심자료 목록 가져오기 
+		var datList = getCernDatList();
+		var tempData = "";
+		var mode = 0;
+		var first = 0;
+		var uName = "";
+		if(datList.length>0){
+			//2. 중복자료 검사
+			var para = "";
+			var titleV = ""; 
+			var temp = "";
+			for(var i=0;i<datList.length;i++){
+				temp = datList[i].split("--");
+				if(temp != null){
+					para = temp[0].substring(4);
+					titleV = temp[1].substring(6);
+					if(para==url){
+						mode = 1;
+						break;
+					}else{
+						// 2-1 데이터 저장 
+						if(tempData==""){
+								uName = 'url=';
+						}else{
+								uName = '---url=';	
+						}
+						if (navigator.appName.charAt(0) == 'N') {
+							tempData += uName+toUtf8(para)+'--title='+toUtf8(titleV);
+						} else if (navigator.appName.charAt(0) == 'M') {
+							tempData += uName+para+'--title='+titleV;
+						}
+					}
+				}
+			}	
+		}else{
+			first = 1;
+		}
+		//3. 등록  
+		if(mode == 0){
+			if(datList.length <= 20){				// 저장 개수 설정 
+				if(first==1){
+					uName = 'url=';
+				}else{
+					uName = tempData+'---url=';	
+				}
+				if (navigator.appName.charAt(0) == 'N') {
+					setCookie('cernDatList',uName+toUtf8(url)+'--title='+toUtf8(title));
+				} else if (navigator.appName.charAt(0) == 'M') {
+					setCookie('cernDatList',uName+url+'--title='+title);
+				}
+				
+				//4. 등록 확인 
+				var resultSize = getCernDatList();
+				if(datList.length<resultSize.length){
+					alert("관심자료에 등록되었습니다.");
+				}else{
+					alert("관심자료 등록 중 오류가 발생하였습니다.");
+				}
+			}else{
+				alert("저장 개수가 초과되었습니다.\n(20개까지 저장 가능합니다.)");
+			}
+		}else{
+			alert("이미 등록된 자료입니다.");
+		}	
+	}else{
+		alert("등록 자료가 없습니다.");
+	}
+}
+
+/**
+  * 관심자료 삭제 
+  */
+function delCernDatList(){
+	var oldCernSize = getCernDatList();
+	//if(!document.cernFrm.allCernLi.checked){
+		 
+		var delNo = "";
+		var cernList = "";
+		var temp = "";
+		var para = "";
+		var titleV = "";
+		var tempData = "";
+		var boo = "";
+		var cntCheckNo = 0;
+		for(var i=0;i<els("cernLi").length;i++){
+			if(els("cernLi").length==1){
+				boo = els("cernLi")[i].checked
+				delNo = els("cernLi")[i].value;
+				 
+			}else{
+				boo = els("cernLi")[i].checked
+				delNo = els("cernLi")[i].value;
+			}
+			 cernList = getCernDatList();
+			 tempData = "";
+			if(getCookie('cernDatList')!=""){
+				for(var j=0;j<cernList.length;j++){
+					temp = cernList[j].split("--");
+					para = temp[0].substring(4);
+					titleV = temp[1].substring(6);
+					if(para==delNo && boo==true){
+						cntCheckNo = 1;
+					}else{
+						if(tempData==""){
+								uName = 'url=';
+						}else{
+								uName = '---url=';	
+						}
+						if (navigator.appName.charAt(0) == 'N') {
+							tempData += uName+toUtf8(para)+'--title='+toUtf8(titleV);
+						} else if (navigator.appName.charAt(0) == 'M') {
+							tempData += uName+para+'--title='+titleV;
+						}
+					}
+				}
+				// 삭제 리스트 제외한 리스트 저장 
+				setCookie('cernDatList',tempData);
+			}
+		}
+		if(cntCheckNo>0){
+			//setCookie('cernDatList',tempData);
+			var afList = getCernDatList();
+			if(oldCernSize.length>afList.length){
+				alert("관심자료 삭제 성공");
+			}else{
+				alert("관심자료 삭제 실패");
+			}
+		}else{
+			alert("선택된 자료가 없습니다.");
+		}
+	outputList();
+}
+
+
+/**
+  * 관심자료 리스트 뿌려주기
+  */
+function outputList() {
+   	var temp = "";
+	if (navigator.appName.charAt(0) == 'N') {
+    	temp = fromUtf8(getCookie('cernDatList'));
+  	} else if (navigator.appName.charAt(0) == 'M') {
+	   	temp = getCookie('cernDatList');
+  	}
+	var text = temp.split("---");
+	var outText = "";
+	var divHtml = "<ul>";
+	if(temp!=""){
+		var sortNo = text.length-1;
+		var tempNo = 0;
+		for(var i = 0; i<text.length;i++){
+		 	outText = text[sortNo].split("--");
+		 	tempNo = i+1;
+		 	divHtml += "<li><input type=\"checkbox\" class=\"vmid\" name=\"cernLi\" value=\""+outText[0].substring(4)+"\"/><a href=\"#AJAX\" onclick=\"javascript:openPop('" 
+						+ outText[0].substring(4) + "');\">&nbsp;" + tempNo +".&nbsp;"
+						+ outText[1].substring(6).replace("00000","<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;") + 
+						"</a></li>";
+		 	sortNo--;
+	   	}
+	}else{
+	 	divHtml += "<li>자료 없음</li>";
+	}
+	//alert(divHtml);
+   	document.getElementById("cernDat").innerHTML = divHtml+"</ul>";
+}  
+  
+/**
+  * 관심자료 리스트 보여주기 
+  */
+function fCernDat(){
+	var mode = document.getElementById("cernDat").style.display; 
+	if(mode==""){
+		document.getElementById("cernDat").style.display = "none";
+	}else{
+		document.getElementById("cernDat").style.display = "";
+		outputList();
+	}
+	
+    
+}
+  
+/**********************************************************************
+ *
+ *  Unicode ⇔ UTF-8
+ *
+ **********************************************************************/
+
+function toUtf8(s) {
+  var c, d = "";
+  for (var i = 0; i < s.length; i++) {
+    c = s.charCodeAt(i);
+    if (c <= 0x7f) {
+      d += s.charAt(i);
+    } else if (c >= 0x80 && c <= 0x7ff) {
+      d += String.fromCharCode(((c >> 6) & 0x1f) | 0xc0);
+      d += String.fromCharCode((c & 0x3f) | 0x80);
+    } else {
+      d += String.fromCharCode((c >> 12) | 0xe0);
+      d += String.fromCharCode(((c >> 6) & 0x3f) | 0x80);
+      d += String.fromCharCode((c & 0x3f) | 0x80);
+    }
+  }
+  return d;
+}
+
+function fromUtf8(s) {
+  var c, d = "", flag = 0, tmp;
+  for (var i = 0; i < s.length; i++) {
+    c = s.charCodeAt(i);
+    if (flag == 0) {
+      if ((c & 0xe0) == 0xe0) {
+        flag = 2;
+        tmp = (c & 0x0f) << 12;
+      } else if ((c & 0xc0) == 0xc0) {
+        flag = 1;
+        tmp = (c & 0x1f) << 6;
+      } else if ((c & 0x80) == 0) {
+        d += s.charAt(i);
+      } else {
+        flag = 0;
+      }
+    } else if (flag == 1) {
+      flag = 0;
+      d += String.fromCharCode(tmp | (c & 0x3f));
+    } else if (flag == 2) {
+      flag = 3;
+      tmp |= (c & 0x3f) << 6;
+    } else if (flag == 3) {
+      flag = 0;
+      d += String.fromCharCode(tmp | (c & 0x3f));
+    } else {
+      flag = 0;
+    }
+  }
+  return d;
+}
+
+ /**********************************************************************
+ *
+ *  내가 찾은 자료  & 검색어 목록
+ *
+ **********************************************************************/
+ 
+/**
+  * 리스트 보여주기 
+  */
+function fQuickDat(dataId){
+	var mode = document.getElementById(dataId+"List").style.display; 
+	if(mode==""){
+		document.getElementById(dataId+"List").style.display = "none";
+	}else{
+		document.getElementById(dataId+"List").style.display = "";
+		outputDataList(dataId);
+	}
+	
+    
+} 
+ 
+ 
+/**
+  * 목록 가져오기 
+  * return : list1[]
+  */
+function getDatList(dataId){
+	var list =  "";	
+	if (navigator.appName.charAt(0) == 'N') {
+		list = fromUtf8(getCookie(dataId));
+	} else if (navigator.appName.charAt(0) == 'M') {
+		list = getCookie(dataId);
+	}	
+	if(list.length>0){
+		list =  list.split("---");
+	}else{
+		list = "";
+	}
+	return list;
+}
+
+/**
+  * 등록  
+  */
+function setDatList(dataId, url, title){
+ 
+	if(title != ""){
+		//1.목록 가져오기 
+		var datList = getDatList(dataId);
+		var tempData = "";
+		var first = 0;
+		var uName = "";
+		if(datList.length > 0){
+			//2. 중복자료 검사
+			var preSavedUrl = "";
+			var preSavedTitle = ""; 
+			var temp = "";
+		 
+			for(var i = 0; i < datList.length; i++){
+				temp = datList[i].split("--");
+				preSavedUrl = temp[0].substring(4);
+				preSavedTitle = temp[1].substring(6);
+				
+				if(preSavedUrl == url){
+					//alert(preSavedUrl); 최상위로 올림 
+					//return false;
+					 
+				}else{
+					// 2-1 데이터 저장 
+					if(tempData == ""){
+							uName = 'url=';
+					}else{
+							uName = '---url=';	
+					}
+					if (navigator.appName.charAt(0) == 'N') {
+						tempData += uName + toUtf8(preSavedUrl) + '--title=' + toUtf8(preSavedTitle);
+					} else if (navigator.appName.charAt(0) == 'M') {
+						tempData += uName + preSavedUrl + '--title=' + preSavedTitle;
+					}
+				}
+			}
+		}
+		else{
+			first = 1;
+		}
+		 
+		//3. 등록  
+		//alert(mode+"---"+datList.length);
+		if(first==1){
+			uName = 'url=';
+		}
+		else{
+			uName = tempData + '---url=';	
+		}
+		
+		if (navigator.appName.charAt(0) == 'N') {
+			setCookie(dataId, uName + toUtf8(url) + '--title=' + toUtf8(title));
+		}
+		else if (navigator.appName.charAt(0) == 'M') {
+			setCookie(dataId, uName + url + '--title=' + title);
+		}
+		
+		//alert(datList.length);
+		if(datList.length > 20){		// 저장 개수 설정 
+			delDatList(dataId, 1);
+		}
+	}
+	 
+}
+
+ 
+ 
+/**
+  * 삭제        (쿠키 id, 삭제 모드)
+  */
+function delDatList(dataId,mode){
+	var oldCernSize = getDatList(dataId);
+	if(mode==1){
+		var cernList = "";
+		var temp = "";
+		var para = "";
+		var titleV = "";
+		var tempData = "";
+	 
+			 cernList = getDatList(dataId);
+			 tempData = "";
+			if(getCookie(dataId)!=""){
+				for(var j=0;j<cernList.length;j++){
+					temp = cernList[j].split("--");
+					para = temp[0].substring(4);
+					titleV = temp[1].substring(6);
+					if(j==0){
+						 
+					}else{
+						if(tempData==""){
+								uName = 'url=';
+						}else{
+								uName = '---url=';	
+						}
+						if (navigator.appName.charAt(0) == 'N') {
+							tempData += uName+toUtf8(para)+'--title='+toUtf8(titleV);
+						} else if (navigator.appName.charAt(0) == 'M') {
+							tempData += uName+para+'--title='+titleV;
+						}
+					}
+				}
+				// 삭제 리스트 제외한 리스트 저장 
+				setCookie(dataId,tempData);
+			}
+		 
+	}else{
+		deleteCookie(dataId);
+		var resultSize = getDatList(dataId);
+		if(oldCernSize.length>resultSize.length){
+			alert("삭제 성공");
+		}else{
+			alert("삭제 실패");
+		}
+	}
+	//outputDataList(dataId);
+}
+  
+  
+/**
+  * 리스트 뿌려주기
+  */
+function outputDataList(dataId) {
+   	var temp = "";
+	if (navigator.appName.charAt(0) == 'N') {
+    	temp = fromUtf8(getCookie(dataId));
+  	} else if (navigator.appName.charAt(0) == 'M') {
+	   	temp = getCookie(dataId);
+  	}
+	var text = temp.split("---");
+	var outText = "";
+	var divHtml = "";
+	var conTit = "";
+	if(temp!=""){
+		var sortNo = text.length-1;
+		for(var i = 0; i < text.length && i < mainListSize;i++){
+		 	outText = text[sortNo].split("--");
+			if(outText != ""){
+				if(dataId=="myFindDat"){
+					idxStart = outText[1].indexOf("[");
+				
+					if(idxStart > 6)	subject = outText[1].substring(6, idxStart);
+					else				subject = outText[1].substring(6);
+					subject = subject.replace("00000","").replace("_", "").replace("title=", "").replace("n", "");
+					if(subject.length > 23)	subject = subject.substring(0, 24) + "...";
+					
+					if(idxStart > 0){
+					    content = outText[1].substring(idxStart);
+					    conTit  = outText[1].substring(idxStart);
+					    
+					} else {
+					    content = "";
+					    conTit  = "";
+					}
+					
+					if(content.length > 8)	content = content.substring(0, 9) + "...";
+				
+					divHtml += "<dt><a href=\"#AJAX\" onclick=\"javascript:openPop('" + outText[0].substring(4) + "');\" >" 
+						//+ (i + 1) + ". "
+						+ subject + "</a></dt>";				
+					divHtml += "<dd><span title='"+conTit+"'>" + content + "</span></dd><br>";
+				}else{
+					divHtml += "<p><a href=\"#AJAX\" onclick=\"javascript:openPop('" + outText[0].substring(4) + "');\" >" 
+						+ (i + 1) + ". " + outText[1].substring(6) + "</a></p><br>";
+				}
+			}
+		 	sortNo--;
+	   	}
+	   			 	/*alert(outText[0].substring(4));
+	   			 	alert(outText[1].substring(6));*/
+	}else{
+	 	divHtml += "<dt>조회한 이력이 없습니다.</dt>";
+	}
+   	document.getElementById(dataId).innerHTML = "<dl>" + divHtml + "</dl>";
+}  
+
+function outputDataNmList(dataId) {
+
+   	var temp = "";
+	if (navigator.appName.charAt(0) == 'N') {
+    	temp = fromUtf8(getCookie(dataId));
+  	} else if (navigator.appName.charAt(0) == 'M') {
+	   	temp = getCookie(dataId);
+  	}
+	var text = temp.split("---");
+	var outText = "";
+	var divHtml = "";
+	if(temp!=""){
+		var sortNo = text.length-1;
+		for(var i = 0; i < text.length;i++){
+		 	outText = text[sortNo].split("--");
+		 	divHtml += "<p><a href=" + outText[0].substring(4) + " >" 
+		 			+ (i + 1) + ". " + outText[1].substring(6) + "</a></p>";
+		 	sortNo--;
+	   	}
+	   			 	/*alert(outText[0].substring(4));
+	   			 	alert(outText[1].substring(6));*/
+	}else{
+	 	divHtml += "<p>자료 없음</p>";
+	}
+   	document.getElementById(dataId).innerHTML = divHtml;
+}  
+
+
+/**
+  * 검색어 쿠키 등록 
+  */
+function fSearchKeySaveF(){
+	setDatList('schTrmDat','searchKeyWord',document.getElementById("searchKeyWord").value);
+}
+
+function searchTrmSave(url, id){
+	setDatList('schTrmDat', url, el(id).value);
+}
+
+/**
+  * 검색어 쿠키 등록 	(다음 실행 함수)
+  */
+function fSearchKeySave(nextProc){
+	setDatList('schTrmDat','searchKeyWord',document.getElementById("searchKeyWord").value);
+	nextProc();
+}
+
+function addMyFindDat(url, id){
+    try{
+	url = url.replaceAll("<strong>", "").replaceAll("</strong>", "");
+	setDatList("myFindDat", url, id)
+	}catch(e){deleteCookie("myFindDat");}
+}
+
+// 내가 찾은용어  검색 라인에 보여주기 
+function searchTrmView(callBackName){
+	var temp = "";
+	var dataId = "schTrmDat";
+	if (navigator.appName.charAt(0) == 'N') {
+    	temp = fromUtf8(getCookie(dataId));
+  	} else if (navigator.appName.charAt(0) == 'M') {
+	   	temp = getCookie(dataId);
+  	}
+	var text = temp.split("---");
+	var outText = "";
+	var divHtml = "";
+	if(temp == null || temp.trim() == ""){
+	 	divHtml += "검색어를 입력하세요.";
+	}
+	else{
+		var sortNo = text.length;
+		if(sortNo > 5){
+			sortNo = 5;
+		}
+		var tempNo = text.length - 1;
+		var txtTitle = "";
+		for(var i = 0; i < sortNo; i++){
+		 	outText = text[tempNo].split("--");
+		 	txtTitle = outText[1].substring(6);
+		 	if(txtTitle.length > 7){
+		 		txtTitle = txtTitle.substring(0,7) + "...";
+		 	}
+
+			if(i > 0) divHtml += ", ";
+			if(typeof(callBackName) != "undefined" && callBackName != null){
+				divHtml += "<a href=# onclick=\"javascript:" + callBackName + "('" + outText[1].substring(6) + "');\" >" + txtTitle + "</a>";
+			}
+			else{
+			 	divHtml += "<a href=" + outText[0].substring(4) + " title="+outText[1].substring(6)+">" + txtTitle + "</a>";
+			}
+
+		 	tempNo --;
+	   	}
+		divHtml = divHtml.substring(0, divHtml.length - 1);	 
+	}
+
+   	document.getElementById("searchTrm").innerHTML = divHtml;
+}
+
+
+
+ /**********************************************************************
+ *
+ *  내가 찾은 법령 이력 
+ *
+ **********************************************************************/
+var maxDetailCookie = 10;
+function setDetailSelectCookie(lawKubun,seq){
+	var dataId = "lawHistory";
+	var dataSeq = "";
+	var dataSeq = lawKubun+","+seq;
+	
+	if(dataSeq != ""){
+		var datList = getDatList(dataId);
+		var tempData = "";
+		var uName = "";
+		var isFirst = true;
+		if(datList.length > 0){
+			for(var i = 0; i < datList.length; i++){
+				if ( datList[i] == dataSeq ) continue;
+
+				if(tempData == ""){
+						uName = "";
+				}else{
+						uName = "---";	
+				}
+				if (navigator.appName.charAt(0) == 'N') {
+					tempData += uName + toUtf8(datList[i]);
+				} else if (navigator.appName.charAt(0) == 'M') {
+					tempData += uName + datList[i];
+				}								
+			}
+			isFirst = false;
+		}
+		
+		if( isFirst == true ) {
+			uName = "";
+		} else {
+			uName = tempData + "---";
+		}
+		
+		if (navigator.appName.charAt(0) == 'N') {
+			setCookie(dataId, uName + toUtf8(dataSeq));
+		} else if (navigator.appName.charAt(0) == 'M') {
+			setCookie(dataId, uName + dataSeq);
+		}	
+		
+		if(datList.length >= maxDetailCookie){		// 저장 개수 설정 
+			delDetailSelectCookie(dataId);
+		}						
+	}
+}	
+
+/**
+  * 20개 이상 쿠키 삭제
+  */
+function delDetailSelectCookie(dataId){
+	var oldList = getDatList(dataId);
+	
+	if ( oldList.length <= maxDetailCookie ) return;	
+	
+	var tmpData = "";
+	var isFirst = true;
+	var uName = "";
+	
+	
+	oldList.reverse();
+	
+	for(var i = 0; i < maxDetailCookie; i ++) {
+		if ( i == 0 )
+			uName = "";
+		else
+			uName = "---";
+		if (navigator.appName.charAt(0) == 'N') {
+			tmpData = toUtf8(oldList[i]) + uName + tmpData;
+		} else if (navigator.appName.charAt(0) == 'M') {
+			tmpData = oldList[i] + uName + tmpData;
+		}
+	}
+	
+	// 삭제 리스트 제외한 리스트 저장 
+	setCookie(dataId,tmpData);
+}
+
+function getDetailSelectCookie(dataId){
+	var list =  "";	
+	if (navigator.appName.charAt(0) == 'N') {
+		list = fromUtf8(getCookie(dataId));
+	} else if (navigator.appName.charAt(0) == 'M') {
+		list = getCookie(dataId);
+	}
+	return list;
+}
+
+
+
+
+/**********************************************************************
+ *
+ *  Nethru_pcId 모듈 
+ *
+ **********************************************************************/
+
+function Nethru_getCookieVal(offset)
+{
+	var endstr = document.cookie.indexOf (";", offset);
+	if (endstr == -1)
+		endstr = document.cookie.length;
+	return unescape(document.cookie.substring(offset, endstr));
+}
+
+function Nethru_SetCookie(name, value){
+   var argv = Nethru_SetCookie.arguments;
+   var argc = Nethru_SetCookie.arguments.length;
+   var expires = (2 < argc) ? argv[2] : null;
+   var path = (3 < argc) ? argv[3] : null;
+   var domain = (4 < argc) ? argv[4] : null;
+   var secure = (5 < argc) ? argv[5] : false;
+	//alert(value);
+   //alert("DOMAIN = " + domain);
+   document.cookie = name + "=" + escape (value) +
+        ((expires == null) ? "" : ("; expires="+expires.toGMTString())) +
+     ((path == null) ? "" : ("; path=" + path)) +
+     ((domain == null) ? "" : ("; domain=" + domain)) +
+        ((secure == true) ? "; secure" : "");
+
+	//alert(document.cookie);
+}
+
+function Nethru_GetCookie(name){
+   var arg = name + "=";
+   var alen = arg.length;
+   var clen = document.cookie.length;
+   var i = 0;
+   while (i < clen)
+      {
+      var j = i + alen;
+      if (document.cookie.substring(i, j) == arg)
+         return Nethru_getCookieVal (j);
+      i = document.cookie.indexOf(" ", i) + 1;
+      if (i == 0)
+         break;
+      }
+  return null;
+}
+
+function Nethru_makePersistentCookie(name,length,path,domain)
+{
+//	alert(name+" -- "+length+"--"+path+"--"+domain);
+    var today = new Date();
+    var expiredDate = new Date(2011,1,1);
+    var cookie;
+	var value;
+
+    cookie = Nethru_GetCookie(name);
+    if ( cookie ) {
+//		alert(cookie);
+        return 1;
+	}
+
+	var values = new Array();
+	for ( i=0; i < length ; i++ ) {
+		values[i] = "" + Math.random();
+	}
+
+	value = today.getTime();
+
+	// use first decimal
+	for ( i=0; i < length ; i++ ) {
+		value += values[i].charAt(2);
+	}
+
+    Nethru_SetCookie(name,value,expiredDate,path,domain);
+}
+
+function Nethru_getDomain() {
+	var _host   = document.domain;
+	var so      = _host.split('.');
+	var dm    = so[so.length-2] + '.' + so[so.length-1];
+	return (so[so.length-1].length == 2) ? so[so.length-3] + '.' + dm : dm;
+}
+
+var Nethru_domain  = Nethru_getDomain();
+Nethru_makePersistentCookie("PCID",10,"/",Nethru_domain);
+
+
+/**
+  * 화면내 검색어 쿠키 등록 
+  */
+function fBdySearchKeySaveF(){
+	setBdySearchDatList('bdySearchDat','searchKeyWord',document.getElementById("bdySearch").value);
+}
+
+/**
+  * 목록 가져오기 
+  * return : list1[]
+  */
+function getBdySearchDatList(dataId){
+	var list =  "";	
+	if (navigator.appName.charAt(0) == 'N') {
+		list = fromUtf8(getCookie(dataId));
+	} else if (navigator.appName.charAt(0) == 'M') {
+		list = getCookie(dataId);
+	}	
+	if(list.length>0){
+		list =  list.split("---");
+	}else{
+		list = "";
+	}
+	return list;
+}
+
+/**
+  * 등록  
+  */
+function setBdySearchDatList(dataId, url, title){
+ 	if(title != ""){
+		//1.목록 가져오기 
+		var datList = getBdySearchDatList(dataId);
+		var tempData = "";
+		var first = 0;
+		var uName = "";
+		
+		if(datList.length > 0){
+			//2. 중복자료 검사
+			var preSavedUrl = "";
+			var preSavedTitle = ""; 
+			var temp = "";
+		 
+			for(var i = 0; i < datList.length; i++){
+				temp = datList[i].split("--");
+				preSavedUrl = temp[0].substring(4);
+				preSavedTitle = temp[1].substring(6);
+				
+				if(preSavedUrl == url){
+					//alert(preSavedUrl); 최상위로 올림 
+					//return false;
+					 
+				}else{
+					// 2-1 데이터 저장 
+					if(tempData == ""){
+							uName = 'url=';
+					}else{
+							uName = '---url=';	
+					}
+					if (navigator.appName.charAt(0) == 'N') {
+						tempData += uName + toUtf8(preSavedUrl) + '--title=' + toUtf8(preSavedTitle);
+					} else if (navigator.appName.charAt(0) == 'M') {
+						tempData += uName + preSavedUrl + '--title=' + preSavedTitle;
+					}
+				}
+			}
+		}
+		else{
+			first = 1;
+		}
+		 
+		//3. 등록  
+		//alert(mode+"---"+datList.length);
+		if(first==1){
+			uName = 'url=';
+		}
+		else{
+			uName = tempData + '---url=';	
+		}
+		
+		if (navigator.appName.charAt(0) == 'N') {
+			setCookie(dataId, uName + toUtf8(url) + '--title=' + toUtf8(title));
+		}
+		else if (navigator.appName.charAt(0) == 'M') {
+			setCookie(dataId, uName + url + '--title=' + title);
+		}
+		
+		//alert(datList.length);
+		if(datList.length > 4){		// 저장 개수 설정 
+			delBdySearchDatList(dataId, 1);
+		}
+	}	 
+}
+
+/**
+  * 삭제        (쿠키 id, 삭제 모드)
+  */
+function delBdySearchDatList(dataId,mode){
+	var oldCernSize = getBdySearchDatList(dataId);
+	if(mode==1){
+		var cernList = "";
+		var temp = "";
+		var para = "";
+		var titleV = "";
+		var tempData = "";
+	 
+			 cernList = getBdySearchDatList(dataId);
+			 tempData = "";
+			if(getCookie(dataId)!=""){
+				for(var j=0;j<cernList.length;j++){
+					temp = cernList[j].split("--");
+					para = temp[0].substring(4);
+					titleV = temp[1].substring(6);
+					if(j==0){
+						 
+					}else{
+						if(tempData==""){
+								uName = 'url=';
+						}else{
+								uName = '---url=';	
+						}
+						if (navigator.appName.charAt(0) == 'N') {
+							tempData += uName+toUtf8(para)+'--title='+toUtf8(titleV);
+						} else if (navigator.appName.charAt(0) == 'M') {
+							tempData += uName+para+'--title='+titleV;
+						}
+					}
+				}
+				// 삭제 리스트 제외한 리스트 저장 
+				setCookie(dataId,tempData);
+			}
+		 
+	}else{
+		deleteCookie(dataId);
+		var resultSize = getDatList(dataId);
+		if(oldCernSize.length>resultSize.length){
+			alert("삭제 성공");
+		}else{
+			alert("삭제 실패");
+		}
+	}
+	//outputDataList(dataId);
+}
+
+

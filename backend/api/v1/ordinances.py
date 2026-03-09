@@ -34,6 +34,7 @@ from backend.schemas.ordinance import (
     AllOrdinanceReviewsResponse,
     OrdinanceReviewWithOrdinance,
     OrdinanceDetectionResultsResponse,
+    LawInfoUpdateResponse,
 )
 from backend.schemas.revision import DetectRequest
 from backend.services.ordinance_service import OrdinanceService
@@ -500,6 +501,43 @@ async def run_detection(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"detection failed: {exc}")
+
+
+@router.post("/{ordinance_id}/sync-parent-laws", response_model=LawInfoUpdateResponse)
+async def sync_parent_laws(
+    ordinance_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """해당 조례의 상위법령만 법제처 API로 동기화"""
+    from sqlalchemy import select
+    from backend.models.ordinance_law_mapping import OrdinanceLawMapping
+    from backend.services.law_sync_service import LawSyncService
+
+    # 상위법령 매핑에서 law PK 목록 조회
+    stmt = select(OrdinanceLawMapping.law_id).where(
+        OrdinanceLawMapping.ordinance_id == ordinance_id
+    )
+    result = await db.execute(stmt)
+    law_ids = [row[0] for row in result.all()]
+
+    if not law_ids:
+        raise HTTPException(status_code=404, detail="상위법령이 없습니다.")
+
+    service = LawSyncService(db)
+    try:
+        sync_result = await service.update_laws_by_ids(law_ids)
+        return LawInfoUpdateResponse(
+            success=True,
+            total_laws=sync_result["total_laws"],
+            updated=sync_result["updated"],
+            failed=sync_result["failed"],
+            message=f"상위법령 동기화 완료: {sync_result['updated']}건 성공, {sync_result['failed']}건 실패",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"상위법령 동기화 중 오류 발생: {str(exc)}",
+        )
 
 
 @router.get("/{ordinance_id}", response_model=OrdinanceResponse)

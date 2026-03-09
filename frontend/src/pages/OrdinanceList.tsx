@@ -68,7 +68,7 @@ export default function OrdinanceList() {
   const [noParentLawFilter, setNoParentLawFilter] = useState<string | undefined>(() => searchParams.get('noParentLaw') || undefined)
   const [needsRevisionFilter, setNeedsRevisionFilter] = useState<string | undefined>(() => searchParams.get('needsRevision') || undefined)
   const [revisionType, setRevisionType] = useState<string | undefined>(() => searchParams.get('revisionType') || undefined)
-  const [excludeOtherLawRevision, setExcludeOtherLawRevision] = useState(() => searchParams.get('excludeOtherLaw') === 'true')
+  const [excludeOtherLawRevision, setExcludeOtherLawRevision] = useState(() => searchParams.get('excludeOtherLaw') !== 'false')
   const [reviewResultFilter, setReviewResultFilter] = useState<string | undefined>(() => searchParams.get('reviewResult') || undefined)
   const [statusFilter, setStatusFilter] = useState<string | undefined>(() => searchParams.get('status') || undefined)
   const [initialLoaded, setInitialLoaded] = useState(false)
@@ -576,36 +576,36 @@ export default function OrdinanceList() {
       <div style={{ display: 'flex', gap: 16 }}>
         {/* 소관부서 사이드 네비 - 관리자만 표시 */}
         {isAdmin ? (
-        <div style={{ width: sidebarWidth, flexShrink: 0, position: 'relative' }}>
-          <Card
-            size="small"
-            title="담당부서"
-            style={{ position: 'sticky', top: 16 }}
-            bodyStyle={{ maxHeight: 'calc(100vh - 200px)', overflow: 'auto', padding: 0 }}
-          >
-            <Tree
-              showIcon
-              expandedKeys={expandedKeys}
-              onExpand={onTreeExpand}
-              treeData={treeData}
-              onSelect={onTreeSelect}
-              selectedKeys={selectedDepartment ? [selectedDepartment] : ['__all__']}
+          <div style={{ width: sidebarWidth, flexShrink: 0, position: 'relative' }}>
+            <Card
+              size="small"
+              title="담당부서"
+              style={{ position: 'sticky', top: 16 }}
+              styles={{ body: { maxHeight: 'calc(100vh - 200px)', overflow: 'auto', padding: 0 } }}
+            >
+              <Tree
+                showIcon
+                expandedKeys={expandedKeys}
+                onExpand={onTreeExpand}
+                treeData={treeData}
+                onSelect={onTreeSelect}
+                selectedKeys={selectedDepartment ? [selectedDepartment] : ['__all__']}
+              />
+            </Card>
+            {/* 리사이즈 핸들 */}
+            <div
+              onMouseDown={handleMouseDown}
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: -4,
+                width: 8,
+                height: '100%',
+                cursor: 'col-resize',
+                zIndex: 10,
+              }}
             />
-          </Card>
-          {/* 리사이즈 핸들 */}
-          <div
-            onMouseDown={handleMouseDown}
-            style={{
-              position: 'absolute',
-              top: 0,
-              right: -4,
-              width: 8,
-              height: '100%',
-              cursor: 'col-resize',
-              zIndex: 10,
-            }}
-          />
-        </div>
+          </div>
         ) : (
           /* 일반 사용자는 자신의 부서만 표시 */
           <div style={{ width: 200, flexShrink: 0 }}>
@@ -624,250 +624,280 @@ export default function OrdinanceList() {
 
         {/* 메인 콘텐츠 */}
         <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {/* 데이터 관리 / 추가 / 내보내기 */}
-        <div style={{ padding: '10px 14px', border: '1px solid #d9d9d9', borderRadius: 8, background: '#fafafa' }}>
-          <Space wrap split={<Divider type="vertical" />}>
-            <Space>
-              <Tooltip title="법제처 API에서 최신 자치법규 데이터를 가져와 DB에 반영합니다">
-                <Button
-                  type="primary"
-                  icon={<SyncOutlined />}
-                  onClick={() => {
-                    setPasswordAction('sync')
-                    setPasswordModalOpen(true)
-                  }}
-                  loading={syncMutation.isPending}
-                >
-                  법제처 동기화
-                </Button>
-              </Tooltip>
-              <Tooltip title="담당부서 배정 정보가 담긴 엑셀 파일을 업로드하여 일괄 반영합니다">
-                <Upload {...uploadProps}>
-                  <Button icon={<UploadOutlined />}>담당부서 엑셀 업로드</Button>
-                </Upload>
-              </Tooltip>
-              <Tooltip title="자치법규정보시스템(ELIS)의 소관부서별 자치법규 목록 페이지로 이동합니다">
-                <a
-                  href="https://elis.go.kr/locgovalr/locgovSeAlrList"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  소관부서별 자치법규 목록
-                </a>
-              </Tooltip>
-            </Space>
-            <Space>
-              <Tooltip title="새로운 자치법규를 수동으로 등록하거나 법제처 API에서 검색하여 추가합니다">
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => setCreateModalOpen(true)}
-                >
-                  신규
-                </Button>
-              </Tooltip>
-              <Tooltip title="DB에 저장된 자치법규의 상세 정보를 법제처 API 기준으로 최신화합니다">
-                <Button
-                  icon={<ReloadOutlined />}
-                  onClick={() => updateOrdinanceInfoMutation.mutate()}
-                  loading={updateOrdinanceInfoMutation.isPending}
-                >
-                  업데이트
-                </Button>
-              </Tooltip>
-              <Tooltip title="현재 필터 조건에 맞는 자치법규 목록을 엑셀 파일로 다운로드합니다">
-                <Button
-                  icon={<DownloadOutlined />}
-                  onClick={async () => {
-                    try {
-                      await ordinanceApi.exportExcel({
-                        category,
-                        department: selectedDepartment,
-                        search: search || undefined,
-                        no_parent_law_filter: noParentLawFilter,
-                        needs_revision_filter: needsRevisionFilter,
-                        revision_type: revisionType,
-                        exclude_other_law_revision: excludeOtherLawRevision || undefined,
-                      })
-                      message.success('엑셀 파일이 다운로드되었습니다.')
-                    } catch (error) {
-                      message.error('엑셀 다운로드 중 오류가 발생했습니다.')
+          <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* 데이터 관리 / 추가 / 내보내기 */}
+            <div style={{ padding: '10px 14px', border: '1px solid #d9d9d9', borderRadius: 8, background: '#fafafa' }}>
+              <Space wrap split={<Divider type="vertical" />}>
+                <Space>
+                                  <Tooltip title="자치법규 이름으로 검색합니다 (Enter로 검색)">
+                  <Input
+                    placeholder="자치법규명 검색"
+                    defaultValue={search}
+                    onPressEnter={(e) => setSearch((e.target as HTMLInputElement).value)}
+                    onChange={(e) => !e.target.value && setSearch('')}
+                    style={{ width: 200 }}
+                    allowClear
+                    suffix={
+                      <SearchOutlined
+                        style={{ cursor: 'pointer', color: '#1890ff' }}
+                        onClick={() => {
+                          const input = document.querySelector('input[placeholder="자치법규명 검색"]') as HTMLInputElement
+                          if (input) setSearch(input.value)
+                        }}
+                      />
                     }
-                  }}
-                >
-                  엑셀 다운로드
-                </Button>
-              </Tooltip>
-            </Space>
-          </Space>
-        </div>
-
-        {/* 검색 필터 */}
-        <div style={{ padding: '10px 14px', border: '1px solid #d9d9d9', borderRadius: 8 }}>
-          <Space wrap>
-            <Tooltip title="자치법규 이름으로 검색합니다 (Enter로 검색)">
-              <Input
-                placeholder="자치법규명 검색"
-                defaultValue={search}
-                onPressEnter={(e) => setSearch((e.target as HTMLInputElement).value)}
-                onChange={(e) => !e.target.value && setSearch('')}
-                style={{ width: 300 }}
-                allowClear
-                suffix={
-                  <SearchOutlined
-                    style={{ cursor: 'pointer', color: '#1890ff' }}
-                    onClick={() => {
-                      const input = document.querySelector('input[placeholder="자치법규명 검색"]') as HTMLInputElement
-                      if (input) setSearch(input.value)
-                    }}
                   />
-                }
-              />
-            </Tooltip>
-            <Tooltip title="조례 또는 규칙으로 분류하여 필터링합니다">
-              <Select
-                placeholder="분류"
-                style={{ width: 120 }}
-                allowClear
-                value={category}
-                onChange={setCategory}
-                options={[
-                  { value: '조례', label: '조례' },
-                  { value: '규칙', label: '규칙' },
-                ]}
-              />
-            </Tooltip>
-            <Tooltip title="상위법령 연결 상태로 필터링합니다 (연결됨/없음/미연결)">
-              <Select
-                placeholder="상위법령"
-                style={{ width: 160 }}
-                allowClear
-                value={noParentLawFilter}
-                onChange={(value) => {
-                  setNoParentLawFilter(value)
-                  setPage(1)
-                }}
-                options={[
-                  { value: 'connected', label: '연결' },
-                  { value: 'confirmed_none', label: '없음 (상위법없음)' },
-                  { value: 'no_mapping', label: '미연결 (확인필요)' },
-                ]}
-              />
-            </Tooltip>
-            <Tooltip title="상위법령 변경에 따른 개정 필요 여부로 필터링합니다">
-              <Select
-                placeholder="개정대상"
-                style={{ width: 140 }}
-                allowClear
-                value={needsRevisionFilter}
-                onChange={(value) => {
-                  setNeedsRevisionFilter(value)
-                  setPage(1)
-                }}
-                options={[
-                  { value: 'needs_revision', label: '개정대상' },
-                  { value: 'no_revision', label: '대상아님' },
-                ]}
-              />
-            </Tooltip>
-            <Tooltip title="제정/전부개정/일부개정 등 제개정 구분으로 필터링합니다">
-              <Select
-                placeholder="제개정구분"
-                style={{ width: 160 }}
-                allowClear
-                value={revisionType}
-                onChange={(value) => {
-                  setRevisionType(value)
-                  setPage(1)
-                }}
-                options={revisionTypes?.map((rt: { revision_type: string; count: number }) => ({
-                  value: rt.revision_type,
-                  label: `${rt.revision_type} (${rt.count})`,
-                })) || []}
-              />
-            </Tooltip>
-            <Tooltip title="다른 법률의 개정으로 인해 변경된 자치법규를 결과에서 제외합니다">
-              <Checkbox
-                checked={excludeOtherLawRevision}
-                onChange={(e) => {
-                  setExcludeOtherLawRevision(e.target.checked)
-                  setPage(1)
-                }}
-              >
-                타법개정 제외
-              </Checkbox>
-            </Tooltip>
-            <Tooltip title="검토 결과 상태(개정필요/불필요/검토중/보류/미검토)로 필터링합니다">
-              <Select
-                placeholder="검토결과"
-                style={{ width: 140 }}
-                allowClear
-                value={reviewResultFilter}
-                onChange={(value) => {
-                  setReviewResultFilter(value)
-                  setPage(1)
-                }}
-                options={[
-                  { value: '개정필요', label: '개정필요' },
-                  { value: '개정불필요', label: '개정불필요' },
-                  { value: '검토중', label: '검토중' },
-                  { value: '보류', label: '보류' },
-                  { value: '미검토', label: '미검토' },
-                ]}
-              />
-            </Tooltip>
-            <Tooltip title="자치법규의 현행 상태(시행중/폐지)로 필터링합니다">
-              <Select
-                placeholder="조례상태"
-                style={{ width: 120 }}
-                allowClear
-                value={statusFilter}
-                onChange={(value) => {
-                  setStatusFilter(value)
-                  setPage(1)
-                }}
-                options={[
-                  { value: 'ACTIVE', label: '시행중' },
-                  { value: 'ABOLISHED', label: '폐지' },
-                ]}
-              />
-            </Tooltip>
-            <Tooltip title="현재 설정된 필터 조건으로 DB에서 자치법규를 조회합니다">
-              <Button
-                icon={<SearchOutlined />}
-                onClick={() => refetch()}
-                loading={isLoading}
-              >
-                DB 조회
-              </Button>
-            </Tooltip>
-          </Space>
-        </div>
-      </div>
+                </Tooltip>
+                <Tooltip title="현재 설정된 필터 조건으로 DB에서 자치법규를 조회합니다">
+                  <Button
+                    icon={<SearchOutlined />}
+                    onClick={() => refetch()}
+                    loading={isLoading}
+                  >
+                    DB 조회
+                  </Button>
+                </Tooltip>
 
-      <Table
-        columns={columns}
-        dataSource={data?.items || []}
-        rowKey="id"
-        loading={isLoading}
-        scroll={{ x: 1000 }}
-        pagination={{
-          current: page,
-          total: data?.total || 0,
-          pageSize: pageSize,
-          showSizeChanger: true,
-          pageSizeOptions: [10, 20, 50, 100],
-          onChange: (newPage, newSize) => {
-            if (newSize !== pageSize) {
-              setPageSize(newSize)
-              setPage(1)
-            } else {
-              setPage(newPage)
-            }
-          },
-          showTotal: (total) => `총 ${total}건`,
-        }}
-      />
+                  <Tooltip title="담당부서 배정 정보가 담긴 엑셀 파일을 업로드하여 일괄 반영합니다">
+                    <Upload {...uploadProps}>
+                      <Button icon={<UploadOutlined />}>담당부서 엑셀 업로드</Button>
+                    </Upload>
+                  </Tooltip>
+                  <Tooltip title="자치법규정보시스템(ELIS)의 소관부서별 자치법규 목록 페이지로 이동합니다">
+                    <a
+                      href="https://elis.go.kr/locgovalr/locgovSeAlrList"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      소관부서별 자치법규 목록
+                    </a>
+                  </Tooltip>
+                </Space>
+                <Space>
+                  <Tooltip title="새로운 자치법규를 수동으로 등록하거나 법제처 API에서 검색하여 추가합니다">
+                    <Button
+                      icon={<PlusOutlined />}
+                      onClick={() => setCreateModalOpen(true)}
+                    >
+                      신규
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="DB에 저장된 자치법규의 상세 정보를 법제처 API 기준으로 최신화합니다">
+                    <Button
+                      icon={<ReloadOutlined />}
+                      onClick={() => updateOrdinanceInfoMutation.mutate()}
+                      loading={updateOrdinanceInfoMutation.isPending}
+                    >
+                      업데이트
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="현재 필터 조건에 맞는 자치법규 목록을 엑셀 파일로 다운로드합니다">
+                    <Button
+                      icon={<DownloadOutlined />}
+                      onClick={async () => {
+                        try {
+                          await ordinanceApi.exportExcel({
+                            category,
+                            department: selectedDepartment,
+                            search: search || undefined,
+                            no_parent_law_filter: noParentLawFilter,
+                            needs_revision_filter: needsRevisionFilter,
+                            revision_type: revisionType,
+                            exclude_other_law_revision: excludeOtherLawRevision || undefined,
+                          })
+                          message.success('엑셀 파일이 다운로드되었습니다.')
+                        } catch (error) {
+                          message.error('엑셀 다운로드 중 오류가 발생했습니다.')
+                        }
+                      }}
+                    >
+                      엑셀 다운로드
+                    </Button>
+                  </Tooltip>
+                  
+                  <Tooltip title="법제처 API에서 최신 자치법규 데이터를 가져와 DB에 반영합니다">
+                    <Button
+                      type="primary"
+                      icon={<SyncOutlined />}
+                      onClick={() => {
+                        setPasswordAction('sync')
+                        setPasswordModalOpen(true)
+                      }}
+                      loading={syncMutation.isPending}
+                    >
+                      법제처 동기화
+                    </Button>
+                  </Tooltip>
+                </Space>
+              </Space>
+            </div>
+
+            {/* 검색 필터 */}
+            <div style={{ padding: '10px 14px', border: '1px solid #d9d9d9', borderRadius: 8 }}>
+              <Space wrap>
+
+                <Tooltip title="상위법령 변경에 따른 개정 필요 여부로 필터링합니다">
+                  <Select
+                    placeholder="개정대상"
+                    style={{ width: 140 }}
+                    allowClear
+                    value={needsRevisionFilter}
+                    onChange={(value) => {
+                      setNeedsRevisionFilter(value)
+                      setPage(1)
+                    }}
+                    options={[
+                      { value: 'needs_revision', label: '개정대상' },
+                      { value: 'no_revision', label: '대상아님' },
+                    ]}
+                  />
+                </Tooltip>
+                <Tooltip title="다른 법률의 개정으로 인해 변경된 자치법규를 결과에서 제외합니다">
+                  <Checkbox
+                    checked={excludeOtherLawRevision}
+                    onChange={(e) => {
+                      setExcludeOtherLawRevision(e.target.checked)
+                      setPage(1)
+                    }}
+                  >
+                    타법개정 제외
+                  </Checkbox>
+                </Tooltip>
+                <Tooltip title="제정/전부개정/일부개정 등 제개정 구분으로 필터링합니다">
+                  <Select
+                    placeholder="제개정구분"
+                    style={{ width: 160 }}
+                    allowClear
+                    value={revisionType}
+                    onChange={(value) => {
+                      setRevisionType(value)
+                      setPage(1)
+                    }}
+                    options={revisionTypes?.map((rt: { revision_type: string; count: number }) => ({
+                      value: rt.revision_type,
+                      label: `${rt.revision_type} (${rt.count})`,
+                    })) || []}
+                  />
+                </Tooltip>
+
+                <Tooltip title="조례 또는 규칙으로 분류하여 필터링합니다">
+                  <Select
+                    placeholder="분류"
+                    style={{ width: 120 }}
+                    allowClear
+                    value={category}
+                    onChange={setCategory}
+                    options={[
+                      { value: '조례', label: '조례' },
+                      { value: '규칙', label: '규칙' },
+                    ]}
+                  />
+                </Tooltip>
+                <Tooltip title="상위법령 연결 상태로 필터링합니다 (연결됨/없음/미연결)">
+                  <Select
+                    placeholder="상위법령"
+                    style={{ width: 160 }}
+                    allowClear
+                    value={noParentLawFilter}
+                    onChange={(value) => {
+                      setNoParentLawFilter(value)
+                      setPage(1)
+                    }}
+                    options={[
+                      { value: 'connected', label: '연결' },
+                      { value: 'confirmed_none', label: '없음 (상위법없음)' },
+                      { value: 'no_mapping', label: '미연결 (확인필요)' },
+                    ]}
+                  />
+                </Tooltip>
+
+                <Tooltip title="검토 결과 상태(개정필요/불필요/검토중/보류/미검토)로 필터링합니다">
+                  <Select
+                    placeholder="검토결과"
+                    style={{ width: 140 }}
+                    allowClear
+                    value={reviewResultFilter}
+                    onChange={(value) => {
+                      setReviewResultFilter(value)
+                      setPage(1)
+                    }}
+                    options={[
+                      { value: '개정필요', label: '개정필요' },
+                      { value: '개정불필요', label: '개정불필요' },
+                      { value: '검토중', label: '검토중' },
+                      { value: '보류', label: '보류' },
+                      { value: '미검토', label: '미검토' },
+                    ]}
+                  />
+                </Tooltip>
+                <Tooltip title="자치법규의 현행 상태(시행중/폐지)로 필터링합니다">
+                  <Select
+                    placeholder="조례상태"
+                    style={{ width: 120 }}
+                    allowClear
+                    value={statusFilter}
+                    onChange={(value) => {
+                      setStatusFilter(value)
+                      setPage(1)
+                    }}
+                    options={[
+                      { value: 'ACTIVE', label: '시행중' },
+                      { value: 'ABOLISHED', label: '폐지' },
+                    ]}
+                  />
+                </Tooltip>
+
+              </Space>
+            </div>
+          </div>
+
+          {/* 필터 결과 요약 */}
+          {(search || category || selectedDepartment || noParentLawFilter || needsRevisionFilter || revisionType || excludeOtherLawRevision || reviewResultFilter || statusFilter) && data?.total !== undefined && (
+            <div style={{ marginBottom: 8, padding: '6px 14px', background: '#e6f7ff', borderRadius: 6, fontSize: 13 }}>
+              <strong>필터 결과: {data.total}건</strong>
+              {' '}
+              <span style={{ color: '#666' }}>
+                (
+                {[
+                  needsRevisionFilter === 'needs_revision' && '개정대상',
+                  needsRevisionFilter === 'no_revision' && '대상아님',
+                  excludeOtherLawRevision && '타법개정 제외',
+                  revisionType && `제개정: ${revisionType}`,
+                  category && `분류: ${category}`,
+                  selectedDepartment && `부서: ${selectedDepartment}`,
+                  noParentLawFilter && '상위법령 필터',
+                  reviewResultFilter && `검토: ${reviewResultFilter}`,
+                  statusFilter && `상태: ${statusFilter === 'ACTIVE' ? '시행중' : '폐지'}`,
+                  search && `검색: "${search}"`,
+                ].filter(Boolean).join(', ')}
+                )
+              </span>
+            </div>
+          )}
+
+          <Table
+            columns={columns}
+            dataSource={data?.items || []}
+            rowKey="id"
+            loading={isLoading}
+            scroll={{ x: 1000 }}
+            pagination={{
+              current: page,
+              total: data?.total || 0,
+              pageSize: pageSize,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 20, 50, 100],
+              onChange: (newPage, newSize) => {
+                if (newSize !== pageSize) {
+                  setPageSize(newSize)
+                  setPage(1)
+                } else {
+                  setPage(newPage)
+                }
+              },
+              showTotal: (total) => `총 ${total}건`,
+            }}
+          />
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Card, Table, Switch, InputNumber, Input, Button, message, Tag, Space, Typography } from 'antd'
-import { CheckCircleOutlined, CloseCircleOutlined, SaveOutlined } from '@ant-design/icons'
+import { Card, Table, Switch, InputNumber, Select, Input, Button, message, Tag, Space, Typography } from 'antd'
+import { CheckCircleOutlined, CloseCircleOutlined, SaveOutlined, CloudServerOutlined, DatabaseOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../services/api'
 import type { LlmProvider, LlmProviderListResponse } from '../types/api'
@@ -12,6 +12,7 @@ export default function AdminSettings() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editValues, setEditValues] = useState<{
     model_name?: string
+    api_key?: string
     rate_limit_per_minute?: number
   }>({})
 
@@ -41,10 +42,26 @@ export default function AdminSettings() {
   }
 
   const handleSave = (provider: LlmProvider) => {
+    const payload: Record<string, any> = {}
+    if (editValues.model_name !== undefined) payload.model_name = editValues.model_name
+    if (editValues.rate_limit_per_minute !== undefined) payload.rate_limit_per_minute = editValues.rate_limit_per_minute
+    // API 키: 빈 문자열이면 전송하지 않음 (변경 없음)
+    if (editValues.api_key) payload.api_key = editValues.api_key
+
     updateMutation.mutate({
       id: provider.id,
-      data: editValues,
+      data: payload,
     })
+  }
+
+  const renderApiKeySource = (record: LlmProvider) => {
+    if (record.api_key_source === 'env') {
+      return <Tag icon={<CloudServerOutlined />} color="success">ENV 설정됨</Tag>
+    }
+    if (record.api_key_source === 'db') {
+      return <Tag icon={<DatabaseOutlined />} color="processing">DB 설정됨</Tag>
+    }
+    return <Tag icon={<CloseCircleOutlined />} color="error">미설정</Tag>
   }
 
   const columns = [
@@ -58,14 +75,18 @@ export default function AdminSettings() {
       title: '모델명',
       dataIndex: 'model_name',
       key: 'model_name',
-      width: 200,
+      width: 220,
       render: (text: string, record: LlmProvider) =>
         editingId === record.id ? (
-          <Input
+          <Select
             size="small"
             defaultValue={text}
-            onChange={(e) => setEditValues((prev) => ({ ...prev, model_name: e.target.value }))}
-            style={{ width: 180 }}
+            onChange={(value) => setEditValues((prev) => ({ ...prev, model_name: value }))}
+            style={{ width: 200 }}
+            options={record.available_models.map((m) => ({
+              value: m.id,
+              label: m.name,
+            }))}
           />
         ) : (
           <Text code>{text}</Text>
@@ -73,14 +94,21 @@ export default function AdminSettings() {
     },
     {
       title: 'API 키',
-      dataIndex: 'api_key_configured',
-      key: 'api_key_configured',
-      width: 100,
-      render: (configured: boolean, record: LlmProvider) =>
-        configured ? (
-          <Tag icon={<CheckCircleOutlined />} color="success">설정됨</Tag>
+      key: 'api_key',
+      width: 200,
+      render: (_: any, record: LlmProvider) =>
+        editingId === record.id ? (
+          <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            {renderApiKeySource(record)}
+            <Input.Password
+              size="small"
+              placeholder="새 API 키 입력 (변경 시에만)"
+              onChange={(e) => setEditValues((prev) => ({ ...prev, api_key: e.target.value }))}
+              style={{ width: 180 }}
+            />
+          </Space>
         ) : (
-          <Tag icon={<CloseCircleOutlined />} color="error">미설정</Tag>
+          renderApiKeySource(record)
         ),
     },
     {
@@ -157,7 +185,7 @@ export default function AdminSettings() {
         />
         <div style={{ marginTop: 16 }}>
           <Text type="secondary">
-            활성 프로바이더는 1개만 설정할 수 있습니다. API 키는 서버 환경변수로 관리됩니다.
+            활성 프로바이더는 1개만 설정할 수 있습니다. API 키는 서버 환경변수(ENV) 또는 DB에서 관리할 수 있습니다.
           </Text>
         </div>
       </Card>

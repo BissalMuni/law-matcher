@@ -2,8 +2,19 @@
 LLM 관련 Pydantic 스키마 - 요청/응답 모델
 """
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field
+
+
+# === 개정 필요 조례 조문 분석 ===
+
+class AffectedOrdinanceArticle(BaseModel):
+    """개정 필요 조례 조문 항목"""
+    article_no: str = Field(..., description="조문번호 (예: 제3조)")
+    article_title: Optional[str] = Field(None, description="조문 제목")
+    current_content_summary: Optional[str] = Field(None, description="현재 조문 내용 요약")
+    issue: Optional[str] = Field(None, description="상위법령 개정으로 인한 문제점")
+    recommendation: Optional[str] = Field(None, description="구체적인 개정 권고")
 
 
 # === AI 분석 요청/응답 ===
@@ -23,6 +34,7 @@ class AiAnalyzeResponse(BaseModel):
     summary_text: Optional[str] = None
     review_draft_text: Optional[str] = None
     review_draft_result: Optional[str] = None
+    affected_articles_json: Optional[List[AffectedOrdinanceArticle]] = None
     provider_name: str
     model_name: str
     token_usage: Optional[dict] = None
@@ -43,6 +55,7 @@ class AiResultItem(BaseModel):
     summary_text: Optional[str] = None
     review_draft_text: Optional[str] = None
     review_draft_result: Optional[str] = None
+    affected_articles_json: Optional[List[AffectedOrdinanceArticle]] = None
     provider_name: str
     model_name: str
     created_at: datetime
@@ -59,6 +72,12 @@ class AiResultsResponse(BaseModel):
 
 # === LLM 프로바이더 관리 ===
 
+class AvailableModel(BaseModel):
+    """선택 가능한 모델 항목"""
+    id: str
+    name: str
+
+
 class LlmProviderResponse(BaseModel):
     """LLM 프로바이더 정보 응답"""
     id: int
@@ -67,8 +86,10 @@ class LlmProviderResponse(BaseModel):
     model_name: str
     api_key_env_name: str
     api_key_configured: bool = False  # 런타임 계산
+    api_key_source: str = "none"  # 'env' | 'db' | 'none'
     is_active: bool
     rate_limit_per_minute: int
+    available_models: list[AvailableModel] = []
     updated_at: Optional[datetime] = None
 
     class Config:
@@ -83,6 +104,7 @@ class LlmProviderListResponse(BaseModel):
 class LlmProviderUpdate(BaseModel):
     """프로바이더 설정 변경 요청"""
     model_name: Optional[str] = None
+    api_key: Optional[str] = None  # DB에 저장할 API 키
     is_active: Optional[bool] = None
     rate_limit_per_minute: Optional[int] = None
 

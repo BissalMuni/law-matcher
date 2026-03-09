@@ -32,6 +32,14 @@ export interface DashboardSummary {
 
 // === 006-llm-review-assistant ===
 
+export interface AffectedOrdinanceArticle {
+  article_no: string
+  article_title: string | null
+  current_content_summary: string | null
+  issue: string | null
+  recommendation: string | null
+}
+
 export interface LlmAnalysisResult {
   id: number
   ordinance_id: number
@@ -42,6 +50,7 @@ export interface LlmAnalysisResult {
   summary_text: string | null
   review_draft_text: string | null
   review_draft_result: string | null  // '개정필요' | '개정불필요'
+  affected_articles_json: AffectedOrdinanceArticle[] | null
   provider_name: string
   model_name: string
   token_usage: { input_tokens: number; output_tokens: number } | null
@@ -56,6 +65,11 @@ export interface AiResultsResponse {
   results: LlmAnalysisResult[]
 }
 
+export interface AvailableModel {
+  id: string
+  name: string
+}
+
 export interface LlmProvider {
   id: number
   provider_name: string
@@ -63,8 +77,10 @@ export interface LlmProvider {
   model_name: string
   api_key_env_name: string
   api_key_configured: boolean
+  api_key_source: 'env' | 'db' | 'none'
   is_active: boolean
   rate_limit_per_minute: number
+  available_models: AvailableModel[]
   updated_at: string | null
 }
 

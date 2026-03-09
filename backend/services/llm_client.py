@@ -39,6 +39,14 @@ class LlmClient(ABC):
         """LLM에 프롬프트를 전송하고 응답을 반환한다"""
         ...
 
+    @staticmethod
+    def _strip_markdown_fences(text: str) -> str:
+        """마크다운 코드 펜스(```json ... ```) 제거"""
+        import re
+        stripped = re.sub(r'^```(?:json)?\s*\n?', '', text.strip())
+        stripped = re.sub(r'\n?```\s*$', '', stripped)
+        return stripped.strip()
+
     async def generate_with_retry(
         self, prompt: str, system_prompt: str, max_retries: int = 2
     ) -> LlmResponse:
@@ -47,13 +55,17 @@ class LlmClient(ABC):
         for attempt in range(max_retries):
             try:
                 response = await self.generate(prompt, system_prompt)
-                # JSON 파싱 검증
+                # 마크다운 코드 펜스 제거 후 JSON 파싱 검증
+                response.content = self._strip_markdown_fences(response.content)
                 json.loads(response.content)
                 return response
             except json.JSONDecodeError as e:
                 last_error = e
+                content_preview = response.content[:200] if response.content else "(empty)"
                 logger.warning(
-                    f"LLM JSON 파싱 실패 (시도 {attempt + 1}/{max_retries}): {e}"
+                    f"LLM JSON 파싱 실패 (시도 {attempt + 1}/{max_retries}): {e} | "
+                    f"응답 미리보기: {content_preview} | "
+                    f"토큰: in={response.input_tokens}, out={response.output_tokens}"
                 )
                 if attempt < max_retries - 1:
                     await asyncio.sleep(1)
@@ -81,7 +93,7 @@ class ClaudeClient(LlmClient):
         try:
             response = await client.messages.create(
                 model=self.model_name,
-                max_tokens=4096,
+                max_tokens=8192,
                 system=system_prompt,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -112,7 +124,7 @@ class ChatGptClient(LlmClient):
                     {"role": "user", "content": prompt},
                 ],
                 response_format={"type": "json_object"},
-                max_tokens=4096,
+                max_tokens=8192,
             )
             usage = response.usage
             return LlmResponse(
@@ -136,7 +148,7 @@ class GeminiClient(LlmClient):
             system_instruction=system_prompt,
             generation_config=genai.GenerationConfig(
                 response_mime_type="application/json",
-                max_output_tokens=4096,
+                max_output_tokens=8192,
             ),
         )
         # Gemini SDK는 동기 API — asyncio에서 실행
@@ -176,10 +188,11 @@ async def get_active_llm_client(db: AsyncSession) -> tuple[LlmClient, LlmProvide
         raise LlmServiceUnavailableError("활성화된 LLM 프로바이더가 없습니다. 관리자에게 문의하세요")
 
     import os
-    api_key = os.getenv(provider.api_key_env_name, "")
+    # env 우선, DB fallback
+    api_key = os.getenv(provider.api_key_env_name, "") or (provider.api_key or "")
     if not api_key:
         raise LlmServiceUnavailableError(
-            f"LLM API 키가 설정되지 않았습니다 ({provider.api_key_env_name})"
+            f"LLM API 키가 설정되지 않았습니다 (환경변수: {provider.api_key_env_name}, DB: 미설정)"
         )
 
     client_class = _CLIENT_MAP.get(provider.provider_name)

@@ -13,9 +13,11 @@ import redis.asyncio as aioredis
 
 from backend.api.deps import get_db, get_current_user, verify_admin_password
 from backend.core.config import settings
+from backend.core.llm_models import AVAILABLE_MODELS
 from backend.models.user import User
 from backend.models.llm_provider import LlmProvider
 from backend.schemas.llm import (
+    AvailableModel,
     LlmProviderResponse,
     LlmProviderListResponse,
     LlmProviderUpdate,
@@ -299,7 +301,17 @@ async def get_llm_providers(
 
     items = []
     for p in providers:
-        api_key_configured = bool(os.getenv(p.api_key_env_name, ""))
+        env_key = bool(os.getenv(p.api_key_env_name, ""))
+        db_key = bool(p.api_key)
+        api_key_configured = env_key or db_key
+        api_key_source = "env" if env_key else ("db" if db_key else "none")
+
+        # 프로바이더별 사용 가능한 모델 목록
+        models = [
+            AvailableModel(**m)
+            for m in AVAILABLE_MODELS.get(p.provider_name, [])
+        ]
+
         items.append(LlmProviderResponse(
             id=p.id,
             provider_name=p.provider_name,
@@ -307,8 +319,10 @@ async def get_llm_providers(
             model_name=p.model_name,
             api_key_env_name=p.api_key_env_name,
             api_key_configured=api_key_configured,
+            api_key_source=api_key_source,
             is_active=p.is_active,
             rate_limit_per_minute=p.rate_limit_per_minute,
+            available_models=models,
             updated_at=p.updated_at,
         ))
 
@@ -330,13 +344,18 @@ async def update_llm_provider(
     if not provider:
         raise HTTPException(status_code=404, detail="프로바이더를 찾을 수 없습니다")
 
-    # 활성화 시 API 키 존재 검증
+    # API 키 업데이트 (DB 저장)
+    if body.api_key is not None:
+        provider.api_key = body.api_key if body.api_key else None
+
+    # 활성화 시 API 키 존재 검증 (env 또는 DB)
     if body.is_active is True:
-        api_key = os.getenv(provider.api_key_env_name, "")
-        if not api_key:
+        env_key = os.getenv(provider.api_key_env_name, "")
+        db_key = provider.api_key
+        if not env_key and not db_key:
             raise HTTPException(
                 status_code=400,
-                detail=f"API 키가 설정되지 않았습니다 ({provider.api_key_env_name}). 환경변수를 먼저 설정하세요.",
+                detail=f"API 키가 설정되지 않았습니다. 환경변수({provider.api_key_env_name}) 또는 DB에서 API 키를 먼저 설정하세요.",
             )
         # 기존 활성 프로바이더 비활성화 (동시 1개만 active)
         await db.execute(
@@ -354,7 +373,16 @@ async def update_llm_provider(
     provider.updated_at = datetime.utcnow()
     await db.commit()
 
-    api_key_configured = bool(os.getenv(provider.api_key_env_name, ""))
+    env_key = bool(os.getenv(provider.api_key_env_name, ""))
+    db_key = bool(provider.api_key)
+    api_key_configured = env_key or db_key
+    api_key_source = "env" if env_key else ("db" if db_key else "none")
+
+    models = [
+        AvailableModel(**m)
+        for m in AVAILABLE_MODELS.get(provider.provider_name, [])
+    ]
+
     return LlmProviderResponse(
         id=provider.id,
         provider_name=provider.provider_name,
@@ -362,8 +390,10 @@ async def update_llm_provider(
         model_name=provider.model_name,
         api_key_env_name=provider.api_key_env_name,
         api_key_configured=api_key_configured,
+        api_key_source=api_key_source,
         is_active=provider.is_active,
         rate_limit_per_minute=provider.rate_limit_per_minute,
+        available_models=models,
         updated_at=provider.updated_at,
     )
 

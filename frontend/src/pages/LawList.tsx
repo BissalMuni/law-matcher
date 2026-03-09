@@ -307,7 +307,7 @@ export default function LawList() {
             size="small"
             title="담당부서"
             style={{ position: 'sticky', top: 16 }}
-            bodyStyle={{ maxHeight: 'calc(100vh - 200px)', overflow: 'auto' }}
+            styles={{ body: { maxHeight: 'calc(100vh - 200px)', overflow: 'auto' } }}
           >
             <Tree
               showIcon

@@ -11,4 +11,4 @@ COPY . .
 
 EXPOSE 3000
 
-CMD ["npm", "run", "dev", "--", "--host"]
+CMD ["sh", "-c", "rm -rf node_modules/.vite && npm run dev -- --host"]

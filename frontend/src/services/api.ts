@@ -260,6 +260,12 @@ export const ordinanceApi = {
     const { data } = await api.post(`/ordinances/${ordinanceId}/detect`, payload)
     return data
   },
+
+  // 상위법령 법제처 동기화
+  syncParentLaws: async (ordinanceId: number) => {
+    const { data } = await api.post(`/ordinances/${ordinanceId}/sync-parent-laws`)
+    return data
+  },
 }
 
 // Sync API
@@ -499,6 +505,7 @@ export const adminApi = {
 
   updateLlmProvider: async (id: number, updateData: {
     model_name?: string
+    api_key?: string
     is_active?: boolean
     rate_limit_per_minute?: number
   }) => {

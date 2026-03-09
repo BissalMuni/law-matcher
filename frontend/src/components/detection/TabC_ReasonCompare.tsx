@@ -25,9 +25,10 @@ interface TabCReasonCompareProps {
   ordinanceId: number
   results: DetectionResult[]
   lawMap: Record<number, string>  // law_id → law_name
+  initialLawId?: number
 }
 
-export default function TabC_ReasonCompare({ ordinanceId, results, lawMap }: TabCReasonCompareProps) {
+export default function TabC_ReasonCompare({ ordinanceId, results, lawMap, initialLawId }: TabCReasonCompareProps) {
   const runDetection = useRunDetection(ordinanceId)
   const [selectedLawId, setSelectedLawId] = useState<number | undefined>(undefined)
 
@@ -39,6 +40,13 @@ export default function TabC_ReasonCompare({ ordinanceId, results, lawMap }: Tab
     })),
     [lawMap]
   )
+
+  // 외부에서 initialLawId가 변경되면 해당 법령 선택
+  useEffect(() => {
+    if (initialLawId !== undefined) {
+      setSelectedLawId(initialLawId)
+    }
+  }, [initialLawId])
 
   useEffect(() => {
     if (!selectedLawId && parentLaws.length > 0) {

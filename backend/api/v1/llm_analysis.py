@@ -128,6 +128,7 @@ async def get_ai_results(
             summary_text=r.summary_text,
             review_draft_text=r.review_draft_text,
             review_draft_result=r.review_draft_result,
+            affected_articles_json=r.affected_articles_json,
             provider_name=r.provider_name,
             model_name=r.model_name,
             created_at=r.created_at,

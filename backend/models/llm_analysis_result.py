@@ -56,6 +56,9 @@ class LlmAnalysisResult(Base):
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     token_usage: Mapped[Optional[dict]] = mapped_column(JSONB)  # {"input_tokens": N, "output_tokens": M}
 
+    # 개정 필요 조례 조문별 분석
+    affected_articles_json: Mapped[Optional[dict]] = mapped_column(JSONB)
+
     # 에러 정보
     error_message: Mapped[Optional[str]] = mapped_column(Text)
 

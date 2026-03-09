@@ -249,7 +249,8 @@ async def get_law_revision_reason(
 
     cached_stmt = select(LawRevisionReason).where(LawRevisionReason.law_id == law_id)
     cached = (await db.execute(cached_stmt)).scalar_one_or_none()
-    if cached:
+    # 캐시된 law_mst와 현재 법령의 law_serial_no가 일치하는 경우에만 캐시 사용
+    if cached and cached.law_mst == str(law.law_serial_no):
         if not cached.revision_reason and not cached.amendment_content:
             response.status_code = 204
             return Response(status_code=204)
@@ -275,14 +276,22 @@ async def get_law_revision_reason(
     amendment_content = detail.amendment_content
     extracted_articles = parse_amendment_articles(amendment_content or "")
 
-    record = LawRevisionReason(
-        law_id=law_id,
-        law_mst=str(law.law_serial_no),
-        revision_reason=revision_reason,
-        amendment_content=amendment_content,
-        extracted_articles={"articles": extracted_articles},
-    )
-    db.add(record)
+    # 기존 캐시가 있으면 업데이트, 없으면 새로 생성
+    if cached:
+        cached.law_mst = str(law.law_serial_no)
+        cached.revision_reason = revision_reason
+        cached.amendment_content = amendment_content
+        cached.extracted_articles = {"articles": extracted_articles}
+        record = cached
+    else:
+        record = LawRevisionReason(
+            law_id=law_id,
+            law_mst=str(law.law_serial_no),
+            revision_reason=revision_reason,
+            amendment_content=amendment_content,
+            extracted_articles={"articles": extracted_articles},
+        )
+        db.add(record)
     await db.commit()
     await db.refresh(record)
 
