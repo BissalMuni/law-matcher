@@ -529,15 +529,20 @@ export default function OrdinanceList() {
       },
     },
     {
-      title: '개정여부',
+      title: '개정검토',
       dataIndex: 'needs_revision',
       key: 'needs_revision',
       width: 80,
       align: 'center' as const,
       render: (value: number | null) => {
         if (value === null || value === undefined) return '-'
+        const colorMap: Record<number, string> = {
+          0: '#52c41a',  // 초록: 개정불필요 (확정 또는 날짜 기준)
+          1: '#f5222d',  // 빨강: 개정대상 (미검토)
+          2: '#fa8c16',  // 주황: 개정필요 (확정)
+        }
         return (
-          <span style={{ color: value === 1 ? '#f5222d' : '#52c41a', fontSize: 48 }}>
+          <span style={{ color: colorMap[value] || '#f5222d', fontSize: 48 }}>
             ●
           </span>
         )
@@ -554,8 +559,8 @@ export default function OrdinanceList() {
         const colorMap: Record<string, string> = {
           '개정필요': '#f5222d',
           '개정불필요': '#52c41a',
-          '검토중': '#faad14',
-          '보류': '#999',
+          '검토중': '#fa8c16',
+          '보류': '#000000',
         }
         return (
           <a

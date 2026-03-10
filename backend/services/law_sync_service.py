@@ -5,6 +5,7 @@ Law Sync Service - 상위법령 동기화 및 개정 감지 서비스
 공포일자 변경을 감지하여 조례 개정 대상을 식별합니다.
 """
 import asyncio
+import logging
 import uuid
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
@@ -12,6 +13,8 @@ import httpx
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+logger = logging.getLogger(__name__)
 
 from backend.models.law import Law
 from backend.models.ordinance import Ordinance
@@ -26,6 +29,7 @@ class LawSearchResult:
     """법령 검색 API 응답 파싱 결과"""
 
     def __init__(self, data: Dict[str, Any]):
+        import re
         self.law_serial_no = int(data.get("법령일련번호", 0))
         self.law_id = int(data.get("법령ID", 0))
         self.law_name = data.get("법령명한글", "")
@@ -39,6 +43,12 @@ class LawSearchResult:
         self.joint_proclaimed_no = data.get("공포번호")  # 공동부령용
         self.self_other_law = data.get("자법타법여부")
         self.detail_link = data.get("법령상세링크")
+
+        # detail_link의 MST가 실제 상세조회용 키 (법령일련번호와 다를 수 있음)
+        if self.detail_link:
+            match = re.search(r"MST=(\d+)", self.detail_link)
+            if match:
+                self.law_serial_no = int(match.group(1))
 
         # 날짜 파싱
         self.proclaimed_date = self._parse_date(data.get("공포일자"))
@@ -103,28 +113,70 @@ class LawSyncService:
         if revision_type:
             params["rrClsCd"] = revision_type
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.get(self.base_url, params=params)
+        max_retries = 2
+        last_exc = None
 
-            # HTML 에러 페이지 체크
-            if response.text.strip().startswith("<!DOCTYPE"):
-                return [], 0
+        for attempt in range(max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.get(self.base_url, params=params)
 
-            response.raise_for_status()
-            data = response.json()
+                    # HTML 에러 페이지 체크
+                    if response.text.strip().startswith("<!DOCTYPE"):
+                        return [], 0
 
-        law_search = data.get("LawSearch") or data.get("lawSearch", {})
-        if not law_search:
-            return [], 0
+                    response.raise_for_status()
 
-        total_cnt = int(law_search.get("totalCnt", 0))
-        items = law_search.get("law", [])
+                    try:
+                        data = response.json()
+                    except Exception as json_err:
+                        logger.warning(
+                            "법령 검색 API JSON 파싱 실패 (시도 %d/%d): %s",
+                            attempt + 1, max_retries + 1, json_err,
+                        )
+                        if attempt < max_retries:
+                            await asyncio.sleep(1.0 * (2 ** attempt))
+                            continue
+                        return [], 0
 
-        if isinstance(items, dict):
-            items = [items]
+                law_search = data.get("LawSearch") or data.get("lawSearch", {})
+                if not law_search:
+                    return [], 0
 
-        results = [LawSearchResult(item) for item in items]
-        return results, total_cnt
+                total_cnt = int(law_search.get("totalCnt", 0))
+                items = law_search.get("law", [])
+
+                if isinstance(items, dict):
+                    items = [items]
+
+                results = [LawSearchResult(item) for item in items]
+                return results, total_cnt
+
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                last_exc = e
+                if attempt < max_retries:
+                    delay = 1.0 * (2 ** attempt)
+                    logger.warning(
+                        "법령 검색 API 요청 실패 (시도 %d/%d), %s초 후 재시도: %s",
+                        attempt + 1, max_retries + 1, delay, str(e),
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error("법령 검색 API 요청 최종 실패: %s", str(e))
+                    raise
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code >= 500 and attempt < max_retries:
+                    delay = 1.0 * (2 ** attempt)
+                    logger.warning(
+                        "법령 검색 API 서버 오류 %d (시도 %d/%d), %s초 후 재시도",
+                        e.response.status_code, attempt + 1, max_retries + 1, delay,
+                    )
+                    await asyncio.sleep(delay)
+                    last_exc = e
+                else:
+                    raise
+
+        raise last_exc  # type: ignore
 
     async def search_all_laws(
         self,
@@ -233,7 +285,7 @@ class LawSyncService:
                 else:
                     failed += 1
             except Exception as e:
-                print(f"법령 '{law_name}' 동기화 실패: {e}")
+                logger.error("법령 '%s' 동기화 실패: %s", law_name, e)
                 failed += 1
             await asyncio.sleep(0.3)
 
@@ -483,12 +535,20 @@ class LawSyncService:
                     "page": page,
                 }
 
-                response = await client.get(self.base_url, params=params)
+                try:
+                    response = await client.get(self.base_url, params=params)
+                except (httpx.TimeoutException, httpx.ConnectError) as e:
+                    logger.warning("lnkOrg API 요청 실패 (page=%d): %s", page, e)
+                    break
 
                 if response.text.strip().startswith("<!DOCTYPE"):
                     break
 
-                data = response.json()
+                try:
+                    data = response.json()
+                except Exception:
+                    logger.warning("lnkOrg API JSON 파싱 실패 (page=%d)", page)
+                    break
                 lnk_org_search = data.get("lnkOrgSearch", {})
 
                 if not lnk_org_search:
@@ -597,10 +657,11 @@ class LawSyncService:
         1) MST(법령일련번호)로 직접 조회
         2) 법령명 검색(검색폭 확대 + 재시도)
         """
-        # 1) MST 직접 조회 (가장 안정적)
-        if law.law_serial_no:
+        # 1) MST 직접 조회 (가장 안정적) — detail_link의 MST 우선 사용
+        mst = law.effective_mst
+        if mst:
             try:
-                law_detail = await moleg_client.get_law_detail(str(law.law_serial_no))
+                law_detail = await moleg_client.get_law_detail(mst)
                 if law_detail and law_detail.law_name:
                     by_mst = self._to_search_result_from_detail(law_detail)
                     if self._normalize_law_name(by_mst.law_name) == self._normalize_law_name(law.law_name):
@@ -676,7 +737,7 @@ class LawSyncService:
                     await asyncio.sleep(0.3)
 
                 except Exception as e:
-                    print(f"법령 '{law.law_name}' 업데이트 실패: {e}")
+                    logger.error("법령 '%s' 업데이트 실패: %s", law.law_name, e)
                     failed += 1
         finally:
             await moleg_client.close()
@@ -733,7 +794,7 @@ class LawSyncService:
                     await asyncio.sleep(0.3)
 
                 except Exception as e:
-                    print(f"법령 '{law.law_name}' 업데이트 실패: {e}")
+                    logger.error("법령 '%s' 업데이트 실패: %s", law.law_name, e)
                     failed += 1
         finally:
             await moleg_client.close()
@@ -968,7 +1029,23 @@ class LawSyncService:
                         try:
                             await self.db.flush()
                         except Exception as flush_err:
+                            logger.error(
+                                "DB flush 실패 (law=%s): %s", law_name, flush_err,
+                            )
                             await self.db.rollback()
+                            # rollback 후 세션 상태 복구: 남은 법령 객체 재로드
+                            try:
+                                stmt_reload = select(Law).order_by(Law.id)
+                                reload_result = await self.db.execute(stmt_reload)
+                                all_laws_map = {l.id: l for l in reload_result.scalars().all()}
+                                for i in range(idx + 1, len(all_laws)):
+                                    reloaded = all_laws_map.get(all_laws[i].id)
+                                    if reloaded:
+                                        all_laws[i] = reloaded
+                            except Exception as reload_err:
+                                logger.error(
+                                    "DB 세션 복구 실패: %s", reload_err,
+                                )
                             failed += 1
                             yield {
                                 "type": "error",
@@ -1042,7 +1119,20 @@ class LawSyncService:
                     # Rate limiting
                     await asyncio.sleep(0.3)
 
+                except asyncio.CancelledError:
+                    # SSE 연결 끊김 등으로 인한 취소 — 진행 중 데이터 저장 후 종료
+                    logger.warning(
+                        "동기화 취소됨 (law=%s, %d/%d)", law_name, current, total_laws,
+                    )
+                    try:
+                        await self.db.commit()
+                    except Exception:
+                        pass
+                    raise
                 except Exception as e:
+                    logger.error(
+                        "법령 동기화 오류 (law=%s): %s", law_name, e, exc_info=True,
+                    )
                     failed += 1
                     yield {
                         "type": "error",
@@ -1082,28 +1172,51 @@ class LawSyncService:
         """
         변경 감지된 법령에 연계된 조례를 자동으로 "검토대기" 상태로 설정
 
-        - revision_status가 null인 조례만 "검토대기"로 변경
-        - 이미 "검토중"/"개정확정" 상태인 조례는 덮어쓰지 않음
+        - revision_status가 null인 조례: 항상 "검토대기"로 변경
+        - revision_status가 "검토완료"인 조례: 새로운 법령 변경이 있을 때만 재플래그
+          (법령 proclaimed_date != mapping.reviewed_law_date이면 새 변경)
+        - "검토대기"/"검토중"/"개정확정" 상태인 조례는 덮어쓰지 않음
         """
-        # 변경된 법령에 연계된 조례 ID 조회
+        # 변경된 법령에 연계된 매핑 조회 (법령 정보 포함)
         mapping_stmt = (
-            select(OrdinanceLawMapping.ordinance_id)
+            select(OrdinanceLawMapping)
+            .options(selectinload(OrdinanceLawMapping.law))
             .where(OrdinanceLawMapping.law_id.in_(changed_law_ids))
-            .distinct()
         )
         mapping_result = await self.db.execute(mapping_stmt)
-        ordinance_ids = [row[0] for row in mapping_result.all()]
+        mappings = mapping_result.scalars().all()
 
-        if not ordinance_ids:
+        if not mappings:
             return 0
 
-        # revision_status가 null인 조례만 "검토대기"로 업데이트
+        # 조례별로 새 변경이 있는지 판단
+        ordinance_ids_to_flag: set = set()
+        for mapping in mappings:
+            if not mapping.law:
+                continue
+            # 이미 검토된 공포일과 동일하면 스킵 (같은 변경에 대한 재감지)
+            if (
+                mapping.reviewed_law_date
+                and mapping.law.proclaimed_date
+                and mapping.reviewed_law_date == mapping.law.proclaimed_date
+            ):
+                continue
+            ordinance_ids_to_flag.add(mapping.ordinance_id)
+
+        if not ordinance_ids_to_flag:
+            return 0
+
+        # revision_status가 null 또는 "검토완료"인 조례만 "검토대기"로 업데이트
+        from sqlalchemy import or_
         ordinance_stmt = (
             select(Ordinance)
             .where(
                 and_(
-                    Ordinance.id.in_(ordinance_ids),
-                    Ordinance.revision_status.is_(None),
+                    Ordinance.id.in_(list(ordinance_ids_to_flag)),
+                    or_(
+                        Ordinance.revision_status.is_(None),
+                        Ordinance.revision_status == "검토완료",
+                    ),
                 )
             )
         )

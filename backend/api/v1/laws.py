@@ -190,16 +190,41 @@ async def sync_laws_stream():
                 service = LawSyncService(db)
                 sync_gen = service.sync_all_laws_with_progress()
 
-                while True:
+                # 별도의 heartbeat 방식: 제너레이터를 취소하지 않고 이벤트 큐 사용
+                event_queue: asyncio.Queue = asyncio.Queue()
+                generator_done = False
+
+                async def consume_generator():
+                    nonlocal generator_done
                     try:
-                        # 15초 이내에 다음 이벤트를 기다림, 없으면 heartbeat 전송
-                        event = await asyncio.wait_for(sync_gen.__anext__(), timeout=15.0)
-                        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-                    except asyncio.TimeoutError:
-                        # heartbeat: SSE 주석으로 전송 (클라이언트 EventSource가 무시)
-                        yield ": heartbeat\n\n"
-                    except StopAsyncIteration:
-                        break
+                        async for event in sync_gen:
+                            await event_queue.put(event)
+                    except Exception as e:
+                        await event_queue.put({
+                            "type": "error",
+                            "message": f"동기화 중 오류 발생: {str(e)}",
+                            "error": str(e),
+                        })
+                    finally:
+                        generator_done = True
+
+                consumer_task = asyncio.create_task(consume_generator())
+
+                try:
+                    while not generator_done or not event_queue.empty():
+                        try:
+                            event = await asyncio.wait_for(event_queue.get(), timeout=15.0)
+                            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                        except asyncio.TimeoutError:
+                            # heartbeat: SSE 주석으로 전송 (제너레이터는 계속 실행 중)
+                            yield ": heartbeat\n\n"
+                finally:
+                    if not consumer_task.done():
+                        consumer_task.cancel()
+                        try:
+                            await consumer_task
+                        except asyncio.CancelledError:
+                            pass
             except Exception as e:
                 error_event = {
                     "type": "error",

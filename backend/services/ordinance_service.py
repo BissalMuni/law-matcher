@@ -225,6 +225,21 @@ class OrdinanceService:
                 .limit(1)
             )
 
+            # 승인된 검토결과로 needs_revision 오버라이드
+            approved_result = (await self.db.execute(
+                select(OrdinanceReview.review_result)
+                .where(OrdinanceReview.ordinance_id == ordinance.id)
+                .where(OrdinanceReview.approval_status == "approved")
+                .order_by(OrdinanceReview.approved_at.desc())
+                .limit(1)
+            )).scalar_one_or_none()
+
+            if approved_result:
+                if approved_result == "개정불필요":
+                    needs_revision = 0  # 초록불
+                elif approved_result == "개정필요":
+                    needs_revision = 2  # 주황불 (개정필요 확정)
+
             # Convert to dict and add count
             ordinance_dict = {
                 "id": ordinance.id,
@@ -1281,7 +1296,18 @@ class OrdinanceService:
                 if review.review_result == "개정필요":
                     ordinance.revision_status = "개정확정"
                 elif review.review_result == "개정불필요":
-                    ordinance.revision_status = None
+                    ordinance.revision_status = "검토완료"  # null 대신 검토완료 (재플래그 방지)
+
+                # 매핑별 reviewed_law_date 기록 (동일 법령 변경 재감지 방지)
+                mappings_result = await self.db.execute(
+                    select(OrdinanceLawMapping)
+                    .options(selectinload(OrdinanceLawMapping.law))
+                    .where(OrdinanceLawMapping.ordinance_id == review.ordinance_id)
+                )
+                for mapping in mappings_result.scalars().all():
+                    if mapping.law and mapping.law.proclaimed_date:
+                        mapping.reviewed_law_date = mapping.law.proclaimed_date
+
             elif approval_status == "rejected":
                 ordinance.revision_status = "검토대기"
 

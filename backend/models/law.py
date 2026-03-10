@@ -70,5 +70,15 @@ class Law(Base):
         back_populates="law", uselist=False, cascade="all, delete-orphan"
     )
 
+    @property
+    def effective_mst(self) -> str:
+        """detail_link에서 MST 추출 (law_serial_no보다 정확)"""
+        import re
+        if self.detail_link:
+            match = re.search(r"MST=(\d+)", self.detail_link)
+            if match:
+                return match.group(1)
+        return str(self.law_serial_no)
+
     def __repr__(self) -> str:
         return f"<Law(id={self.id}, name={self.law_name}, type={self.law_type})>"

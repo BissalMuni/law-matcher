@@ -1,9 +1,9 @@
 """
 Ordinance-Law mapping model (조례-상위법령 연계)
 """
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Date, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.database import Base
@@ -42,6 +42,9 @@ class OrdinanceLawMapping(Base):
 
     # 연계 상세 정보
     related_articles: Mapped[Optional[str]] = mapped_column(String(500))  # 관련 조문 (예: "제3조, 제5조")
+
+    # 검토 완료 추적: 검토 승인 시 해당 법령의 proclaimed_date 기록
+    reviewed_law_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # 메타 정보
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

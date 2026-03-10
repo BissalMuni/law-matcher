@@ -255,7 +255,8 @@ class RevisionDetectionService:
             owns_client = True
 
         try:
-            law_detail = await client.get_law_detail(str(law.law_serial_no))
+            mst = law.effective_mst
+            law_detail = await client.get_law_detail(mst)
         finally:
             if owns_client:
                 await client.close()
@@ -263,7 +264,7 @@ class RevisionDetectionService:
         extracted_articles = parse_amendment_articles(law_detail.amendment_content or "")
         record = LawRevisionReason(
             law_id=law.id,
-            law_mst=str(law.law_serial_no),
+            law_mst=mst,
             revision_reason=law_detail.revision_reason,
             amendment_content=law_detail.amendment_content,
             extracted_articles={"articles": extracted_articles},
