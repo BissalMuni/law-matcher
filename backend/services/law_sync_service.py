@@ -823,6 +823,8 @@ class LawSyncService:
         stmt = select(Law).order_by(Law.id)
         result = await self.db.execute(stmt)
         all_laws = list(result.scalars().all())
+        # rollback 시 expired 객체의 id 접근 불가 방지용 캐시
+        all_law_ids = [law.id for law in all_laws]
 
         total_laws = len(all_laws)
         updated = 0
@@ -843,19 +845,21 @@ class LawSyncService:
         try:
             for idx, law in enumerate(all_laws):
                 current = idx + 1
-                law_name = law.law_name
-
-                # 요청 시작 알림
-                yield {
-                    "type": "progress",
-                    "current": current,
-                    "total": total_laws,
-                    "law_name": law_name,
-                    "status": "requesting",
-                    "message": f"[{current}/{total_laws}] {law_name} - API 요청 중...",
-                }
+                law_name = f"law_id={all_law_ids[idx]}"
 
                 try:
+                    # rollback 후 expired 객체 접근 시 greenlet 오류 방지
+                    law_name = law.law_name
+
+                    # 요청 시작 알림
+                    yield {
+                        "type": "progress",
+                        "current": current,
+                        "total": total_laws,
+                        "law_name": law_name,
+                        "status": "requesting",
+                        "message": f"[{current}/{total_laws}] {law_name} - API 요청 중...",
+                    }
                     exact_match, results, had_response = await self._resolve_exact_match(law, moleg_client)
 
                     # 수신 완료 알림
@@ -945,33 +949,42 @@ class LawSyncService:
                                 "new": exact_match.law_id,
                             }
 
-                        # 법령 정보 업데이트 (law_serial_no가 동일한 경우에만 업데이트)
-                        law.law_id = exact_match.law_id
-                        # law_serial_no는 unique 제약이 있으므로, 같을 때만 업데이트
-                        if law.law_serial_no == exact_match.law_serial_no:
-                            law.law_abbr = exact_match.law_abbr
-                            law.proclaimed_date = exact_match.proclaimed_date
-                            law.proclaimed_no = exact_match.proclaimed_no
-                            law.enforced_date = exact_match.enforced_date
-                            law.revision_type = exact_match.revision_type
-                            law.history_code = exact_match.history_code
-                            law.dept_name = exact_match.dept_name
-                            law.dept_code = exact_match.dept_code
-                            law.detail_link = exact_match.detail_link
-                            law.last_synced_at = datetime.utcnow()
-                        else:
-                            # law_serial_no가 다르면 나머지 필드만 업데이트 (law_serial_no 제외)
-                            law.law_abbr = exact_match.law_abbr
-                            law.proclaimed_date = exact_match.proclaimed_date
-                            law.proclaimed_no = exact_match.proclaimed_no
-                            law.enforced_date = exact_match.enforced_date
-                            law.revision_type = exact_match.revision_type
-                            law.history_code = exact_match.history_code
-                            law.dept_name = exact_match.dept_name
-                            law.dept_code = exact_match.dept_code
-                            law.detail_link = exact_match.detail_link
-                            law.last_synced_at = datetime.utcnow()
-                            # law_serial_no 변경 기록
+                        # law_id 충돌 체크: 다른 법령이 이미 해당 law_id를 사용 중인지 확인
+                        skip_law_id_update = False
+                        if exact_match.law_id != law.law_id:
+                            conflict_stmt = select(Law.id).where(
+                                and_(
+                                    Law.law_id == exact_match.law_id,
+                                    Law.id != law.id,
+                                )
+                            )
+                            conflict = (await self.db.execute(conflict_stmt)).scalar_one_or_none()
+                            if conflict:
+                                logger.warning(
+                                    "law_id 충돌: %s(id=%d)의 law_id를 %d로 변경 시 "
+                                    "기존 법령(id=%d)과 충돌 — law_id 업데이트 생략",
+                                    law_name, law.id, exact_match.law_id, conflict,
+                                )
+                                skip_law_id_update = True
+                                changes["law_id"]["skipped"] = True
+
+                        # 법령 정보 업데이트
+                        if not skip_law_id_update:
+                            law.law_id = exact_match.law_id
+
+                        # law_serial_no 충돌 방지: 같을 때만 업데이트, 다르면 기록만
+                        law.law_abbr = exact_match.law_abbr
+                        law.proclaimed_date = exact_match.proclaimed_date
+                        law.proclaimed_no = exact_match.proclaimed_no
+                        law.enforced_date = exact_match.enforced_date
+                        law.revision_type = exact_match.revision_type
+                        law.history_code = exact_match.history_code
+                        law.dept_name = exact_match.dept_name
+                        law.dept_code = exact_match.dept_code
+                        law.detail_link = exact_match.detail_link
+                        law.last_synced_at = datetime.utcnow()
+
+                        if law.law_serial_no != exact_match.law_serial_no:
                             changes["law_serial_no"] = {
                                 "old": law.law_serial_no,
                                 "new": exact_match.law_serial_no,
@@ -1033,19 +1046,31 @@ class LawSyncService:
                                 "DB flush 실패 (law=%s): %s", law_name, flush_err,
                             )
                             await self.db.rollback()
-                            # rollback 후 세션 상태 복구: 남은 법령 객체 재로드
+                            # rollback 후 세션의 만료된 객체 사용 불가 → 캐시된 ID로 새로 조회
                             try:
-                                stmt_reload = select(Law).order_by(Law.id)
-                                reload_result = await self.db.execute(stmt_reload)
-                                all_laws_map = {l.id: l for l in reload_result.scalars().all()}
-                                for i in range(idx + 1, len(all_laws)):
-                                    reloaded = all_laws_map.get(all_laws[i].id)
-                                    if reloaded:
-                                        all_laws[i] = reloaded
+                                remaining_ids = all_law_ids[idx + 1:]
+                                if remaining_ids:
+                                    stmt_reload = select(Law).where(Law.id.in_(remaining_ids)).order_by(Law.id)
+                                    reload_result = await self.db.execute(stmt_reload)
+                                    reloaded_laws = list(reload_result.scalars().all())
+                                    reloaded_map = {l.id: l for l in reloaded_laws}
+                                    for i, lid in enumerate(remaining_ids):
+                                        if lid in reloaded_map:
+                                            all_laws[idx + 1 + i] = reloaded_map[lid]
                             except Exception as reload_err:
                                 logger.error(
-                                    "DB 세션 복구 실패: %s", reload_err,
+                                    "DB 세션 복구 실패: %s — 동기화를 중단합니다", reload_err,
                                 )
+                                # 복구 불가 시 지금까지 결과 반환하고 종료
+                                yield {
+                                    "type": "error",
+                                    "current": current,
+                                    "total": total_laws,
+                                    "law_name": law_name,
+                                    "error": f"DB 세션 복구 불가: {reload_err}",
+                                    "message": f"[{current}/{total_laws}] DB 세션 복구 불가 - 동기화 중단",
+                                }
+                                break
                             failed += 1
                             yield {
                                 "type": "error",
