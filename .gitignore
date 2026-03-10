@@ -31,7 +31,7 @@ yarn-error.log*
 # Database
 *.db
 *.sqlite
-backup.sql
+# backup.sql
 
 # Logs
 *.log
