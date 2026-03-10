@@ -893,24 +893,29 @@ class LawSyncService:
                         }
                         changed_laws.append(failed_law_info)
 
-                    # law_changes 테이블에 저장
+                    # law_changes 테이블에 저장 (SAVEPOINT로 격리)
                         if save_to_db:
-                            law_change = LawChange(
-                                law_id=law.id,
-                                sync_date=sync_date,
-                                sync_batch_id=sync_batch_id,
-                                api_status=ApiStatus.NO_RESPONSE,
-                                api_message="API 응답 없음",
-                                old_values={
-                                    "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
-                                    "enforced_date": str(law.enforced_date) if law.enforced_date else None,
-                                    "revision_type": law.revision_type,
-                                },
-                                new_values=None,
-                                dept_name=law.dept_name,
-                                dept_code=law.dept_code,
-                            )
-                            self.db.add(law_change)
+                            try:
+                                async with self.db.begin_nested():
+                                    law_change = LawChange(
+                                        law_id=law.id,
+                                        sync_date=sync_date,
+                                        sync_batch_id=sync_batch_id,
+                                        api_status=ApiStatus.NO_RESPONSE,
+                                        api_message="API 응답 없음",
+                                        old_values={
+                                            "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
+                                            "enforced_date": str(law.enforced_date) if law.enforced_date else None,
+                                            "revision_type": law.revision_type,
+                                        },
+                                        new_values=None,
+                                        dept_name=law.dept_name,
+                                        dept_code=law.dept_code,
+                                    )
+                                    self.db.add(law_change)
+                                    await self.db.flush()
+                            except Exception as e:
+                                logger.error("law_change 저장 실패 (no_response, law=%s): %s", law_name, e)
 
                         yield {
                             "type": "changed",
@@ -968,30 +973,72 @@ class LawSyncService:
                                 skip_law_id_update = True
                                 changes["law_id"]["skipped"] = True
 
-                        # 법령 정보 업데이트
-                        if not skip_law_id_update:
-                            law.law_id = exact_match.law_id
-
-                        # law_serial_no 충돌 방지: 같을 때만 업데이트, 다르면 기록만
-                        law.law_abbr = exact_match.law_abbr
-                        law.proclaimed_date = exact_match.proclaimed_date
-                        law.proclaimed_no = exact_match.proclaimed_no
-                        law.enforced_date = exact_match.enforced_date
-                        law.revision_type = exact_match.revision_type
-                        law.history_code = exact_match.history_code
-                        law.dept_name = exact_match.dept_name
-                        law.dept_code = exact_match.dept_code
-                        law.detail_link = exact_match.detail_link
-                        law.last_synced_at = datetime.utcnow()
-
                         if law.law_serial_no != exact_match.law_serial_no:
                             changes["law_serial_no"] = {
                                 "old": law.law_serial_no,
                                 "new": exact_match.law_serial_no,
                                 "skipped": True,
                             }
-                        updated += 1
 
+                        # SAVEPOINT 내에서 법령 업데이트 + flush
+                        # begin_nested()는 SAVEPOINT를 사용하므로 실패 시 해당 건만 롤백되고
+                        # 메인 트랜잭션은 유효하게 유지됨 (greenlet_spawn 방지)
+                        try:
+                            async with self.db.begin_nested():
+                                # 법령 정보 업데이트
+                                if not skip_law_id_update:
+                                    law.law_id = exact_match.law_id
+                                law.law_abbr = exact_match.law_abbr
+                                law.proclaimed_date = exact_match.proclaimed_date
+                                law.proclaimed_no = exact_match.proclaimed_no
+                                law.enforced_date = exact_match.enforced_date
+                                law.revision_type = exact_match.revision_type
+                                law.history_code = exact_match.history_code
+                                law.dept_name = exact_match.dept_name
+                                law.dept_code = exact_match.dept_code
+                                law.detail_link = exact_match.detail_link
+                                law.last_synced_at = datetime.utcnow()
+
+                                # law_changes 테이블에 저장 (법령 변경이 있는 경우만)
+                                if save_to_db and changes:
+                                    law_change = LawChange(
+                                        law_id=law.id,
+                                        sync_date=sync_date,
+                                        sync_batch_id=sync_batch_id,
+                                        api_status=ApiStatus.SUCCESS,
+                                        api_message="API 성공 - 변경 감지",
+                                        old_values=old_values,
+                                        new_values={
+                                            "proclaimed_date": str(exact_match.proclaimed_date) if exact_match.proclaimed_date else None,
+                                            "enforced_date": str(exact_match.enforced_date) if exact_match.enforced_date else None,
+                                            "revision_type": exact_match.revision_type,
+                                            "law_id": exact_match.law_id,
+                                            "dept_name": exact_match.dept_name,
+                                        },
+                                        dept_name=exact_match.dept_name,
+                                        dept_code=exact_match.dept_code,
+                                    )
+                                    self.db.add(law_change)
+
+                                await self.db.flush()
+                        except Exception as flush_err:
+                            logger.error(
+                                "DB flush 실패 (law=%s): %s", law_name, flush_err,
+                            )
+                            # SAVEPOINT 롤백 → 메인 트랜잭션 유효, 수정된 객체만 만료
+                            self.db.expire(law)
+                            failed += 1
+                            yield {
+                                "type": "error",
+                                "current": current,
+                                "total": total_laws,
+                                "law_name": law_name,
+                                "error": str(flush_err),
+                                "message": f"[{current}/{total_laws}] {law_name} - DB 저장 오류 (건너뜀)",
+                            }
+                            continue
+
+                        updated += 1
                         compare_result = "changed" if changes else "unchanged"
                         if changes:
                             changed_law_info = {
@@ -1009,27 +1056,6 @@ class LawSyncService:
                             }
                             changed_laws.append(changed_law_info)
 
-                            # law_changes 테이블에 저장 (법령 변경이 있는 경우만)
-                            if save_to_db and changes:
-                                law_change = LawChange(
-                                    law_id=law.id,
-                                    sync_date=sync_date,
-                                    sync_batch_id=sync_batch_id,
-                                    api_status=ApiStatus.SUCCESS,
-                                    api_message="API 성공 - 변경 감지",
-                                    old_values=old_values,
-                                    new_values={
-                                        "proclaimed_date": str(exact_match.proclaimed_date) if exact_match.proclaimed_date else None,
-                                        "enforced_date": str(exact_match.enforced_date) if exact_match.enforced_date else None,
-                                        "revision_type": exact_match.revision_type,
-                                        "law_id": exact_match.law_id,
-                                        "dept_name": exact_match.dept_name,
-                                    },
-                                    dept_name=exact_match.dept_name,
-                                    dept_code=exact_match.dept_code,
-                                    )
-                                self.db.add(law_change)
-
                             yield {
                                 "type": "changed",
                                 "current": current,
@@ -1037,50 +1063,6 @@ class LawSyncService:
                                 "law": changed_law_info,
                                 "message": f"[{current}/{total_laws}] {law_name} - 변경 감지!",
                             }
-
-                        # 매 건마다 flush하여 에러 발생 시 해당 건만 롤백
-                        try:
-                            await self.db.flush()
-                        except Exception as flush_err:
-                            logger.error(
-                                "DB flush 실패 (law=%s): %s", law_name, flush_err,
-                            )
-                            await self.db.rollback()
-                            # rollback 후 세션의 만료된 객체 사용 불가 → 캐시된 ID로 새로 조회
-                            try:
-                                remaining_ids = all_law_ids[idx + 1:]
-                                if remaining_ids:
-                                    stmt_reload = select(Law).where(Law.id.in_(remaining_ids)).order_by(Law.id)
-                                    reload_result = await self.db.execute(stmt_reload)
-                                    reloaded_laws = list(reload_result.scalars().all())
-                                    reloaded_map = {l.id: l for l in reloaded_laws}
-                                    for i, lid in enumerate(remaining_ids):
-                                        if lid in reloaded_map:
-                                            all_laws[idx + 1 + i] = reloaded_map[lid]
-                            except Exception as reload_err:
-                                logger.error(
-                                    "DB 세션 복구 실패: %s — 동기화를 중단합니다", reload_err,
-                                )
-                                # 복구 불가 시 지금까지 결과 반환하고 종료
-                                yield {
-                                    "type": "error",
-                                    "current": current,
-                                    "total": total_laws,
-                                    "law_name": law_name,
-                                    "error": f"DB 세션 복구 불가: {reload_err}",
-                                    "message": f"[{current}/{total_laws}] DB 세션 복구 불가 - 동기화 중단",
-                                }
-                                break
-                            failed += 1
-                            yield {
-                                "type": "error",
-                                "current": current,
-                                "total": total_laws,
-                                "law_name": law_name,
-                                "error": str(flush_err),
-                                "message": f"[{current}/{total_laws}] {law_name} - DB 저장 오류: {str(flush_err)}",
-                            }
-                            continue
                     else:
                     # API 응답은 있지만 정확히 일치하는 법령명 없음
                         failed += 1
@@ -1104,24 +1086,29 @@ class LawSyncService:
                         }
                         changed_laws.append(not_found_law_info)
 
-                    # law_changes 테이블에 저장
+                    # law_changes 테이블에 저장 (SAVEPOINT로 격리)
                         if save_to_db:
-                            law_change = LawChange(
-                                law_id=law.id,
-                                sync_date=sync_date,
-                                sync_batch_id=sync_batch_id,
-                                api_status=ApiStatus.NOT_FOUND,
-                                api_message=api_message,
-                                old_values={
-                                    "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
-                                    "enforced_date": str(law.enforced_date) if law.enforced_date else None,
-                                    "revision_type": law.revision_type,
-                                },
-                                new_values=None,
-                                dept_name=law.dept_name,
-                                dept_code=law.dept_code,
-                            )
-                            self.db.add(law_change)
+                            try:
+                                async with self.db.begin_nested():
+                                    law_change = LawChange(
+                                        law_id=law.id,
+                                        sync_date=sync_date,
+                                        sync_batch_id=sync_batch_id,
+                                        api_status=ApiStatus.NOT_FOUND,
+                                        api_message=api_message,
+                                        old_values={
+                                            "proclaimed_date": str(law.proclaimed_date) if law.proclaimed_date else None,
+                                            "enforced_date": str(law.enforced_date) if law.enforced_date else None,
+                                            "revision_type": law.revision_type,
+                                        },
+                                        new_values=None,
+                                        dept_name=law.dept_name,
+                                        dept_code=law.dept_code,
+                                    )
+                                    self.db.add(law_change)
+                                    await self.db.flush()
+                            except Exception as e:
+                                logger.error("law_change 저장 실패 (not_found, law=%s): %s", law_name, e)
 
                         yield {
                             "type": "changed",
