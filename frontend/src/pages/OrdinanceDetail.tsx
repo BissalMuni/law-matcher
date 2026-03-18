@@ -518,8 +518,8 @@ export default function OrdinanceDetail() {
               {ordinance?.revision_status ? (
                 <Tag color={
                   ordinance.revision_status === '검토대기' ? 'warning' :
-                  ordinance.revision_status === '검토중' ? 'processing' :
-                  ordinance.revision_status === '개정확정' ? 'error' : 'default'
+                    ordinance.revision_status === '검토중' ? 'processing' :
+                      ordinance.revision_status === '개정확정' ? 'error' : 'default'
                 }>
                   {ordinance.revision_status}
                 </Tag>
@@ -611,6 +611,18 @@ export default function OrdinanceDetail() {
         />
       </Card>
 
+      {/* 개정 판별 탭 */}
+      {parentLaws && parentLaws.length > 0 && (
+        <Card title="개정 검토 판별" style={{ marginBottom: 16 }}>
+          <DetectionTabs
+            ordinanceId={Number(id)}
+            lawMap={Object.fromEntries(
+              parentLaws.map((law: ParentLaw) => [law.law_internal_id, law.law_name])
+            )}
+          />
+        </Card>
+      )}
+
       {/* AI 분석 카드 — 법령별 AI 분석 결과 및 버튼 */}
       {parentLaws && parentLaws.length > 0 && (
         <Card title="AI 개정이유분석" style={{ marginBottom: 16 }}>
@@ -680,17 +692,7 @@ export default function OrdinanceDetail() {
         }}
       />
 
-      {/* 개정 판별 탭 */}
-      {parentLaws && parentLaws.length > 0 && (
-        <Card title="개정 검토 판별" style={{ marginBottom: 16 }}>
-          <DetectionTabs
-            ordinanceId={Number(id)}
-            lawMap={Object.fromEntries(
-              parentLaws.map((law: ParentLaw) => [law.law_internal_id, law.law_name])
-            )}
-          />
-        </Card>
-      )}
+
 
       {/* 검토이력 카드 */}
       <Card

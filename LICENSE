@@ -1,0 +1,57 @@
+Copyright (c) 2026 강남구청, 정책해커단, 송민혁, 강진규. All rights reserved.
+
+이 소프트웨어 및 관련 문서 파일("소프트웨어")은 아래 조건에 따라 제공됩니다.
+
+=============================================================================
+비상업적 연구 목적 라이센스 (Non-Commercial Research License)
+=============================================================================
+
+1. 허용 사항
+   - 연구, 교육, 학술 목적의 소프트웨어 사용
+   - 연구 목적의 소스 코드 열람 및 수정
+   - 비상업적 목적의 결과물 발표 및 배포 (원저작자 명시 필수)
+
+2. 금지 사항
+   - 상업적 목적의 사용, 판매, 임대, 라이센스 재배포
+   - 원저작자 명시 없이 소프트웨어 또는 파생 저작물 배포
+   - 본 소프트웨어를 이용한 영리 서비스 제공
+
+3. 배포 조건
+   파생 저작물을 배포하는 경우 반드시 다음을 포함해야 합니다:
+   - 본 라이센스 전문
+   - 원저작자 표기: 강남구청, 송민혁, 강진규
+   - 수정 사항에 대한 명시적 고지
+
+4. 면책 조항
+   본 소프트웨어는 "있는 그대로" 제공되며, 명시적이거나 묵시적인 어떠한
+   보증도 하지 않습니다. 저작권자는 소프트웨어 사용으로 인한 직접적,
+   간접적, 부수적, 특별한, 또는 결과적 손해에 대해 책임을 지지 않습니다.
+
+5. 상업적 이용 문의
+   상업적 이용을 원하는 경우 저작권자에게 별도 문의하시기 바랍니다.
+
+=============================================================================
+Non-Commercial Research License (English)
+=============================================================================
+
+Copyright (c) 2026 Gangnam-gu Office, Song Min-hyeok, Kang Jin-gyu.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to use,
+copy, modify, and distribute the Software solely for non-commercial research,
+educational, and academic purposes, subject to the following conditions:
+
+1. The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+2. The Software, or any derivative works, may NOT be used for commercial
+   purposes, including but not limited to selling, licensing, or providing
+   paid services based on the Software.
+
+3. Any publication or distribution of derivative works must clearly credit
+   the original authors: Gangnam-gu Office, Song Min-hyeok, Kang Jin-gyu.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY ARISING FROM THE USE OF THIS SOFTWARE.
