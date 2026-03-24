@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import {
   Table,
   Tag,
@@ -22,6 +22,8 @@ import {
   Form,
   Popconfirm,
   Spin,
+  Tabs,
+  Tooltip,
 } from 'antd'
 import {
   HistoryOutlined,
@@ -57,10 +59,12 @@ interface LawChange {
   created_at: string
 }
 
-interface SyncDate {
+interface SyncBatch {
+  sync_batch_id: string
   sync_date: string
   total: number
-  success: number
+  changed: number
+  no_change: number
   no_response: number
   not_found: number
 }
@@ -82,6 +86,7 @@ interface SyncProgress {
 
 export default function LawChangeList() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
   // URL 쿼리 파라미터에서 초기값 읽기
@@ -93,14 +98,14 @@ export default function LawChangeList() {
   const [changedField, setChangedField] = useState<string | undefined>(() => searchParams.get('changedField') || undefined)
   const [search, setSearch] = useState<string>(() => searchParams.get('search') || undefined)
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([])
-  const [selectedSyncDate, setSelectedSyncDate] = useState<string>(() => searchParams.get('syncDate') || undefined)
+  const [selectedBatchId, setSelectedBatchId] = useState<string | undefined>(() => searchParams.get('batchId') || undefined)
   const [revisionType, setRevisionType] = useState<string | undefined>(() => searchParams.get('revisionType') || undefined)
 
-  // SSE 동기화 상태
+  // 동기화 상태
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null)
   const [syncLogs, setSyncLogs] = useState<SyncProgress[]>([])
-  const eventSourceRef = useRef<EventSource | null>(null)
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logContainerRef = useRef<HTMLDivElement>(null)
 
   // 상세 모달
@@ -132,15 +137,15 @@ export default function LawChangeList() {
     if (apiStatus && apiStatus !== 'all') params.set('apiStatus', apiStatus)
     if (changedField) params.set('changedField', changedField)
     if (search) params.set('search', search)
-    if (selectedSyncDate) params.set('syncDate', selectedSyncDate)
+    if (selectedBatchId) params.set('batchId', selectedBatchId)
     if (revisionType) params.set('revisionType', revisionType)
     setSearchParams(params, { replace: true })
-  }, [page, apiStatus, changedField, search, selectedSyncDate, revisionType, setSearchParams])
+  }, [page, apiStatus, changedField, search, selectedBatchId, revisionType, setSearchParams])
 
-  // 동기화 날짜 목록 조회
-  const { data: syncDates } = useQuery({
-    queryKey: ['law-changes-sync-dates'],
-    queryFn: () => lawChangesApi.getSyncDates(),
+  // 동기화 배치 목록 조회
+  const { data: syncBatches } = useQuery({
+    queryKey: ['law-changes-sync-batches'],
+    queryFn: () => lawChangesApi.getSyncBatches(),
   })
 
   // 제개정구분 목록 조회
@@ -149,16 +154,12 @@ export default function LawChangeList() {
     queryFn: () => lawChangesApi.getRevisionTypes(),
   })
 
-  // 최초 로드 시 가장 최근 날짜 선택
-  useEffect(() => {
-    if (syncDates && syncDates.length > 0 && !selectedSyncDate && !isSyncing) {
-      setSelectedSyncDate(syncDates[0].sync_date)
-    }
-  }, [syncDates, selectedSyncDate, isSyncing])
+  // URL에 syncDate가 있으면 해당 날짜 선택 (뒤로가기 등)
+  // 목록 화면이 기본이므로 자동 선택하지 않음
 
   // 데이터 조회 (날짜 필터 추가)
   const { data, isLoading } = useQuery({
-    queryKey: ['law-changes', page, apiStatus, changedField, search, selectedSyncDate, revisionType],
+    queryKey: ['law-changes', page, apiStatus, changedField, search, selectedBatchId, revisionType],
     queryFn: () =>
       lawChangesApi.getList({
         page,
@@ -166,17 +167,17 @@ export default function LawChangeList() {
         api_status: apiStatus === 'all' ? undefined : apiStatus,
         changed_field: changedField,
         search,
-        sync_date: selectedSyncDate,
+        sync_batch_id: selectedBatchId,
         revision_type: revisionType,
       }),
-    enabled: !isSyncing && !!selectedSyncDate,
+    enabled: !isSyncing && !!selectedBatchId,
   })
 
-  // 통계 조회 (선택된 동기화 날짜 기준)
+  // 통계 조회 (선택된 배치 기준)
   const { data: stats } = useQuery({
-    queryKey: ['law-changes-stats', selectedSyncDate],
-    queryFn: () => lawChangesApi.getStats({ sync_date: selectedSyncDate }),
-    enabled: !isSyncing && !!selectedSyncDate,
+    queryKey: ['law-changes-stats', selectedBatchId],
+    queryFn: () => lawChangesApi.getStats({ sync_batch_id: selectedBatchId }),
+    enabled: !isSyncing && !!selectedBatchId,
   })
 
   // 연혁 조회
@@ -194,57 +195,55 @@ export default function LawChangeList() {
   }, [syncLogs])
 
   // 동기화 시작
-  const handleStartSync = () => {
-    setIsSyncing(true)
-    setSyncProgress(null)
-    setSyncLogs([])
-    setSelectedSyncDate(undefined)
+  const handleStartSync = async () => {
+    try {
+      setIsSyncing(true)
+      setSyncProgress(null)
+      setSyncLogs([])
+      setSelectedBatchId(undefined)
 
-    const eventSource = lawSearchApi.syncLawsStream()
-    eventSourceRef.current = eventSource
+      await lawSearchApi.startSync()
+      setSyncLogs((prev) => [...prev, { type: 'start', message: '법령 동기화를 시작합니다...' }])
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data: SyncProgress = JSON.parse(event.data)
-        setSyncProgress(data)
+      // 폴링으로 진행 상태 확인
+      pollTimerRef.current = setInterval(async () => {
+        try {
+          const progress = await lawSearchApi.getSyncProgress()
+          setSyncProgress(progress)
 
-        // 변경된 법령 또는 에러만 로그에 추가
-        if (data.type === 'changed' || data.type === 'error' || data.type === 'start' || data.type === 'complete') {
-          setSyncLogs((prev) => [...prev, data])
+          if (progress.status === 'COMPLETED' || progress.status === 'FAILED') {
+            if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+            pollTimerRef.current = null
+            setIsSyncing(false)
+            setSyncProgress(null)
+
+            if (progress.status === 'COMPLETED') {
+              setSyncLogs((prev) => [...prev, { type: 'complete', message: `동기화 완료: ${progress.current || 0}건 처리`, updated: progress.updated || 0, failed: progress.failed || 0, changed_count: progress.changed_count || 0 }])
+              message.success('동기화가 완료되었습니다.')
+            } else {
+              setSyncLogs((prev) => [...prev, { type: 'error', message: '동기화 중 오류가 발생했습니다.' }])
+              message.error('동기화 중 오류가 발생했습니다.')
+            }
+
+            queryClient.invalidateQueries({ queryKey: ['law-changes'] })
+            queryClient.invalidateQueries({ queryKey: ['law-changes-stats'] })
+            queryClient.invalidateQueries({ queryKey: ['law-changes-sync-batches'] })
+          }
+        } catch (e) {
+          console.error('Polling error:', e)
         }
-
-        // 완료 시 처리
-        if (data.type === 'complete') {
-          eventSource.close()
-          eventSourceRef.current = null
-          setIsSyncing(false)
-          message.success(data.message || '동기화가 완료되었습니다.')
-
-          // 데이터 새로고침
-          queryClient.invalidateQueries({ queryKey: ['law-changes'] })
-          queryClient.invalidateQueries({ queryKey: ['law-changes-stats'] })
-          queryClient.invalidateQueries({ queryKey: ['law-changes-sync-dates'] })
-        }
-      } catch (e) {
-        console.error('SSE parse error:', e)
-      }
-    }
-
-    eventSource.onerror = (error) => {
-      console.error('SSE error:', error)
-      eventSource.close()
-      eventSourceRef.current = null
+      }, 3000)
+    } catch (e) {
       setIsSyncing(false)
-      setSyncLogs((prev) => [...prev, { type: 'error', message: '연결이 끊어졌습니다.' }])
-      message.error('동기화 중 연결이 끊어졌습니다.')
+      message.error('동기화 시작에 실패했습니다.')
     }
   }
 
   // 동기화 중지
   const handleStopSync = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-      eventSourceRef.current = null
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
     }
     setIsSyncing(false)
     message.warning('동기화가 중지되었습니다.')
@@ -253,8 +252,8 @@ export default function LawChangeList() {
   // 컴포넌트 언마운트 시 정리
   useEffect(() => {
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current)
       }
     }
   }, [])
@@ -336,7 +335,7 @@ export default function LawChangeList() {
       setSelectedRowKeys([])
       queryClient.invalidateQueries({ queryKey: ['law-changes'] })
       queryClient.invalidateQueries({ queryKey: ['law-changes-stats'] })
-      queryClient.invalidateQueries({ queryKey: ['law-changes-sync-dates'] })
+      queryClient.invalidateQueries({ queryKey: ['law-changes-sync-batches'] })
     },
     onError: () => {
       message.error('법령 일괄 삭제에 실패했습니다.')
@@ -706,20 +705,22 @@ export default function LawChangeList() {
     )
   }
 
-  // 동기화 진행 중 UI 렌더링
-  const renderSyncingContent = () => (
+  // 동기화 로그 UI 렌더링
+  const renderSyncLogContent = () => (
     <Card>
-      <div style={{ marginBottom: 16 }}>
-        <Space>
-          <LoadingOutlined spin style={{ fontSize: 18 }} />
-          <Text strong>법령 동기화 진행 중...</Text>
-          <Button danger size="small" onClick={handleStopSync}>
-            중지
-          </Button>
-        </Space>
-      </div>
+      {isSyncing && (
+        <div style={{ marginBottom: 16 }}>
+          <Space>
+            <LoadingOutlined spin style={{ fontSize: 18 }} />
+            <Text strong>법령 동기화 진행 중...</Text>
+            <Button danger size="small" onClick={handleStopSync}>
+              중지
+            </Button>
+          </Space>
+        </div>
+      )}
 
-      {syncProgress && syncProgress.total && (
+      {isSyncing && syncProgress && syncProgress.total && (
         <div style={{ marginBottom: 16 }}>
           <Progress
             percent={Math.round(((syncProgress.current || 0) / syncProgress.total) * 100)}
@@ -789,76 +790,226 @@ export default function LawChangeList() {
 
   return (
     <div>
-      <Space style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>법령 변경 관리</Title>
-        <Button
-          type="primary"
-          icon={isSyncing ? <LoadingOutlined /> : <SyncOutlined />}
-          onClick={handleStartSync}
-          disabled={isSyncing}
-        >
-          법령 동기화
-        </Button>
-      </Space>
+      <Title level={4} style={{ marginBottom: 16 }}>법령 변경 관리</Title>
 
-      {/* 동기화 중일 때 */}
-      {isSyncing ? (
-        renderSyncingContent()
-      ) : (
-        <>
-          {/* 통계 카드 */}
-          {stats && (
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col span={6}>
-                <Card size="small">
-                  <Statistic title="전체" value={stats.total} />
-                </Card>
-              </Col>
-              <Col span={6}>
-                <Card size="small">
-                  <Statistic
-                    title="성공"
-                    value={stats.by_api_status?.success || 0}
-                    valueStyle={{ color: '#52c41a' }}
-                  />
-                </Card>
-              </Col>
-              <Col span={6}>
-                <Card size="small">
-                  <Statistic
-                    title="응답없음"
-                    value={stats.by_api_status?.no_response || 0}
-                    valueStyle={{ color: '#ff4d4f' }}
-                  />
-                </Card>
-              </Col>
-              <Col span={6}>
-                <Card size="small">
-                  <Statistic
-                    title="미발견"
-                    value={stats.by_api_status?.not_found || 0}
-                    valueStyle={{ color: '#fa8c16' }}
-                  />
-                </Card>
-              </Col>
-            </Row>
-          )}
+      <Tabs
+        defaultActiveKey="list"
+        onChange={(key) => {
+          if (key === 'list') setSelectedBatchId(undefined)
+        }}
+        destroyOnHidden={false}
+        items={[
+          {
+            key: 'sync',
+            label: isSyncing ? <span><LoadingOutlined spin /> 동기화 진행</span> : <span><SyncOutlined /> 동기화</span>,
+            children: (
+              <div>
+                {!isSyncing && (
+                  <div style={{ marginBottom: 16 }}>
+                    <Space>
+                      <Tooltip title="법제처 API에서 전체 법령 변경사항을 동기화합니다">
+                        <Button
+                          type="primary"
+                          icon={<SyncOutlined />}
+                          onClick={handleStartSync}
+                        >
+                          법령 동기화 시작
+                        </Button>
+                      </Tooltip>
+                      <Tooltip title="백그라운드에서 진행 중인 동기화 상태를 확인합니다">
+                        <Button
+                          icon={<SyncOutlined />}
+                          onClick={async () => {
+                          try {
+                            const progress = await lawSearchApi.getSyncProgress()
+                            if (progress.status === 'RUNNING') {
+                              setIsSyncing(true)
+                              setSyncProgress(progress)
+                              message.info(`동기화 진행 중: ${progress.current || 0} / ${progress.total || 0}`)
+                              // 폴링 시작
+                              if (!pollTimerRef.current) {
+                                pollTimerRef.current = setInterval(async () => {
+                                  try {
+                                    const p = await lawSearchApi.getSyncProgress()
+                                    setSyncProgress(p)
+                                    if (p.status === 'COMPLETED' || p.status === 'FAILED') {
+                                      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+                                      pollTimerRef.current = null
+                                      setIsSyncing(false)
+                                      if (p.status === 'COMPLETED') {
+                                        setSyncLogs((prev) => [...prev, { type: 'complete', message: `동기화 완료: ${p.current || 0}건 처리` }])
+                                        message.success('동기화가 완료되었습니다.')
+                                      } else {
+                                        message.error('동기화 중 오류가 발생했습니다.')
+                                      }
+                                      queryClient.invalidateQueries({ queryKey: ['law-changes'] })
+                                      queryClient.invalidateQueries({ queryKey: ['law-changes-stats'] })
+                                      queryClient.invalidateQueries({ queryKey: ['law-changes-sync-batches'] })
+                                    }
+                                  } catch (e) {
+                                    console.error('Polling error:', e)
+                                  }
+                                }, 3000)
+                              }
+                            } else {
+                              message.info(`현재 상태: ${progress.status === 'IDLE' ? '대기 중' : progress.status}`)
+                            }
+                          } catch {
+                            message.error('상태 확인 실패')
+                          }
+                        }}
+                      >
+                        상태 확인
+                      </Button>
+                      </Tooltip>
+                      <Tooltip title="동기화 상태를 초기화합니다 (FAILED 상태 해제)">
+                        <Button
+                          danger
+                          icon={<DeleteOutlined />}
+                          onClick={async () => {
+                            try {
+                              await lawSearchApi.clearSyncProgress()
+                              setIsSyncing(false)
+                              setSyncProgress(null)
+                              setSyncLogs([])
+                              message.success('동기화 상태가 초기화되었습니다.')
+                            } catch {
+                              message.error('초기화 실패')
+                            }
+                          }}
+                        >
+                          초기화
+                        </Button>
+                      </Tooltip>
+                    </Space>
+                  </div>
+                )}
+                {(isSyncing || syncLogs.length > 0) && renderSyncLogContent()}
+              </div>
+            ),
+          },
+          {
+            key: 'list',
+            label: '동기화 이력',
+              children: (
+                <Table
+                  columns={[
+                    {
+                      title: '동기화 일시',
+                      dataIndex: 'sync_date',
+                      key: 'sync_date',
+                      width: 180,
+                      render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
+                    },
+                    {
+                      title: '전체',
+                      dataIndex: 'total',
+                      key: 'total',
+                      width: 100,
+                      align: 'center' as const,
+                    },
+                    {
+                      title: '변경감지',
+                      dataIndex: 'changed',
+                      key: 'changed',
+                      width: 100,
+                      align: 'center' as const,
+                      render: (v: number) => <Text style={{ color: v > 0 ? '#fa8c16' : undefined }}>{v}</Text>,
+                    },
+                    {
+                      title: '변경없음',
+                      dataIndex: 'no_change',
+                      key: 'no_change',
+                      width: 100,
+                      align: 'center' as const,
+                      render: (v: number) => <Text style={{ color: '#52c41a' }}>{v}</Text>,
+                    },
+                    {
+                      title: '응답없음',
+                      dataIndex: 'no_response',
+                      key: 'no_response',
+                      width: 100,
+                      align: 'center' as const,
+                      render: (v: number) => <Text style={{ color: v > 0 ? '#ff4d4f' : undefined }}>{v}</Text>,
+                    },
+                    {
+                      title: '미발견',
+                      dataIndex: 'not_found',
+                      key: 'not_found',
+                      width: 100,
+                      align: 'center' as const,
+                      render: (v: number) => <Text style={{ color: v > 0 ? '#ff4d4f' : undefined }}>{v}</Text>,
+                    },
+                    {
+                      title: '작업',
+                      key: 'action',
+                      width: 100,
+                      align: 'center' as const,
+                      render: (_: any, record: SyncBatch) => (
+                        <Popconfirm
+                          title="동기화 데이터 삭제"
+                          description={`이 동기화 배치의 데이터 ${record.total}건을 모두 삭제합니다.`}
+                          onConfirm={async (e) => {
+                            e?.stopPropagation()
+                            try {
+                              await lawChangesApi.deleteBySyncBatch(record.sync_batch_id)
+                              message.success('삭제되었습니다.')
+                              queryClient.invalidateQueries({ queryKey: ['law-changes-sync-batches'] })
+                            } catch {
+                              message.error('삭제에 실패했습니다.')
+                            }
+                          }}
+                          onCancel={(e) => e?.stopPropagation()}
+                          okText="삭제"
+                          okButtonProps={{ danger: true }}
+                          cancelText="취소"
+                        >
+                          <Button
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            삭제
+                          </Button>
+                        </Popconfirm>
+                      ),
+                    },
+                  ]}
+                  dataSource={syncBatches || []}
+                  rowKey="sync_batch_id"
+                  pagination={false}
+                  onRow={(record: SyncBatch) => ({
+                    onClick: () => {
+                      setSelectedBatchId(record.sync_batch_id)
+                      setPage(1)
+                    },
+                    style: { cursor: 'pointer' },
+                  })}
+                />
+              ),
+            },
+            {
+              key: 'detail',
+              label: selectedBatchId ? `동기화 상세` : '동기화 상세',
+              disabled: !selectedBatchId,
+              children: selectedBatchId ? (
+                <>
+                  {/* 통계 */}
+                  <Space style={{ marginBottom: 16 }}>
+                    <Text strong>{syncBatches?.find((b: SyncBatch) => b.sync_batch_id === selectedBatchId)?.sync_date ? dayjs(syncBatches.find((b: SyncBatch) => b.sync_batch_id === selectedBatchId).sync_date).format('YYYY-MM-DD HH:mm') : selectedBatchId}</Text>
+                    {stats && (
+                      <>
+                        <Tag>전체 {stats.total}</Tag>
+                        <Tag color="green">성공 {stats.by_api_status?.success || 0}</Tag>
+                        <Tag color="red">응답없음 {stats.by_api_status?.no_response || 0}</Tag>
+                        <Tag color="orange">미발견 {stats.by_api_status?.not_found || 0}</Tag>
+                      </>
+                    )}
+                  </Space>
 
-          {/* 필터 */}
-          <Space style={{ marginBottom: 16 }} wrap>
-            <Select
-              placeholder="동기화 날짜"
-              style={{ width: 200 }}
-              value={selectedSyncDate}
-              onChange={(value) => {
-                setSelectedSyncDate(value)
-                setPage(1)
-              }}
-              options={syncDates?.map((d: SyncDate) => ({
-                value: d.sync_date,
-                label: `${d.sync_date} (${d.success}/${d.total})`,
-              })) || []}
-            />
+                  {/* 필터 */}
+                  <Space style={{ marginBottom: 16 }} wrap>
             <Space.Compact>
               <Input
                 placeholder="법령명 검색"
@@ -925,7 +1076,7 @@ export default function LawChangeList() {
                 try {
                   await lawChangesApi.exportExcel({
                     api_status: apiStatus === 'all' ? undefined : apiStatus,
-                    sync_date: selectedSyncDate,
+                    sync_batch_id: selectedBatchId,
                     search,
                   })
                   message.success('엑셀 파일이 다운로드되었습니다.')
@@ -966,7 +1117,6 @@ export default function LawChangeList() {
                 </Button>
               </Popconfirm>
             )}
-
           </Space>
 
           {/* 테이블 */}
@@ -985,8 +1135,11 @@ export default function LawChangeList() {
             }}
             scroll={{ x: 1200 }}
           />
-        </>
-      )}
+                </>
+              ) : null,
+            },
+          ]}
+        />
 
       {/* 상세 모달 */}
       <Modal
@@ -1098,7 +1251,10 @@ export default function LawChangeList() {
                 onClick={() => setSelectedOrdinance(null)}
                 style={{ marginRight: 8 }}
               />
-              {selectedOrdinance.name}
+              <a onClick={() => {
+                handleOrdinanceModalClose()
+                navigate(`/ordinances/${selectedOrdinance.id}`)
+              }}>{selectedOrdinance.name}</a>
             </Space>
           ) : (
             `연계 자치법규 - ${selectedLawForOrdinance?.law_name}`

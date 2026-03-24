@@ -57,14 +57,17 @@ class LlmAnalysisService:
         self.db = db
 
     async def analyze_ordinance(
-        self, ordinance_id: int, law_id: int
+        self, ordinance_id: int, law_id: int, force: bool = False
     ) -> LlmAnalysisResult:
         """
         메인 진입점: 1회 통합 호출로 요약 + 검토의견 초안을 동시 생성
 
+        Args:
+            force: True이면 기존 성공 결과를 삭제하고 재분석 (관리자 전용)
+
         Raises:
             ValueError: 조례/법령 미발견, 매핑 미존재, 제개정이유 없음
-            ConflictError: 이미 분석 완료
+            ConflictError: 이미 분석 완료 (force=False일 때만)
             LlmServiceUnavailableError: 프로바이더 미설정
             RateLimitExceededError: Rate Limit 초과
         """
@@ -88,9 +91,13 @@ class LlmAnalysisService:
             ordinance_id, law_id, law.proclaimed_date
         )
         if existing and existing.status == "success":
-            raise ConflictError("이미 AI 분석이 완료되었습니다", existing.id)
-        # 실패 건은 1회 재시도 허용 — 기존 레코드 삭제 후 재생성
-        if existing and existing.status == "failed":
+            if force:
+                await self.db.delete(existing)
+                await self.db.flush()
+            else:
+                raise ConflictError("이미 AI 분석이 완료되었습니다", existing.id)
+        # 실패/중단(pending) 건은 재시도 허용 — 기존 레코드 삭제 후 재생성
+        if existing and existing.status in ("failed", "pending"):
             await self.db.delete(existing)
             await self.db.flush()
 

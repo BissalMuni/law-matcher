@@ -13,7 +13,6 @@ import DepartmentList from './pages/DepartmentList'
 import DepartmentDetail from './pages/DepartmentDetail'
 import OrdinanceList from './pages/OrdinanceList'
 import OrdinanceDetail from './pages/OrdinanceDetail'
-import RevisionNeededList from './pages/RevisionNeededList'
 import LawList from './pages/LawList'
 import LawChangeList from './pages/LawChangeList'
 import ReviewList from './pages/ReviewList'
@@ -23,6 +22,7 @@ import AdminSettings from './pages/AdminSettings'
 import AiAnalytics from './pages/AiAnalytics'
 import DetectionCompare from './pages/DetectionCompare'
 import ChangePassword from './pages/ChangePassword'
+import BatchProcessing from './pages/BatchProcessing'
 import { maintenanceApi } from './services/api'
 
 function App() {
@@ -81,7 +81,6 @@ function App() {
                 {/* Shared routes (ADMIN + USER) */}
                 <Route path="ordinances" element={<OrdinanceList />} />
                 <Route path="ordinances/:id" element={<OrdinanceDetail />} />
-                <Route path="revision-needed" element={<RevisionNeededList />} />
                 <Route path="dashboard" element={<Dashboard />} />
 
                 {/* ADMIN only routes */}
@@ -95,6 +94,7 @@ function App() {
                   <Route path="admin/settings" element={<AdminSettings />} />
                   <Route path="admin/ai-analytics" element={<AiAnalytics />} />
                   <Route path="admin/detection-compare" element={<DetectionCompare />} />
+                  <Route path="admin/batch" element={<BatchProcessing />} />
                   <Route path="change-password" element={<ChangePassword />} />
                 </Route>
               </Route>

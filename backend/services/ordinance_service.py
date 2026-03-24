@@ -36,6 +36,7 @@ class OrdinanceService:
         size: int = 20,
         category: Optional[str] = None,
         department: Optional[str] = None,
+        department_id: Optional[int] = None,
         search: Optional[str] = None,
         no_parent_law_filter: Optional[str] = None,
         needs_revision_filter: Optional[str] = None,
@@ -46,6 +47,8 @@ class OrdinanceService:
         revision_status_filter: Optional[str] = None,  # "any" | "검토대기" | "검토중" | "개정확정"
     ) -> dict:
         """Get paginated list of ordinances"""
+        from backend.models.department import Department as DeptModel
+
         query = select(Ordinance)
         if status_filter:
             query = query.where(Ordinance.status == status_filter)
@@ -54,11 +57,34 @@ class OrdinanceService:
 
         if category:
             query = query.where(Ordinance.category == category)
-        if department:
-            # 부서명이 정확히 일치하거나, "상위부서 하위부서" 형태에서 하위부서가 일치하는 경우
+        if department_id:
+            # 부서 마스터 ID로 부서명 조회 후 문자열 기반 필터
+            dept_result = await self.db.execute(
+                select(DeptModel).where(DeptModel.id == department_id)
+            )
+            dept = dept_result.scalar_one_or_none()
+            if dept:
+                # 해당 부서 + 하위 부서의 이름 패턴 수집
+                name_candidates = set()
+                if dept.parent_name:
+                    # 하위 부서 (과): "행정국 총무과" 형태
+                    name_candidates.add(f"{dept.parent_name} {dept.name}")
+                else:
+                    # 상위 부서 (국/실): 자신 + 산하 과 전부
+                    name_candidates.add(dept.name)
+                    child_result = await self.db.execute(
+                        select(DeptModel.name).where(DeptModel.parent_name == dept.name)
+                    )
+                    for (child_name,) in child_result:
+                        name_candidates.add(f"{dept.name} {child_name}")
+
+                query = query.where(Ordinance.department.in_(list(name_candidates)))
+        elif department:
+            # 레거시: 문자열 기반 부서 필터
             query = query.where(
                 (Ordinance.department == department) |
-                (Ordinance.department.like(f"% {department}"))
+                (Ordinance.department.like(f"% {department}")) |
+                (Ordinance.department.like(f"{department} %"))
             )
         if search:
             query = query.where(Ordinance.name.ilike(f"%{search}%"))
@@ -92,6 +118,13 @@ class OrdinanceService:
 
         # 개정대상 필터
         if needs_revision_filter:
+            # 승인된 "개정불필요" 리뷰가 있는 조례 제외용 서브쿼리
+            approved_no_revision_subquery = (
+                select(OrdinanceReview.ordinance_id)
+                .where(OrdinanceReview.approval_status == "approved")
+                .where(OrdinanceReview.review_result == "개정불필요")
+                .distinct()
+            )
             # 상위법령이 있는 조례만 (매핑 존재)
             has_mapping_subquery = select(OrdinanceLawMapping.ordinance_id).distinct()
             if needs_revision_filter == "needs_revision":
@@ -112,6 +145,8 @@ class OrdinanceService:
                     Ordinance.id.in_(has_mapping_subquery),
                     Ordinance.enacted_date.isnot(None),
                     Ordinance.id.in_(revision_subquery),
+                    # 승인된 "개정불필요" 검토가 있는 조례는 제외
+                    Ordinance.id.notin_(approved_no_revision_subquery),
                 )
             elif needs_revision_filter == "no_revision":
                 # 상위법령 시행일이 조례 공포일 이하인 경우
@@ -263,6 +298,7 @@ class OrdinanceService:
                 "no_parent_law": ordinance.no_parent_law,
                 "needs_revision": needs_revision,
                 "law_revision_types": law_revision_types,
+                "revision_status": ordinance.revision_status,
                 "latest_review_result": latest_review_result,
             }
             items.append(ordinance_dict)
@@ -366,21 +402,50 @@ class OrdinanceService:
         proclaimed_date: Optional[str] = None,
         enforced_date: Optional[str] = None,
     ) -> Law:
-        """법령명과 법령유형으로 법령을 찾거나 생성"""
-        # 법령명과 법령유형으로 법령 검색
+        """법령명과 법령유형으로 법령을 찾거나 생성 (법제처 API 자동 조회 포함)"""
+        from backend.utils.text import normalize_name, normalize_name_for_compare
+        from backend.core.config import settings
+        import logging
+
+        logger = logging.getLogger(__name__)
+        law_name = normalize_name(law_name)
+
+        # 법령명으로 DB 검색 (법령유형은 프론트/법제처 간 명칭 차이가 있으므로 제외)
         result = await self.db.execute(
-            select(Law).where(
-                and_(
-                    Law.law_name == law_name,
-                    Law.law_type == law_type
-                )
-            )
+            select(Law).where(Law.law_name == law_name)
         )
         law = result.scalar_one_or_none()
 
-        # 법령이 없으면 새로 생성
-        if not law:
-            # 다음 사용 가능한 law_serial_no와 law_id 찾기
+        if law:
+            return law
+
+        # DB에 없으면 법제처 API로 실제 법령 정보 조회
+        api_result = await self._search_law_from_api(law_name)
+
+        if api_result:
+            # 법제처 API 결과로 정확한 정보의 법령 생성
+            law = Law(
+                law_serial_no=api_result.law_serial_no,
+                law_id=api_result.law_id,
+                law_name=api_result.law_name,
+                law_abbr=api_result.law_abbr,
+                law_type=api_result.law_type or law_type,
+                proclaimed_date=api_result.proclaimed_date,
+                proclaimed_no=api_result.proclaimed_no,
+                enforced_date=api_result.enforced_date,
+                revision_type=api_result.revision_type,
+                history_code=api_result.history_code,
+                dept_name=api_result.dept_name,
+                dept_code=api_result.dept_code,
+                detail_link=api_result.detail_link,
+                last_synced_at=datetime.utcnow(),
+            )
+            logger.info(
+                "법제처 API에서 법령 조회 성공: %s (law_id=%d, MST=%d)",
+                api_result.law_name, api_result.law_id, api_result.law_serial_no,
+            )
+        else:
+            # 법제처에서 못 찾으면 placeholder 생성 (수동 등록 케이스)
             max_result = await self.db.execute(
                 select(func.max(Law.law_serial_no), func.max(Law.law_id))
             )
@@ -388,7 +453,6 @@ class OrdinanceService:
             next_serial = (max_serial or 0) + 1
             next_law_id = (max_law_id or 0) + 1
 
-            # 날짜 변환
             proclaimed_date_obj = None
             enforced_date_obj = None
             if proclaimed_date:
@@ -402,7 +466,6 @@ class OrdinanceService:
                 except ValueError:
                     pass
 
-            # 새 법령 생성
             law = Law(
                 law_serial_no=next_serial,
                 law_id=next_law_id,
@@ -411,10 +474,63 @@ class OrdinanceService:
                 proclaimed_date=proclaimed_date_obj,
                 enforced_date=enforced_date_obj,
             )
-            self.db.add(law)
-            await self.db.flush()  # law.id를 얻기 위해 flush
+            logger.warning(
+                "법제처 API에서 법령 미발견, placeholder 생성: %s (law_id=%d)",
+                law_name, next_law_id,
+            )
 
+        self.db.add(law)
+        await self.db.flush()
         return law
+
+    async def _search_law_from_api(
+        self,
+        law_name: str,
+    ):
+        """법제처 API에서 법령명으로 검색하여 정확히 일치하는 결과 반환"""
+        from backend.utils.text import normalize_name_for_compare
+        from backend.services.law_sync_service import LawSyncService, LawSearchResult
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            sync_service = LawSyncService(self.db)
+            target_normalized = normalize_name_for_compare(law_name)
+
+            # 1) 현행법령 검색
+            results, _ = await sync_service.search_laws(query=law_name, display=30)
+            match = self._find_api_match(results, law_name, target_normalized)
+            if match:
+                return match
+
+            # 2) 시행예정 포함 검색 (nw=2 fallback)
+            results, _ = await sync_service.search_laws(query=law_name, display=30, nw=2)
+            match = self._find_api_match(results, law_name, target_normalized)
+            if match:
+                return match
+
+        except Exception as e:
+            logger.warning("법제처 API 조회 실패 (법령명=%s): %s", law_name, e)
+
+        return None
+
+    @staticmethod
+    def _find_api_match(results, law_name: str, target_normalized: str):
+        """검색 결과에서 정확히 일치하는 법령 찾기"""
+        from backend.utils.text import normalize_name_for_compare
+
+        # 완전 일치 우선
+        for item in results:
+            if item.law_name == law_name:
+                return item
+
+        # 정규화 비교
+        for item in results:
+            if normalize_name_for_compare(item.law_name) == target_normalized:
+                return item
+
+        return None
 
     async def create_parent_law(
         self,
@@ -561,12 +677,13 @@ class OrdinanceService:
                 except ValueError:
                     pass
 
+            from backend.utils.text import normalize_name
             if existing:
                 # EXCLUDED 상태인 조례는 스킵
                 if existing.status == "EXCLUDED":
                     continue
                 # 업데이트
-                existing.name = ordin_data.get('자치법규명', existing.name)
+                existing.name = normalize_name(ordin_data.get('자치법규명', '')) or existing.name
                 existing.category = ordin_data.get('자치법규종류', existing.category)
                 existing.serial_no = ordin_data.get('자치법규일련번호')
                 existing.field_name = ordin_data.get('자치법규분야명')
@@ -581,7 +698,7 @@ class OrdinanceService:
                 # 신규 생성
                 new_ordinance = Ordinance(
                     code=ordin_id,
-                    name=ordin_data.get('자치법규명', ''),
+                    name=normalize_name(ordin_data.get('자치법규명', '')),
                     category=ordin_data.get('자치법규종류'),
                     serial_no=ordin_data.get('자치법규일련번호'),
                     field_name=ordin_data.get('자치법규분야명'),
@@ -679,12 +796,9 @@ class OrdinanceService:
         df.columns = df.columns.str.strip()
 
         def normalize_text(s: str) -> str:
-            """
-            특수문자 정규화
-            - ㆍ (U+318D, 한글 자모 중점) -> · (U+00B7, 가운뎃점)
-            - ･ (U+FF65, 반각 가운뎃점) -> · (U+00B7, 가운뎃점)
-            """
-            return s.replace('ㆍ', '·').replace('･', '·').strip()
+            """특수문자 정규화 — 법제처 기준 ㆍ(U+318D)로 통일"""
+            from backend.utils.text import normalize_name
+            return normalize_name(s)
 
         updated = 0
         not_found = 0
@@ -800,10 +914,11 @@ class OrdinanceService:
 
         # 기존 매핑된 Law 레코드를 직접 수정 (새 레코드 생성 방지)
         if law_name is not None or law_type is not None:
+            from backend.utils.text import normalize_name
             law = mapping.law
             if law:
                 if law_name is not None:
-                    law.law_name = law_name
+                    law.law_name = normalize_name(law_name)
                 if law_type is not None:
                     law.law_type = law_type
                 if proclaimed_date:
@@ -869,6 +984,8 @@ class OrdinanceService:
             등록 결과 정보
         """
         import uuid
+        from backend.utils.text import normalize_name
+        name = normalize_name(name)
 
         # 동일한 이름의 자치법규가 있는지 확인
         existing = await self.db.execute(
@@ -950,6 +1067,9 @@ class OrdinanceService:
         Returns:
             등록 결과 정보
         """
+        from backend.utils.text import normalize_name
+        name = normalize_name(name)
+
         # 이미 등록된 자치법규인지 확인 (code로 확인)
         existing = await self.db.execute(
             select(Ordinance).where(Ordinance.code == ordinance_id)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Table,
@@ -12,12 +12,15 @@ import {
   Input,
   message,
   Tooltip,
+  Card,
+  Tree,
 } from 'antd'
-import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import { CheckCircleOutlined, CloseCircleOutlined, ApartmentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ordinanceApi } from '../services/api'
+import { ordinanceApi, departmentApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import dayjs from 'dayjs'
+import type { TreeDataNode } from 'antd'
 
 const { Title } = Typography
 const { TextArea } = Input
@@ -38,6 +41,21 @@ interface ReviewItem {
   approval_note?: string
   created_by?: { username: string; full_name: string | null } | null
   created_at: string
+}
+
+interface DepartmentTreeNode {
+  id: number
+  code: string
+  name: string
+  parent_name: string | null
+  sort_order: number
+  ordinance_count: number
+  children: DepartmentTreeNode[]
+}
+
+interface DepartmentTreeResponse {
+  bureaus: DepartmentTreeNode[]
+  zones: DepartmentTreeNode[]
 }
 
 const REVIEW_RESULT_COLOR: Record<string, string> = {
@@ -61,12 +79,103 @@ export default function ReviewList() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const isAdmin = user?.user_type === 'GENERAL' || user?.user_type === 'ADMIN'
+  const isAdmin = user?.user_type === 'ADMIN'
 
   const [page, setPage] = useState(1)
+  const [viewMode, setViewMode] = useState<'reviews' | 'all_revision'>('reviews')
   const [approvalStatus, setApprovalStatus] = useState<string | undefined>('pending')
   const [reviewResult, setReviewResult] = useState<string | undefined>()
   const [reviewerType, setReviewerType] = useState<string | undefined>()
+  const [selectedDepartment, setSelectedDepartment] = useState<string | undefined>()
+
+  // 사이드바 리사이즈
+  const [sidebarWidth, setSidebarWidth] = useState(220)
+  const isResizing = useRef(false)
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([])
+  const [treeInitialized, setTreeInitialized] = useState(false)
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    isResizing.current = true
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = sidebarWidth
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return
+      const newWidth = Math.max(150, Math.min(400, startWidth + e.clientX - startX))
+      setSidebarWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      isResizing.current = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [sidebarWidth])
+
+  // 부서 트리 조회
+  const { data: departmentTree } = useQuery<DepartmentTreeResponse>({
+    queryKey: ['department-tree'],
+    queryFn: () => departmentApi.getTree(),
+  })
+
+  const treeData: TreeDataNode[] = useMemo(() => {
+    if (!departmentTree?.bureaus) return []
+
+    const buildChildren = (nodes: DepartmentTreeNode[]): TreeDataNode[] => {
+      return nodes.map(node => ({
+        title: `${node.name} (${node.ordinance_count})`,
+        key: String(node.id),
+        children: node.children.length > 0 ? buildChildren(node.children) : undefined,
+      }))
+    }
+
+    const rootChildren = buildChildren(departmentTree.bureaus)
+    const totalCount = departmentTree.bureaus.reduce((sum, b) => sum + b.ordinance_count, 0)
+
+    return [
+      {
+        title: `전체 (${totalCount})`,
+        key: '__all__',
+        icon: <ApartmentOutlined />,
+        children: rootChildren,
+      },
+    ]
+  }, [departmentTree])
+
+  const onTreeSelect = (selectedKeys: React.Key[]) => {
+    const key = selectedKeys[0] as string
+    if (key === '__all__' || !key) {
+      setSelectedDepartment(undefined)
+    } else {
+      setSelectedDepartment(key)
+    }
+    setPage(1)
+  }
+
+  const onTreeExpand = (keys: React.Key[]) => {
+    setExpandedKeys(keys)
+  }
+
+  useEffect(() => {
+    if (departmentTree?.bureaus && !treeInitialized) {
+      const allKeys: React.Key[] = ['__all__']
+      const collectKeys = (nodes: DepartmentTreeNode[]) => {
+        for (const node of nodes) {
+          allKeys.push(String(node.id))
+          if (node.children.length > 0) {
+            collectKeys(node.children)
+          }
+        }
+      }
+      collectKeys(departmentTree.bureaus)
+      setExpandedKeys(allKeys)
+      setTreeInitialized(true)
+    }
+  }, [departmentTree, treeInitialized])
 
   // 승인/반려 모달 상태
   const [approveModal, setApproveModal] = useState<{
@@ -78,14 +187,16 @@ export default function ReviewList() {
   const [approveForm] = Form.useForm()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['all-reviews', page, approvalStatus, reviewResult, reviewerType],
+    queryKey: ['all-reviews', page, viewMode, approvalStatus, reviewResult, reviewerType, selectedDepartment],
     queryFn: () =>
       ordinanceApi.getAllReviews({
         page,
         size: 20,
-        approval_status: approvalStatus,
-        review_result: reviewResult,
-        reviewer_type: reviewerType,
+        view_mode: viewMode,
+        approval_status: viewMode === 'reviews' ? approvalStatus : undefined,
+        review_result: viewMode === 'reviews' ? reviewResult : undefined,
+        reviewer_type: viewMode === 'reviews' ? reviewerType : undefined,
+        department_id: selectedDepartment ? Number(selectedDepartment) : undefined,
       }),
   })
 
@@ -95,7 +206,7 @@ export default function ReviewList() {
     onSuccess: () => {
       message.success(approveModal.action === 'approved' ? '승인되었습니다.' : '반려되었습니다.')
       queryClient.invalidateQueries({ queryKey: ['all-reviews'] })
-      setApproveModal({ open: false, reviewId: null, action: null })
+      setApproveModal({ open: false, reviewId: null, action: null, reviewResult: null })
       approveForm.resetFields()
     },
     onError: () => {
@@ -117,7 +228,8 @@ export default function ReviewList() {
     })
   }
 
-  const columns = [
+  // 검토의견 모드 컬럼
+  const reviewColumns = [
     {
       title: '자치법규',
       dataIndex: 'ordinance_name',
@@ -226,63 +338,120 @@ export default function ReviewList() {
       : []),
   ]
 
+  const columns = reviewColumns
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>검토의견 관리</Title>
+      <Title level={4}>검토의견 관리</Title>
+
+      <div style={{ display: 'flex', gap: 16 }}>
+        {/* 소관부서 사이드 네비 */}
+        {isAdmin && (
+          <div style={{ width: sidebarWidth, flexShrink: 0, position: 'relative' }}>
+            <Card
+              size="small"
+              title="담당부서"
+              style={{ position: 'sticky', top: 16 }}
+              styles={{ body: { maxHeight: 'calc(100vh - 200px)', overflow: 'auto', padding: 0 } }}
+            >
+              <Tree
+                showIcon
+                expandedKeys={expandedKeys}
+                onExpand={onTreeExpand}
+                treeData={treeData}
+                onSelect={onTreeSelect}
+                selectedKeys={selectedDepartment ? [selectedDepartment] : ['__all__']}
+              />
+            </Card>
+            <div
+              onMouseDown={handleMouseDown}
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: -4,
+                width: 8,
+                height: '100%',
+                cursor: 'col-resize',
+                zIndex: 10,
+              }}
+            />
+          </div>
+        )}
+
+        {/* 메인 콘텐츠 */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Space style={{ marginBottom: 16 }} wrap>
+            <Select
+              style={{ width: 150 }}
+              value={viewMode}
+              onChange={(v) => { setViewMode(v); setPage(1) }}
+              options={[
+                { value: 'all_revision', label: '개정대상 전체' },
+                { value: 'reviews', label: '검토의견 있음' },
+              ]}
+            />
+            {viewMode === 'reviews' && (
+              <>
+                <Select
+                  placeholder="승인상태"
+                  style={{ width: 120 }}
+                  allowClear
+                  value={approvalStatus}
+                  onChange={(v) => { setApprovalStatus(v); setPage(1) }}
+                  options={[
+                    { value: 'pending', label: '승인대기' },
+                    { value: 'approved', label: '승인됨' },
+                    { value: 'rejected', label: '반려됨' },
+                  ]}
+                />
+                <Select
+                  placeholder="검토결과"
+                  style={{ width: 130 }}
+                  allowClear
+                  value={reviewResult}
+                  onChange={(v) => { setReviewResult(v); setPage(1) }}
+                  options={[
+                    { value: '개정필요', label: '개정필요' },
+                    { value: '개정불필요', label: '개정불필요' },
+                  ]}
+                />
+                <Select
+                  placeholder="검토자유형"
+                  style={{ width: 130 }}
+                  allowClear
+                  value={reviewerType}
+                  onChange={(v) => { setReviewerType(v); setPage(1) }}
+                  options={[
+                    { value: 'DEPARTMENT', label: '부서담당자' },
+                    { value: 'GENERAL', label: '총괄담당자' },
+                  ]}
+                />
+              </>
+            )}
+          </Space>
+
+          <div style={{ marginBottom: 8, padding: '4px 8px', background: '#e6f4ff', borderRadius: 4, fontSize: 13 }}>
+            <strong>필터 결과: {data?.total || 0}건</strong>
+            {viewMode === 'all_revision' && ' (개정대상 전체, 승인된 "개정불필요" 제외)'}
+            {viewMode === 'reviews' && approvalStatus && ` (${APPROVAL_LABEL[approvalStatus] || approvalStatus})`}
+          </div>
+
+          <Table
+            columns={columns}
+            dataSource={data?.items || []}
+            rowKey="id"
+            loading={isLoading}
+            size="small"
+            pagination={{
+              current: page,
+              total: data?.total || 0,
+              pageSize: 20,
+              onChange: setPage,
+              showTotal: (total) => `총 ${total}건`,
+            }}
+          />
+        </div>
       </div>
-
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Select
-          placeholder="승인상태"
-          style={{ width: 120 }}
-          allowClear
-          value={approvalStatus}
-          onChange={(v) => { setApprovalStatus(v); setPage(1) }}
-          options={[
-            { value: 'pending', label: '승인대기' },
-            { value: 'approved', label: '승인됨' },
-            { value: 'rejected', label: '반려됨' },
-          ]}
-        />
-        <Select
-          placeholder="검토결과"
-          style={{ width: 130 }}
-          allowClear
-          value={reviewResult}
-          onChange={(v) => { setReviewResult(v); setPage(1) }}
-          options={[
-            { value: '개정필요', label: '개정필요' },
-            { value: '개정불필요', label: '개정불필요' },
-          ]}
-        />
-        <Select
-          placeholder="검토자유형"
-          style={{ width: 130 }}
-          allowClear
-          value={reviewerType}
-          onChange={(v) => { setReviewerType(v); setPage(1) }}
-          options={[
-            { value: 'DEPARTMENT', label: '부서담당자' },
-            { value: 'GENERAL', label: '총괄담당자' },
-          ]}
-        />
-      </Space>
-
-      <Table
-        columns={columns}
-        dataSource={data?.items || []}
-        rowKey="id"
-        loading={isLoading}
-        size="small"
-        pagination={{
-          current: page,
-          total: data?.total || 0,
-          pageSize: 20,
-          onChange: setPage,
-          showTotal: (total) => `총 ${total}건`,
-        }}
-      />
 
       {/* 승인/반려 모달 */}
       <Modal

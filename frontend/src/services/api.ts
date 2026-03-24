@@ -84,6 +84,7 @@ export const ordinanceApi = {
     size?: number
     category?: string
     department?: string
+    department_id?: string
     search?: string
     no_parent_law_filter?: string  // "no_mapping" | "confirmed_none"
     needs_revision_filter?: string  // "needs_revision" | "no_revision"
@@ -212,9 +213,11 @@ export const ordinanceApi = {
   getAllReviews: async (params: {
     page?: number
     size?: number
+    view_mode?: string         // reviews | all_revision
     approval_status?: string   // pending | approved | rejected
     review_result?: string     // 개정필요 | 개정불필요
     reviewer_type?: string     // DEPARTMENT | GENERAL
+    department_id?: number
   }) => {
     const { data } = await api.get('/ordinances/reviews-all', { params })
     return data
@@ -400,6 +403,16 @@ export const departmentApi = {
     return data
   },
 
+  getMismatches: async () => {
+    const { data } = await api.get('/departments/mismatches')
+    return data
+  },
+
+  fixMismatch: async (oldName: string, newName: string) => {
+    const { data } = await api.post('/departments/mismatches/fix', { old_name: oldName, new_name: newName })
+    return data
+  },
+
   downloadTemplate: async () => {
     const response = await api.get('/departments/template/download', {
       responseType: 'blob',
@@ -484,8 +497,8 @@ export const maintenanceApi = {
 
 // AI Analysis API (006-llm-review-assistant)
 export const aiApi = {
-  analyze: async (ordinanceId: number, lawId: number) => {
-    const { data } = await api.post(`/ordinances/${ordinanceId}/ai-analyze`, { law_id: lawId })
+  analyze: async (ordinanceId: number, lawId: number, force: boolean = false) => {
+    const { data } = await api.post(`/ordinances/${ordinanceId}/ai-analyze`, { law_id: lawId, force })
     return data
   },
 
@@ -519,6 +532,132 @@ export const adminApi = {
   },
 }
 
+// Batch Processing API (일괄 개정검토)
+export const batchApi = {
+  getJobs: async () => {
+    const { data } = await api.get('/batch')
+    return data
+  },
+
+  createJob: async (name: string, filterParams: Record<string, any>) => {
+    const { data } = await api.post('/batch', { name, filter_params: filterParams })
+    return data
+  },
+
+  getJob: async (jobId: number) => {
+    const { data } = await api.get(`/batch/${jobId}`)
+    return data
+  },
+
+  deleteJob: async (jobId: number) => {
+    const { data } = await api.delete(`/batch/${jobId}`)
+    return data
+  },
+
+  getItems: async (jobId: number, params?: {
+    step_filter?: string
+    result_filter?: string
+    page?: number
+    size?: number
+  }) => {
+    const { data } = await api.get(`/batch/${jobId}/items`, { params })
+    return data
+  },
+
+  getCounts: async (jobId: number) => {
+    const { data } = await api.get(`/batch/${jobId}/counts`)
+    return data
+  },
+
+  toggleExclude: async (jobId: number, itemId: number) => {
+    const { data } = await api.post(`/batch/${jobId}/items/${itemId}/toggle-exclude`)
+    return data
+  },
+
+  // SSE 스트리밍 단계 실행
+  runStep2: (jobId: number) => {
+    const token = localStorage.getItem('law_matcher_token')
+    return new EventSource(`/api/v1/batch/${jobId}/step2${token ? `?token=${token}` : ''}`)
+  },
+
+  runStep3: (jobId: number) => {
+    const token = localStorage.getItem('law_matcher_token')
+    return new EventSource(`/api/v1/batch/${jobId}/step3${token ? `?token=${token}` : ''}`)
+  },
+
+  runStep4: (jobId: number) => {
+    const token = localStorage.getItem('law_matcher_token')
+    return new EventSource(`/api/v1/batch/${jobId}/step4${token ? `?token=${token}` : ''}`)
+  },
+
+  // POST 방식 단계 실행 (SSE가 안 될 경우 폴백)
+  runStep2Post: async (jobId: number) => {
+    const { data } = await api.post(`/batch/${jobId}/step2`, {}, { timeout: 600000 })
+    return data
+  },
+
+  runStep3Post: async (jobId: number) => {
+    const { data } = await api.post(`/batch/${jobId}/step3`, {}, { timeout: 600000 })
+    return data
+  },
+
+  runStep4Post: async (jobId: number) => {
+    const { data } = await api.post(`/batch/${jobId}/step4`, {}, { timeout: 600000 })
+    return data
+  },
+
+  retry: async (jobId: number, step: string, itemIds?: number[]) => {
+    const { data } = await api.post(`/batch/${jobId}/retry`, { step, item_ids: itemIds })
+    return data
+  },
+
+  getReport: async (jobId: number) => {
+    const { data } = await api.get(`/batch/${jobId}/report`)
+    return data
+  },
+
+  exportExcel: async (jobId: number) => {
+    const response = await api.get(`/batch/${jobId}/export`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `일괄개정검토_보고서.xlsx`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  },
+
+  exportDocx: async (jobId: number) => {
+    const response = await api.get(`/batch/${jobId}/export-docx`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `일괄개정검토_보고서.docx`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  },
+
+  exportPdf: async (jobId: number) => {
+    const response = await api.get(`/batch/${jobId}/export-pdf`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `일괄개정검토_보고서.pdf`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  },
+
+  getItemDetail: async (jobId: number, itemId: number) => {
+    const { data } = await api.get(`/batch/${jobId}/items/${itemId}/detail`)
+    return data
+  },
+}
+
 export default api
 
 
@@ -534,9 +673,20 @@ export const lawSearchApi = {
     return data
   },
 
-  // SSE 스트리밍으로 법령 동기화
-  syncLawsStream: () => {
-    return new EventSource('/api/v1/laws/sync-stream')
+  // 백그라운드 법령 동기화
+  startSync: async () => {
+    const { data } = await api.post('/laws/sync-start')
+    return data
+  },
+
+  getSyncProgress: async () => {
+    const { data } = await api.get('/laws/sync-progress')
+    return data
+  },
+
+  clearSyncProgress: async () => {
+    const { data } = await api.post('/laws/sync-clear')
+    return data
   },
 }
 
@@ -548,6 +698,9 @@ export const lawsApi = {
     search?: string
     law_type?: string
     dept_name?: string
+    department_id?: string
+    revision_type?: string
+    has_ordinance?: boolean
   }) => {
     const { data } = await api.get('/laws', { params })
     return data
@@ -557,6 +710,8 @@ export const lawsApi = {
     search?: string
     law_type?: string
     dept_name?: string
+    revision_type?: string
+    has_ordinance?: boolean
   }) => {
     const size = 100
     const countRes = await lawsApi.getCount(params)
@@ -574,13 +729,18 @@ export const lawsApi = {
     return results.flat()
   },
 
-  getCount: async (params?: { search?: string; law_type?: string; dept_name?: string }) => {
+  getCount: async (params?: { search?: string; law_type?: string; dept_name?: string; department_id?: string; revision_type?: string; has_ordinance?: boolean }) => {
     const { data } = await api.get('/laws/count', { params })
     return data
   },
 
   getTypes: async () => {
     const { data } = await api.get('/laws/types')
+    return data
+  },
+
+  getRevisionTypes: async () => {
+    const { data } = await api.get('/laws/revision-types')
     return data
   },
 
@@ -727,7 +887,12 @@ export const lawChangesApi = {
     return data
   },
 
-  getStats: async (params?: { sync_date?: string }) => {
+  deleteBySyncDate: async (syncDate: string) => {
+    const { data } = await api.delete(`/law-changes/sync-dates/${syncDate}`)
+    return data
+  },
+
+  getStats: async (params?: { sync_date?: string; sync_batch_id?: string }) => {
     const { data } = await api.get('/law-changes/stats', { params })
     return data
   },
@@ -739,6 +904,11 @@ export const lawChangesApi = {
 
   getSyncBatches: async () => {
     const { data } = await api.get('/law-changes/sync-batches')
+    return data
+  },
+
+  deleteBySyncBatch: async (batchId: string) => {
+    const { data } = await api.delete(`/law-changes/sync-batches/${batchId}`)
     return data
   },
 
@@ -761,6 +931,7 @@ export const lawChangesApi = {
     api_status?: string
     dept_name?: string
     sync_date?: string
+    sync_batch_id?: string
     search?: string
   }) => {
     const response = await api.get('/law-changes/export', {

@@ -63,6 +63,30 @@ async def get_input_statistics(
     return await service.get_input_statistics()
 
 
+@router.get("/mismatches")
+async def get_department_mismatches(
+    db: AsyncSession = Depends(get_db),
+):
+    """조례 테이블과 부서 마스터 간 불일치 부서명 조회"""
+    service = DepartmentService(db)
+    return await service.get_mismatches()
+
+
+@router.post("/mismatches/fix")
+async def fix_department_mismatch(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """조례 테이블의 부서명을 일괄 변경"""
+    old_name = data.get("old_name")
+    new_name = data.get("new_name")
+    if not old_name or not new_name:
+        raise HTTPException(status_code=400, detail="old_name, new_name 필수")
+    service = DepartmentService(db)
+    updated = await service.fix_mismatch(old_name, new_name)
+    return {"message": f"{updated}건 수정 완료", "updated": updated}
+
+
 @router.get("/tree", response_model=DepartmentTreeResponse)
 async def get_department_tree(
     db: AsyncSession = Depends(get_db),
@@ -139,8 +163,10 @@ async def update_department(
     db: AsyncSession = Depends(get_db),
 ):
     """Update department"""
+    update_data = data.model_dump(exclude_unset=True)
+    print(f"[DEPT UPDATE] id={department_id}, data={update_data}", flush=True)
     service = DepartmentService(db)
-    return await service.update(department_id, data.model_dump(exclude_unset=True))
+    return await service.update(department_id, update_data)
 
 
 @router.delete("/{department_id}")

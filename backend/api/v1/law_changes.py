@@ -13,7 +13,9 @@ from sqlalchemy.orm import selectinload
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
-from backend.api.deps import get_db
+from backend.api.deps import get_db, get_current_user
+from backend.models.user import User
+from sqlalchemy import delete as sa_delete
 from backend.models.law_change import LawChange, ApiStatus
 from backend.models.law import Law
 from backend.schemas.ordinance import (
@@ -138,11 +140,14 @@ async def get_law_changes(
 @router.get("/stats", response_model=LawChangeStatsResponse)
 async def get_law_change_stats(
     sync_date: Optional[str] = None,
+    sync_batch_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """법령 변경 통계 조회 (API 상태별, 부서별)"""
     date_filter = []
-    if sync_date:
+    if sync_batch_id:
+        date_filter.append(LawChange.sync_batch_id == sync_batch_id)
+    elif sync_date:
         sync_date_obj = datetime.strptime(sync_date, "%Y-%m-%d").date()
         date_filter.append(func.date(LawChange.sync_date) == sync_date_obj)
 
@@ -321,7 +326,8 @@ async def get_sync_batches(
             LawChange.sync_batch_id,
             func.min(LawChange.sync_date).label("sync_date"),
             func.count(LawChange.id).label("total"),
-            func.count(LawChange.id).filter(LawChange.api_status == ApiStatus.SUCCESS).label("success"),
+            func.count(LawChange.id).filter(LawChange.api_status == ApiStatus.SUCCESS).label("changed"),
+            func.count(LawChange.id).filter(LawChange.api_status == ApiStatus.NO_CHANGE).label("no_change"),
             func.count(LawChange.id).filter(LawChange.api_status == ApiStatus.NO_RESPONSE).label("no_response"),
             func.count(LawChange.id).filter(LawChange.api_status == ApiStatus.NOT_FOUND).label("not_found"),
         )
@@ -335,9 +341,10 @@ async def get_sync_batches(
             "sync_batch_id": row[0],
             "sync_date": row[1],
             "total": row[2],
-            "success": row[3],
-            "no_response": row[4],
-            "not_found": row[5],
+            "changed": row[3],
+            "no_change": row[4],
+            "no_response": row[5],
+            "not_found": row[6],
         }
         for row in result.all()
     ]
@@ -390,6 +397,42 @@ async def get_sync_dates(
         }
         for row in result.all()
     ]
+
+
+@router.delete("/sync-dates/{sync_date}")
+async def delete_by_sync_date(
+    sync_date: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """특정 동기화 날짜의 모든 변경 기록 삭제 (관리자 전용)"""
+    if current_user.user_type != "ADMIN":
+        raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있습니다")
+
+    from datetime import date as date_type
+    target_date = date_type.fromisoformat(sync_date)
+    query = sa_delete(LawChange).where(
+        func.date(LawChange.sync_date) == target_date
+    )
+    result = await db.execute(query)
+    await db.commit()
+    return {"deleted": result.rowcount}
+
+
+@router.delete("/sync-batches/{batch_id}")
+async def delete_by_sync_batch(
+    batch_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """특정 동기화 배치의 모든 변경 기록 삭제 (관리자 전용)"""
+    if current_user.user_type != "ADMIN":
+        raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있습니다")
+
+    query = sa_delete(LawChange).where(LawChange.sync_batch_id == batch_id)
+    result = await db.execute(query)
+    await db.commit()
+    return {"deleted": result.rowcount}
 
 
 @router.get("/{change_id}")

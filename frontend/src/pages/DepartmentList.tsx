@@ -23,6 +23,7 @@ import {
   ExclamationCircleOutlined,
   UploadOutlined,
   DownloadOutlined,
+  WarningOutlined,
 } from '@ant-design/icons'
 import { Upload } from 'antd'
 import type { UploadProps } from 'antd'
@@ -101,6 +102,50 @@ export default function DepartmentList() {
       message.error('부서 삭제에 실패했습니다.')
     },
   })
+
+  // 불일치 부서명 조회
+  interface MismatchItem {
+    department: string
+    count: number
+  }
+
+  const { data: mismatches, refetch: refetchMismatches } = useQuery<MismatchItem[]>({
+    queryKey: ['departments-mismatches'],
+    queryFn: () => departmentApi.getMismatches(),
+  })
+
+  const [fixTarget, setFixTarget] = useState<string | null>(null)
+  const [fixNewName, setFixNewName] = useState('')
+
+  const fixMismatchMutation = useMutation({
+    mutationFn: ({ oldName, newName }: { oldName: string; newName: string }) =>
+      departmentApi.fixMismatch(oldName, newName),
+    onSuccess: (data) => {
+      message.success(data.message)
+      setFixTarget(null)
+      setFixNewName('')
+      refetchMismatches()
+      queryClient.invalidateQueries({ queryKey: ['departments-tree'] })
+      queryClient.invalidateQueries({ queryKey: ['departments-summary'] })
+    },
+    onError: () => {
+      message.error('수정에 실패했습니다.')
+    },
+  })
+
+  // 부서 마스터의 전체 이름 목록 (매칭용 드롭다운)
+  const allDeptFullNames: { label: string; value: string }[] = (() => {
+    const names: { label: string; value: string }[] = []
+    const bureaus = treeData?.bureaus || []
+    for (const bureau of bureaus) {
+      names.push({ label: bureau.name, value: bureau.name })
+      for (const child of bureau.children || []) {
+        const fullName = `${bureau.name} ${child.name}`
+        names.push({ label: fullName, value: fullName })
+      }
+    }
+    return names
+  })()
 
   const uploadMutation = useMutation({
     mutationFn: departmentApi.upload,
@@ -185,8 +230,17 @@ export default function DepartmentList() {
     ? allDepartments.filter(d => d.name.toLowerCase().includes(search.toLowerCase()))
     : allDepartments
 
-  // Get parent departments for dropdown (only top-level ones without parent)
-  const parentDepartments = allDepartments.filter(d => !d.parent_name)
+  // Get parent departments for dropdown: top-level departments + unique parent_name values
+  const parentDepartments = (() => {
+    const topLevel = allDepartments.filter(d => !d.parent_name)
+    // parent_name으로만 존재하는 국 단위 (행정국, 기획경제국 등) 추가
+    const parentNames = new Set(allDepartments.map(d => d.parent_name).filter(Boolean))
+    const topLevelNames = new Set(topLevel.map(d => d.name))
+    const extraParents = [...parentNames]
+      .filter(name => !topLevelNames.has(name!))
+      .map(name => ({ id: 0, code: '', name: name!, parent_name: undefined, sort_order: 0, ordinance_count: 0, children: [] }))
+    return [...topLevel, ...extraParents].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  })()
 
   // Department columns
   const columns = [
@@ -201,7 +255,7 @@ export default function DepartmentList() {
       title: '부서명',
       key: 'department_name',
       render: (_: any, record: DepartmentTreeNode) => (
-        <span style={{ fontWeight: !record.parent_name ? 'bold' : 'normal' }}>
+        <span style={{ fontWeight: !record.parent_name ? 'bold' : 'normal', whiteSpace: 'pre' }}>
           {record.parent_name ? `${record.parent_name} - ${record.name}` : record.name}
         </span>
       ),
@@ -320,6 +374,97 @@ export default function DepartmentList() {
           !record.parent_name ? 'group-header-row' : ''
         }
       />
+
+      {/* 불일치 부서명 */}
+      {mismatches && mismatches.length > 0 && (
+        <Card
+          title={
+            <Space>
+              <WarningOutlined style={{ color: '#faad14' }} />
+              <span>부서명 불일치 ({mismatches.length}건)</span>
+            </Space>
+          }
+          size="small"
+          style={{ marginTop: 24, marginBottom: 24 }}
+        >
+          <Table
+            dataSource={mismatches}
+            rowKey="department"
+            pagination={false}
+            size="small"
+            columns={[
+              {
+                title: '조례 테이블 부서명',
+                dataIndex: 'department',
+                key: 'department',
+              },
+              {
+                title: '조례 수',
+                dataIndex: 'count',
+                key: 'count',
+                width: 80,
+                align: 'center' as const,
+              },
+              {
+                title: '변경할 부서명',
+                key: 'fix',
+                width: 300,
+                render: (_: any, record: MismatchItem) =>
+                  fixTarget === record.department ? (
+                    <Select
+                      showSearch
+                      style={{ width: '100%' }}
+                      placeholder="부서 선택"
+                      value={fixNewName || undefined}
+                      onChange={(val) => setFixNewName(val)}
+                      options={allDeptFullNames}
+                      filterOption={(input, option) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                      }
+                    />
+                  ) : null,
+              },
+              {
+                title: '작업',
+                key: 'action',
+                width: 150,
+                render: (_: any, record: MismatchItem) =>
+                  fixTarget === record.department ? (
+                    <Space>
+                      <Button
+                        type="primary"
+                        size="small"
+                        disabled={!fixNewName}
+                        loading={fixMismatchMutation.isPending}
+                        onClick={() =>
+                          fixMismatchMutation.mutate({
+                            oldName: record.department,
+                            newName: fixNewName,
+                          })
+                        }
+                      >
+                        적용
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => { setFixTarget(null); setFixNewName('') }}
+                      >
+                        취소
+                      </Button>
+                    </Space>
+                  ) : (
+                    <Button
+                      size="small"
+                      onClick={() => { setFixTarget(record.department); setFixNewName('') }}
+                    >
+                      수정
+                    </Button>
+                  ),
+              },
+            ]}
+          />
+        </Card>
+      )}
 
       <Modal
         title={editingDepartment ? '부서 수정' : '부서 추가'}

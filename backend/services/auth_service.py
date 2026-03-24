@@ -78,7 +78,7 @@ class AuthService:
         username: str,
         password: str,
         full_name: Optional[str] = None,
-        user_type: str = "GENERAL",
+        user_type: str = "ADMIN",
         department_id: Optional[int] = None,
     ) -> User:
         """
@@ -89,7 +89,7 @@ class AuthService:
             username: Username
             password: Plain text password
             full_name: Full name (optional)
-            user_type: User type (DEPARTMENT or GENERAL)
+            user_type: User type (DEPARTMENT or ADMIN)
             department_id: Department ID (optional, required for DEPARTMENT type)
 
         Returns:

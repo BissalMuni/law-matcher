@@ -30,9 +30,10 @@ class LawSearchResult:
 
     def __init__(self, data: Dict[str, Any]):
         import re
+        from backend.utils.text import normalize_name
         self.law_serial_no = int(data.get("법령일련번호", 0))
         self.law_id = int(data.get("법령ID", 0))
-        self.law_name = data.get("법령명한글", "")
+        self.law_name = normalize_name(data.get("법령명한글", ""))
         self.law_abbr = data.get("법령약칭명")
         self.law_type = data.get("법령구분명", "")
         self.history_code = data.get("현행연혁코드")
@@ -82,6 +83,7 @@ class LawSyncService:
         page: int = 1,
         display: int = 100,
         sort: str = "ddes",  # 공포일자 내림차순
+        nw: Optional[int] = None,  # 1=현행, 2=시행예정 포함, None=기본(현행)
     ) -> Tuple[List[LawSearchResult], int]:
         """
         현행법령 검색 API 호출
@@ -93,6 +95,7 @@ class LawSyncService:
             page: 페이지 번호
             display: 결과 개수 (max 100)
             sort: 정렬 옵션
+            nw: 현행/시행예정 구분 (1=현행, 2=시행예정 포함)
 
         Returns:
             (검색결과 리스트, 전체 개수)
@@ -112,6 +115,8 @@ class LawSyncService:
             params["ancYd"] = anc_yd
         if revision_type:
             params["rrClsCd"] = revision_type
+        if nw is not None:
+            params["nw"] = nw
 
         max_retries = 2
         last_exc = None
@@ -595,9 +600,8 @@ class LawSyncService:
 
     @staticmethod
     def _normalize_law_name(name: Optional[str]) -> str:
-        if not name:
-            return ""
-        return "".join(str(name).split())
+        from backend.utils.text import normalize_name_for_compare
+        return normalize_name_for_compare(name)
 
     @staticmethod
     def _parse_api_date(date_value: Optional[str]) -> Optional[date]:
@@ -655,7 +659,8 @@ class LawSyncService:
         """
         법령 매칭 우선순위:
         1) MST(법령일련번호)로 직접 조회
-        2) 법령명 검색(검색폭 확대 + 재시도)
+        2) 법령명 검색 — 현행(기본)
+        3) 법령명 검색 — 시행예정 포함(nw=2) fallback
         """
         # 1) MST 직접 조회 (가장 안정적) — detail_link의 MST 우선 사용
         mst = law.effective_mst
@@ -670,7 +675,7 @@ class LawSyncService:
                 # MST 직접 조회 실패 시 검색으로 폴백
                 pass
 
-        # 2) 법령명 검색 (재시도 + display 확장)
+        # 2) 법령명 검색 (현행 → 시행예정 포함 fallback)
         queries = [law.law_name]
         compact_name = self._normalize_law_name(law.law_name)
         if compact_name and compact_name != law.law_name:
@@ -678,8 +683,21 @@ class LawSyncService:
 
         last_results: List[LawSearchResult] = []
         had_response = False
+
+        # 2a) 현행법령 검색 (기본)
         for query in queries:
             results, _ = await self.search_laws(query=query, display=30)
+            if results:
+                had_response = True
+                last_results = results
+                exact_match = self._find_exact_match(results, law.law_name)
+                if exact_match:
+                    return exact_match, results, True
+            await asyncio.sleep(0.2)
+
+        # 2b) 시행예정 포함 검색 (nw=2 fallback)
+        for query in queries:
+            results, _ = await self.search_laws(query=query, display=30, nw=2)
             if results:
                 had_response = True
                 last_results = results
@@ -999,25 +1017,36 @@ class LawSyncService:
                                 law.detail_link = exact_match.detail_link
                                 law.last_synced_at = datetime.utcnow()
 
-                                # law_changes 테이블에 저장 (법령 변경이 있는 경우만)
-                                if save_to_db and changes:
-                                    law_change = LawChange(
-                                        law_id=law.id,
-                                        sync_date=sync_date,
-                                        sync_batch_id=sync_batch_id,
-                                        api_status=ApiStatus.SUCCESS,
-                                        api_message="API 성공 - 변경 감지",
-                                        old_values=old_values,
-                                        new_values={
-                                            "proclaimed_date": str(exact_match.proclaimed_date) if exact_match.proclaimed_date else None,
-                                            "enforced_date": str(exact_match.enforced_date) if exact_match.enforced_date else None,
-                                            "revision_type": exact_match.revision_type,
-                                            "law_id": exact_match.law_id,
-                                            "dept_name": exact_match.dept_name,
-                                        },
-                                        dept_name=exact_match.dept_name,
-                                        dept_code=exact_match.dept_code,
-                                    )
+                                # law_changes 테이블에 저장
+                                if save_to_db:
+                                    if changes:
+                                        law_change = LawChange(
+                                            law_id=law.id,
+                                            sync_date=sync_date,
+                                            sync_batch_id=sync_batch_id,
+                                            api_status=ApiStatus.SUCCESS,
+                                            api_message="API 성공 - 변경 감지",
+                                            old_values=old_values,
+                                            new_values={
+                                                "proclaimed_date": str(exact_match.proclaimed_date) if exact_match.proclaimed_date else None,
+                                                "enforced_date": str(exact_match.enforced_date) if exact_match.enforced_date else None,
+                                                "revision_type": exact_match.revision_type,
+                                                "law_id": exact_match.law_id,
+                                                "dept_name": exact_match.dept_name,
+                                            },
+                                            dept_name=exact_match.dept_name,
+                                            dept_code=exact_match.dept_code,
+                                        )
+                                    else:
+                                        law_change = LawChange(
+                                            law_id=law.id,
+                                            sync_date=sync_date,
+                                            sync_batch_id=sync_batch_id,
+                                            api_status=ApiStatus.NO_CHANGE,
+                                            api_message="API 성공 - 변경 없음",
+                                            dept_name=exact_match.dept_name,
+                                            dept_code=exact_match.dept_code,
+                                        )
                                     self.db.add(law_change)
 
                                 await self.db.flush()

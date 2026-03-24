@@ -106,7 +106,7 @@ async def get_current_user(
             id=user_id,
             username=username,
             full_name="관리자" if user_type == "ADMIN" else username,
-            user_type="GENERAL" if user_type == "ADMIN" else "DEPARTMENT",
+            user_type="ADMIN" if user_type == "ADMIN" else "DEPARTMENT",
             is_active=True,
         )
 

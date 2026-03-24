@@ -22,10 +22,11 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[Optional[str]] = mapped_column(String(100))
-    user_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # "DEPARTMENT" | "GENERAL"
+    user_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # "DEPARTMENT" | "ADMIN"
     department_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("departments.id", ondelete="SET NULL")
     )
+    department_name: Mapped[Optional[str]] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

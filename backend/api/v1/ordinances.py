@@ -50,6 +50,7 @@ async def get_ordinances(
     size: int = Query(20, ge=1, le=100),
     category: Optional[str] = None,
     department: Optional[str] = None,
+    department_id: Optional[int] = None,
     search: Optional[str] = None,
     no_parent_law_filter: Optional[str] = None,  # "no_mapping" | "confirmed_none" | None
     needs_revision_filter: Optional[str] = None,  # "needs_revision" | "no_revision" | None
@@ -67,6 +68,7 @@ async def get_ordinances(
         size=size,
         category=category,
         department=department,
+        department_id=department_id,
         search=search,
         no_parent_law_filter=no_parent_law_filter,
         needs_revision_filter=needs_revision_filter,
@@ -374,28 +376,65 @@ async def export_ordinances(
     )
 
 
+async def _resolve_department_names(db: AsyncSession, department_id: int) -> Optional[set]:
+    """부서 ID로 부서명 후보 집합 반환"""
+    from backend.models.department import Department as DeptModel
+    dept_result = await db.execute(
+        select(DeptModel).where(DeptModel.id == department_id)
+    )
+    dept = dept_result.scalar_one_or_none()
+    if not dept:
+        return None
+    name_candidates = set()
+    if dept.parent_name:
+        name_candidates.add(f"{dept.parent_name} {dept.name}")
+    else:
+        name_candidates.add(dept.name)
+        child_result = await db.execute(
+            select(DeptModel.name).where(DeptModel.parent_name == dept.name)
+        )
+        for (child_name,) in child_result:
+            name_candidates.add(f"{dept.name} {child_name}")
+    return name_candidates
+
+
 @router.get("/reviews-all", response_model=AllOrdinanceReviewsResponse)
 async def get_all_ordinance_reviews(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
+    view_mode: Optional[str] = None,         # reviews | all_revision
     approval_status: Optional[str] = None,   # pending | approved | rejected
     review_result: Optional[str] = None,      # 개정필요 | 개정불필요 | 검토중 | 보류
     reviewer_type: Optional[str] = None,      # DEPARTMENT | GENERAL
+    department_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     전체 검토의견 목록 조회 (관리자 승인 대시보드)
 
-    approval_status=pending 으로 필터하면 승인 대기 목록을 볼 수 있습니다.
+    view_mode:
+      - "reviews" (기본): 검토의견 있는 자료만
+      - "all_revision": 개정대상 전체 조례 (최신 리뷰 포함)
     """
-    from sqlalchemy import select, func
+    from sqlalchemy import select, func, and_
     from sqlalchemy.orm import selectinload
     from backend.models.ordinance_review import OrdinanceReview
     from backend.models.ordinance import Ordinance
+    from backend.models.ordinance_law_mapping import OrdinanceLawMapping
+    from backend.models.law import Law
 
+    dept_names = None
+    if department_id:
+        dept_names = await _resolve_department_names(db, department_id)
+
+    if view_mode == "all_revision":
+        return await _get_all_revision_reviews(db, page, size, dept_names)
+
+    # 기본: 검토의견 있는 자료
     stmt = (
         select(OrdinanceReview)
+        .join(Ordinance, OrdinanceReview.ordinance_id == Ordinance.id)
         .options(
             selectinload(OrdinanceReview.created_by),
             selectinload(OrdinanceReview.updated_by),
@@ -410,6 +449,8 @@ async def get_all_ordinance_reviews(
         stmt = stmt.where(OrdinanceReview.review_result == review_result)
     if reviewer_type:
         stmt = stmt.where(OrdinanceReview.reviewer_type == reviewer_type)
+    if dept_names:
+        stmt = stmt.where(Ordinance.department.in_(list(dept_names)))
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = await db.scalar(count_stmt) or 0
@@ -426,6 +467,95 @@ async def get_all_ordinance_reviews(
         if review.ordinance:
             item.ordinance_name = review.ordinance.name
             item.ordinance_department = review.ordinance.department
+        items.append(item)
+
+    return AllOrdinanceReviewsResponse(total=total, page=page, size=size, items=items)
+
+
+async def _get_all_revision_reviews(
+    db: AsyncSession,
+    page: int,
+    size: int,
+    dept_names: Optional[set],
+):
+    """개정대상 전체 조례 목록 + 최신 리뷰 정보"""
+    from sqlalchemy import select, func
+    from sqlalchemy.orm import selectinload
+    from backend.models.ordinance_review import OrdinanceReview
+    from backend.models.ordinance import Ordinance
+    from backend.models.ordinance_law_mapping import OrdinanceLawMapping
+    from backend.models.law import Law
+
+    # 승인된 "개정불필요" 제외
+    approved_no_revision = (
+        select(OrdinanceReview.ordinance_id)
+        .where(OrdinanceReview.approval_status == "approved")
+        .where(OrdinanceReview.review_result == "개정불필요")
+        .distinct()
+    )
+
+    # 개정대상: 상위법령 시행일 > 조례 공포일 (타법개정 제외)
+    has_mapping = select(OrdinanceLawMapping.ordinance_id).distinct()
+    revision_subquery = (
+        select(OrdinanceLawMapping.ordinance_id)
+        .join(Law, OrdinanceLawMapping.law_id == Law.id)
+        .where(Law.enforced_date.isnot(None))
+        .where(Law.revision_type != '타법개정')
+        .group_by(OrdinanceLawMapping.ordinance_id)
+        .having(func.max(Law.enforced_date) > Ordinance.enacted_date)
+    )
+
+    stmt = (
+        select(Ordinance)
+        .where(
+            Ordinance.id.in_(has_mapping),
+            Ordinance.enacted_date.isnot(None),
+            Ordinance.id.in_(revision_subquery),
+            Ordinance.id.notin_(approved_no_revision),
+        )
+    )
+    if dept_names:
+        stmt = stmt.where(Ordinance.department.in_(list(dept_names)))
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = await db.scalar(count_stmt) or 0
+
+    stmt = stmt.order_by(Ordinance.department, Ordinance.name)
+    stmt = stmt.offset((page - 1) * size).limit(size)
+
+    result = await db.execute(stmt)
+    ordinances = result.scalars().all()
+
+    items = []
+    for ordin in ordinances:
+        # 최신 리뷰 조회
+        latest_review = (await db.execute(
+            select(OrdinanceReview)
+            .options(
+                selectinload(OrdinanceReview.created_by),
+                selectinload(OrdinanceReview.approved_by),
+            )
+            .where(OrdinanceReview.ordinance_id == ordin.id)
+            .order_by(OrdinanceReview.created_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+
+        if latest_review:
+            item = OrdinanceReviewWithOrdinance.model_validate(latest_review)
+        else:
+            # 리뷰 없는 조례 — 빈 리뷰 아이템 생성
+            item = OrdinanceReviewWithOrdinance(
+                id=ordin.id * -1,  # 음수 ID로 구분
+                ordinance_id=ordin.id,
+                reviewer_type="-",
+                review_content="-",
+                review_result=None,
+                approval_status=None,
+                created_at=ordin.created_at or ordin.enacted_date,
+                updated_at=ordin.updated_at or ordin.enacted_date,
+            )
+        item.ordinance_name = ordin.name
+        item.ordinance_department = ordin.department
         items.append(item)
 
     return AllOrdinanceReviewsResponse(total=total, page=page, size=size, items=items)
@@ -461,7 +591,7 @@ async def clear_ordinance_revision(
     개정확정 해제 (FR-015, 관리자 전용)
     revision_status "개정확정"→null
     """
-    if current_user.user_type not in ("ADMIN", "GENERAL"):
+    if current_user.user_type != "ADMIN":
         raise HTTPException(status_code=403, detail="관리자만 개정확정을 해제할 수 있습니다.")
 
     service = OrdinanceService(db)
@@ -815,8 +945,8 @@ async def approve_ordinance_review(
     current_user: User = Depends(get_current_user),
 ):
     """검토의견 승인/반려 (관리자 전용)"""
-    # 관리자 권한 확인 (ADMIN 또는 GENERAL 허용)
-    if current_user.user_type not in ("ADMIN", "GENERAL"):
+    # 관리자 권한 확인
+    if current_user.user_type != "ADMIN":
         raise HTTPException(status_code=403, detail="관리자만 승인/반려할 수 있습니다.")
 
     if data.approval_status not in ["approved", "rejected"]:

@@ -73,10 +73,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth()
   }, [])
 
-  const login = async (username: string, password: string, departmentName?: string) => {
+  const login = async (username: string, password: string, departmentName?: string, departmentId?: number) => {
     try {
       const response = await authApi.login({ username, password, department_name: departmentName })
       const { access_token, user: userData } = response
+
+      // 부서 로그인 시 선택한 부서 ID를 user 객체에 주입
+      if (departmentId && !userData.department_id) {
+        userData.department_id = departmentId
+      }
 
       setToken(access_token)
       setUser(userData)

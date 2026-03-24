@@ -11,7 +11,7 @@ class UserBase(BaseModel):
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=100)
     full_name: Optional[str] = Field(None, max_length=100)
-    user_type: str = Field(..., pattern="^(DEPARTMENT|GENERAL)$")
+    user_type: str = Field(..., pattern="^(DEPARTMENT|ADMIN)$")
     department_id: Optional[int] = None
 
 
@@ -26,7 +26,7 @@ class UserUpdate(BaseModel):
     username: Optional[str] = Field(None, min_length=3, max_length=100)
     full_name: Optional[str] = Field(None, max_length=100)
     password: Optional[str] = Field(None, min_length=8, max_length=100)
-    user_type: Optional[str] = Field(None, pattern="^(DEPARTMENT|GENERAL)$")
+    user_type: Optional[str] = Field(None, pattern="^(DEPARTMENT|ADMIN)$")
     department_id: Optional[int] = None
     is_active: Optional[bool] = None
 

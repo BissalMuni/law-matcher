@@ -58,8 +58,12 @@ export default function LawList() {
     return p ? parseInt(p, 10) : 1
   })
   const [search, setSearch] = useState(() => searchParams.get('search') || '')
-  const [lawType, setLawType] = useState<string | undefined>(() => searchParams.get('lawType') || undefined)
+  const [revisionType, setRevisionType] = useState<string | undefined>(() => searchParams.get('revisionType') || undefined)
   const [selectedDepartment, setSelectedDepartment] = useState<string | undefined>(() => searchParams.get('dept') || undefined)
+  const [hasOrdinance, setHasOrdinance] = useState<boolean | undefined>(() => {
+    const v = searchParams.get('hasOrdinance')
+    return v === 'true' ? true : v === 'false' ? false : undefined
+  })
   const [initialLoaded, setInitialLoaded] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>(['__all__'])
   const [sidebarWidth, setSidebarWidth] = useState(220)
@@ -101,19 +105,25 @@ export default function LawList() {
     queryFn: () => departmentApi.getTree(),
   })
 
-  // 트리 데이터 변환
+  // 전체 법령 수 조회 (트리 루트용)
+  const { data: totalLawCount } = useQuery({
+    queryKey: ['laws-total-count'],
+    queryFn: () => lawsApi.getCount({}),
+  })
+
+  // 트리 데이터 변환 (부서 마스터 ID 기준)
   const treeData: TreeDataNode[] = useMemo(() => {
     if (!departmentTree?.bureaus) return []
-
-    const totalCount = departmentTree.bureaus.reduce((sum, b) => sum + b.ordinance_count, 0)
 
     const buildChildren = (nodes: DepartmentTreeNode[]): TreeDataNode[] => {
       return nodes.map(node => ({
         title: `${node.name} (${node.ordinance_count})`,
-        key: node.name,
+        key: String(node.id),
         children: node.children.length > 0 ? buildChildren(node.children) : undefined,
       }))
     }
+
+    const totalCount = totalLawCount?.count || 0
 
     return [
       {
@@ -123,36 +133,38 @@ export default function LawList() {
         children: buildChildren(departmentTree.bureaus),
       },
     ]
-  }, [departmentTree])
+  }, [departmentTree, totalLawCount])
 
-  // 법령 유형 목록 조회
-  const { data: lawTypes } = useQuery({
-    queryKey: ['law-types'],
-    queryFn: () => lawsApi.getTypes(),
+  // 제개정구분 목록 조회
+  const { data: revisionTypes } = useQuery({
+    queryKey: ['law-revision-types'],
+    queryFn: () => lawsApi.getRevisionTypes(),
   })
 
   // 법령 목록 조회
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['laws', page, search, lawType, selectedDepartment],
+    queryKey: ['laws', page, search, revisionType, selectedDepartment, hasOrdinance],
     queryFn: () =>
       lawsApi.getList({
         page,
         size: 20,
         search: search || undefined,
-        law_type: lawType,
-        dept_name: selectedDepartment,
+        revision_type: revisionType,
+        department_id: selectedDepartment,
+        has_ordinance: hasOrdinance,
       }),
     enabled: initialLoaded,
   })
 
   // 법령 개수 조회
   const { data: countData } = useQuery({
-    queryKey: ['laws-count', search, lawType, selectedDepartment],
+    queryKey: ['laws-count', search, revisionType, selectedDepartment, hasOrdinance],
     queryFn: () =>
       lawsApi.getCount({
         search: search || undefined,
-        law_type: lawType,
-        dept_name: selectedDepartment,
+        revision_type: revisionType,
+        department_id: selectedDepartment,
+        has_ordinance: hasOrdinance,
       }),
     enabled: initialLoaded,
   })
@@ -200,10 +212,11 @@ export default function LawList() {
     const params = new URLSearchParams()
     if (page > 1) params.set('page', String(page))
     if (search) params.set('search', search)
-    if (lawType) params.set('lawType', lawType)
+    if (revisionType) params.set('revisionType', revisionType)
     if (selectedDepartment) params.set('dept', selectedDepartment)
+    if (hasOrdinance !== undefined) params.set('hasOrdinance', String(hasOrdinance))
     setSearchParams(params, { replace: true })
-  }, [page, search, lawType, selectedDepartment, setSearchParams])
+  }, [page, search, revisionType, selectedDepartment, hasOrdinance, setSearchParams])
 
   const onTreeSelect = (selectedKeys: React.Key[]) => {
     const key = selectedKeys[0] as string
@@ -354,15 +367,26 @@ export default function LawList() {
               }
             />
             <Select
-              placeholder="법령구분"
-              style={{ width: 120 }}
+              placeholder="제개정구분"
+              style={{ width: 150 }}
               allowClear
-              value={lawType}
-              onChange={setLawType}
-              options={lawTypes?.map((t: { type: string; count: number }) => ({
+              value={revisionType}
+              onChange={(value) => { setRevisionType(value); setPage(1) }}
+              options={revisionTypes?.map((t: { type: string; count: number }) => ({
                 value: t.type,
                 label: `${t.type} (${t.count})`,
               })) || []}
+            />
+            <Select
+              placeholder="자치법규 연결"
+              style={{ width: 160 }}
+              allowClear
+              value={hasOrdinance}
+              onChange={(value) => { setHasOrdinance(value); setPage(1) }}
+              options={[
+                { value: true, label: '연결 있음' },
+                { value: false, label: '미연결' },
+              ]}
             />
             <Button
               icon={<SearchOutlined />}

@@ -132,3 +132,65 @@ export interface AiAnalyticsData {
   average_token_usage: { input_tokens: number; output_tokens: number } | null
   by_provider: Record<string, { count: number; model: string }>
 }
+
+// === Batch Processing ===
+
+export interface BatchJob {
+  id: number
+  name: string
+  current_step: string
+  step1_status: string
+  step2_status: string
+  step3_status: string
+  step4_status: string
+  step5_status: string
+  step2_progress: number
+  step2_total: number
+  step3_progress: number
+  step3_total: number
+  step4_progress: number
+  step4_total: number
+  filter_params: Record<string, any> | null
+  summary: Record<string, any> | null
+  created_at: string
+}
+
+export interface BatchJobItem {
+  id: number
+  batch_job_id: number
+  ordinance_id: number
+  ordinance_name: string
+  ordinance_department: string | null
+  ordinance_category: string | null
+  step1_result: string
+  step1_reason: string | null
+  step2_result: string | null
+  step2_reason: string | null
+  step2_detail: Record<string, any> | null
+  step3_result: string | null
+  step3_reason: string | null
+  step4_result: string | null
+  step4_reason: string | null
+  step4_ai_summary: string | null
+  step4_ai_result: string | null
+  final_result: string | null
+  manually_excluded: boolean
+}
+
+export interface BatchStepCounts {
+  total: number
+  step1: Record<string, number>
+  step2: Record<string, number>
+  step3: Record<string, number>
+  step4: Record<string, number>
+  final: Record<string, number>
+}
+
+export interface BatchStepProgress {
+  progress: number
+  total: number
+  ordinance_name: string
+  result: string
+  done?: boolean
+  error?: string
+}

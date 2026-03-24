@@ -16,7 +16,8 @@ if TYPE_CHECKING:
 
 class ApiStatus(str, enum.Enum):
     """API 응답 상태"""
-    SUCCESS = "success"          # API 성공, 정확히 일치하는 법령 발견
+    SUCCESS = "success"          # API 성공, 변경 감지됨
+    NO_CHANGE = "no_change"      # API 성공, 변경 없음
     NO_RESPONSE = "no_response"  # API 응답 없음
     NOT_FOUND = "not_found"      # API 응답은 있으나 정확히 일치하는 법령명 없음
 

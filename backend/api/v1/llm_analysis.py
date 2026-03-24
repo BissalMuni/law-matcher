@@ -40,8 +40,10 @@ async def ai_analyze(
     service = LlmAnalysisService(db)
 
     try:
+        # 관리자만 force 재분석 가능
+        force = body.force and current_user.user_type == "ADMIN"
         result = await asyncio.wait_for(
-            service.analyze_ordinance(ordinance_id, body.law_id),
+            service.analyze_ordinance(ordinance_id, body.law_id, force=force),
             timeout=settings.LLM_TIMEOUT + 5,  # 약간의 여유
         )
         await db.commit()

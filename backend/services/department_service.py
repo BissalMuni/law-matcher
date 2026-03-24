@@ -94,12 +94,23 @@ class DepartmentService:
 
     async def update(self, department_id: int, data: dict) -> Department:
         """Update department"""
-        department = await self.get_by_id(department_id)
-        for key, value in data.items():
-            if value is not None:
-                setattr(department, key, value)
-        await self.db.flush()
-        await self.db.refresh(department)
+        from sqlalchemy import update as sql_update
+        update_values = {k: v for k, v in data.items() if v is not None}
+        print(f"[DEPT UPDATE] id={department_id}, values={update_values}", flush=True)
+        await self.db.execute(
+            sql_update(Department)
+            .where(Department.id == department_id)
+            .values(**update_values)
+        )
+        await self.db.commit()
+        # 갱신된 객체 반환
+        result = await self.db.execute(
+            select(Department).where(Department.id == department_id)
+        )
+        department = result.scalar_one_or_none()
+        if not department:
+            raise NotFoundError(f"Department {department_id} not found")
+        print(f"[DEPT UPDATE] after commit: name=[{department.name}]", flush=True)
         return department
 
     async def delete(self, department_id: int) -> None:
@@ -305,6 +316,52 @@ class DepartmentService:
 
         output.seek(0)
         return output.getvalue()
+
+    async def get_mismatches(self) -> list:
+        """조례 테이블의 department 값 중 부서 마스터와 매칭되지 않는 항목 조회"""
+        # 모든 부서 조회
+        dept_result = await self.db.execute(select(Department))
+        all_depts = dept_result.scalars().all()
+
+        # 매칭 가능한 이름 셋 구성
+        valid_names = set()
+        for d in all_depts:
+            valid_names.add(d.name)
+            if d.parent_name:
+                valid_names.add(f"{d.parent_name} {d.name}")
+
+        # 조례 테이블의 고유 department 값 + 건수
+        ord_result = await self.db.execute(
+            select(Ordinance.department, func.count(Ordinance.id).label("count"))
+            .where(
+                Ordinance.status == "ACTIVE",
+                Ordinance.department.isnot(None),
+                Ordinance.department != "",
+            )
+            .group_by(Ordinance.department)
+        )
+
+        mismatches = []
+        for row in ord_result:
+            if row.department not in valid_names:
+                mismatches.append({
+                    "department": row.department,
+                    "count": row.count,
+                })
+
+        mismatches.sort(key=lambda x: -x["count"])
+        return mismatches
+
+    async def fix_mismatch(self, old_name: str, new_name: str) -> int:
+        """조례 테이블의 department 값을 일괄 변경"""
+        from sqlalchemy import update
+        result = await self.db.execute(
+            update(Ordinance)
+            .where(Ordinance.department == old_name)
+            .values(department=new_name)
+        )
+        await self.db.commit()
+        return result.rowcount
 
     async def get_tree(self) -> dict:
         """Get departments as hierarchical tree based on parent_name"""

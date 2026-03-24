@@ -44,10 +44,14 @@ async def get_laws(
     search: Optional[str] = None,
     law_type: Optional[str] = None,
     dept_name: Optional[str] = None,
+    department_id: Optional[int] = None,
+    revision_type: Optional[str] = None,
+    has_ordinance: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """상위법령 목록 조회 (담당부서는 연계 자치법규 기준 필터링)"""
     from backend.models.ordinance import Ordinance
+    from backend.models.department import Department as DeptModel
 
     # 연계 자치법규 개수 서브쿼리
     ordinance_count_subq = (
@@ -58,8 +62,35 @@ async def get_laws(
         .label("ordinance_count")
     )
 
-    if dept_name:
-        # 담당부서 필터: 연계된 자치법규의 담당부서로 필터링
+    if department_id:
+        # 부서 마스터 ID로 부서명 조회 후 하위 부서 포함 필터링
+        dept_result = await db.execute(
+            select(DeptModel).where(DeptModel.id == department_id)
+        )
+        dept = dept_result.scalar_one_or_none()
+        if dept:
+            name_candidates = set()
+            if dept.parent_name:
+                name_candidates.add(f"{dept.parent_name} {dept.name}")
+            else:
+                name_candidates.add(dept.name)
+                child_result = await db.execute(
+                    select(DeptModel.name).where(DeptModel.parent_name == dept.name)
+                )
+                for (child_name,) in child_result:
+                    name_candidates.add(f"{dept.name} {child_name}")
+
+            subquery = (
+                select(OrdinanceLawMapping.law_id)
+                .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
+                .where(Ordinance.department.in_(list(name_candidates)))
+                .distinct()
+            )
+            query = select(Law, ordinance_count_subq).where(Law.id.in_(subquery))
+        else:
+            query = select(Law, ordinance_count_subq)
+    elif dept_name:
+        # 레거시: 문자열 기반 부서 필터
         subquery = (
             select(OrdinanceLawMapping.law_id)
             .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
@@ -74,6 +105,14 @@ async def get_laws(
         query = query.where(Law.law_name.ilike(f"%{search}%"))
     if law_type:
         query = query.where(Law.law_type == law_type)
+    if revision_type:
+        query = query.where(Law.revision_type == revision_type)
+    if has_ordinance is not None:
+        linked_subq = select(OrdinanceLawMapping.law_id).distinct()
+        if has_ordinance:
+            query = query.where(Law.id.in_(linked_subq))
+        else:
+            query = query.where(~Law.id.in_(linked_subq))
 
     query = query.order_by(Law.law_name).offset((page - 1) * size).limit(size)
     result = await db.execute(query)
@@ -107,13 +146,42 @@ async def get_laws_count(
     search: Optional[str] = None,
     law_type: Optional[str] = None,
     dept_name: Optional[str] = None,
+    department_id: Optional[int] = None,
+    revision_type: Optional[str] = None,
+    has_ordinance: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """상위법령 개수 조회 (담당부서는 연계 자치법규 기준 필터링)"""
     from backend.models.ordinance import Ordinance
+    from backend.models.department import Department as DeptModel
 
-    if dept_name:
-        # 담당부서 필터: 연계된 자치법규의 담당부서로 필터링
+    if department_id:
+        dept_result = await db.execute(
+            select(DeptModel).where(DeptModel.id == department_id)
+        )
+        dept = dept_result.scalar_one_or_none()
+        if dept:
+            name_candidates = set()
+            if dept.parent_name:
+                name_candidates.add(f"{dept.parent_name} {dept.name}")
+            else:
+                name_candidates.add(dept.name)
+                child_result = await db.execute(
+                    select(DeptModel.name).where(DeptModel.parent_name == dept.name)
+                )
+                for (child_name,) in child_result:
+                    name_candidates.add(f"{dept.name} {child_name}")
+
+            subquery = (
+                select(OrdinanceLawMapping.law_id)
+                .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
+                .where(Ordinance.department.in_(list(name_candidates)))
+                .distinct()
+            )
+            query = select(func.count(Law.id)).where(Law.id.in_(subquery))
+        else:
+            query = select(func.count(Law.id))
+    elif dept_name:
         subquery = (
             select(OrdinanceLawMapping.law_id)
             .join(Ordinance, OrdinanceLawMapping.ordinance_id == Ordinance.id)
@@ -128,6 +196,14 @@ async def get_laws_count(
         query = query.where(Law.law_name.ilike(f"%{search}%"))
     if law_type:
         query = query.where(Law.law_type == law_type)
+    if revision_type:
+        query = query.where(Law.revision_type == revision_type)
+    if has_ordinance is not None:
+        linked_subq = select(OrdinanceLawMapping.law_id).distinct()
+        if has_ordinance:
+            query = query.where(Law.id.in_(linked_subq))
+        else:
+            query = query.where(~Law.id.in_(linked_subq))
 
     result = await db.scalar(query)
     return {"count": result}
@@ -142,6 +218,21 @@ async def get_law_types(
         select(Law.law_type, func.count(Law.id).label("count"))
         .group_by(Law.law_type)
         .order_by(Law.law_type)
+    )
+    rows = result.all()
+    return [{"type": row[0], "count": row[1]} for row in rows]
+
+
+@router.get("/revision-types")
+async def get_law_revision_types(
+    db: AsyncSession = Depends(get_db),
+):
+    """제개정구분 목록 조회"""
+    result = await db.execute(
+        select(Law.revision_type, func.count(Law.id).label("count"))
+        .where(Law.revision_type.isnot(None))
+        .group_by(Law.revision_type)
+        .order_by(func.count(Law.id).desc())
     )
     rows = result.all()
     return [{"type": row[0], "count": row[1]} for row in rows]
@@ -169,79 +260,63 @@ async def get_law_departments(
     return [{"name": row[0], "count": row[1]} for row in rows]
 
 
-@router.get("/sync-stream")
-async def sync_laws_stream():
+@router.post("/sync-start")
+async def start_sync_background():
     """
-    법령 동기화 (SSE 스트리밍)
+    법령 동기화 시작 (백그라운드 Celery 태스크)
 
-    모든 상위법령을 법제처 API와 비교하여 변경사항을 실시간으로 스트리밍합니다.
-    - 진행 상황 (요청/수신/비교)
-    - 변경된 법령 정보
-    - 최종 결과
-
-    heartbeat(: 주석)를 15초마다 전송하여 프록시/브라우저 타임아웃 방지
+    SSE 대신 Celery 워커에서 실행하여 브라우저 연결과 무관하게 끝까지 실행됩니다.
+    진행 상황은 GET /laws/sync-progress 로 폴링합니다.
     """
-    import asyncio
-    from backend.core.database import async_session
+    import redis
+    from backend.tasks import sync_laws_background, SYNC_PROGRESS_KEY
 
-    async def event_generator():
-        async with async_session() as db:
-            try:
-                service = LawSyncService(db)
-                sync_gen = service.sync_all_laws_with_progress()
+    r = redis.Redis.from_url(settings.CELERY_BROKER_URL, decode_responses=True)
 
-                # 별도의 heartbeat 방식: 제너레이터를 취소하지 않고 이벤트 큐 사용
-                event_queue: asyncio.Queue = asyncio.Queue()
-                generator_done = False
+    # 이미 실행 중인지 확인
+    raw = r.get(SYNC_PROGRESS_KEY)
+    if raw:
+        progress = json.loads(raw)
+        if progress.get("status") == "RUNNING":
+            raise HTTPException(status_code=409, detail="이미 동기화가 진행 중입니다.")
 
-                async def consume_generator():
-                    nonlocal generator_done
-                    try:
-                        async for event in sync_gen:
-                            await event_queue.put(event)
-                    except Exception as e:
-                        await event_queue.put({
-                            "type": "error",
-                            "message": f"동기화 중 오류 발생: {str(e)}",
-                            "error": str(e),
-                        })
-                    finally:
-                        generator_done = True
+    # 이전 동기화 결과 제거 (폴링에서 이전 COMPLETED를 감지하지 않도록)
+    r.delete(SYNC_PROGRESS_KEY)
 
-                consumer_task = asyncio.create_task(consume_generator())
+    task = sync_laws_background.delay()
+    return {"task_id": task.id, "message": "동기화가 시작되었습니다."}
 
-                try:
-                    while not generator_done or not event_queue.empty():
-                        try:
-                            event = await asyncio.wait_for(event_queue.get(), timeout=15.0)
-                            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-                        except asyncio.TimeoutError:
-                            # heartbeat: SSE 주석으로 전송 (제너레이터는 계속 실행 중)
-                            yield ": heartbeat\n\n"
-                finally:
-                    if not consumer_task.done():
-                        consumer_task.cancel()
-                        try:
-                            await consumer_task
-                        except asyncio.CancelledError:
-                            pass
-            except Exception as e:
-                error_event = {
-                    "type": "error",
-                    "message": f"동기화 중 오류 발생: {str(e)}",
-                    "error": str(e),
-                }
-                yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+@router.get("/sync-progress")
+async def get_sync_progress():
+    """
+    법령 동기화 진행 상황 조회 (폴링용)
+
+    Returns:
+        status: IDLE | RUNNING | COMPLETED | FAILED
+        current, total: 진행률
+        law_name: 현재 처리 중인 법령명
+        changed_laws: 변경 감지된 법령 목록
+    """
+    import redis
+    from backend.tasks import SYNC_PROGRESS_KEY
+
+    r = redis.Redis.from_url(settings.CELERY_BROKER_URL, decode_responses=True)
+    raw = r.get(SYNC_PROGRESS_KEY)
+    if not raw:
+        return {"status": "IDLE"}
+    return json.loads(raw)
+
+
+@router.post("/sync-clear")
+async def clear_sync_progress():
+    """동기화 진행 상황 초기화"""
+    import redis
+    from backend.tasks import SYNC_PROGRESS_KEY
+
+    r = redis.Redis.from_url(settings.CELERY_BROKER_URL, decode_responses=True)
+    r.delete(SYNC_PROGRESS_KEY)
+    return {"message": "초기화 완료"}
 
 
 @router.get("/{law_id}", response_model=LawResponse)
@@ -600,7 +675,7 @@ async def bulk_delete_laws(
     """
     from backend.models.law_change import LawChange
 
-    if current_user.user_type not in ("ADMIN", "GENERAL"):
+    if current_user.user_type != "ADMIN":
         raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있습니다.")
 
     law_ids = request.get("law_ids", [])
@@ -655,7 +730,7 @@ async def delete_law(
     """
     from backend.models.law_change import LawChange
 
-    if current_user.user_type not in ("ADMIN", "GENERAL"):
+    if current_user.user_type != "ADMIN":
         raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있습니다.")
 
     # 법령 존재 확인

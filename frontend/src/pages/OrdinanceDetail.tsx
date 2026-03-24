@@ -768,7 +768,7 @@ export default function OrdinanceDetail() {
                       )}
                     </span>
                     <Space size="small">
-                      {(user?.user_type === 'ADMIN' || user?.user_type === 'GENERAL') && (!review.approval_status || review.approval_status === 'pending') && (
+                      {user?.user_type === 'ADMIN' && (!review.approval_status || review.approval_status === 'pending') && (
                         <>
                           <Popconfirm
                             title="검토의견 승인"

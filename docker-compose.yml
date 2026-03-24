@@ -68,7 +68,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app/backend
-    command: celery -A backend.celery_app worker -l info
+    command: celery -A backend.celery_app worker -l info --pool=solo
     restart: unless-stopped
     networks:
       - lawmatcher-network

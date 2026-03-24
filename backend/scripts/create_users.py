@@ -29,7 +29,7 @@ async def create_users():
                 username="admin",
                 hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
                 full_name="관리자",
-                user_type="GENERAL",  # GENERAL = 관리자
+                user_type="ADMIN",
                 is_active=True,
             )
             db.add(admin)

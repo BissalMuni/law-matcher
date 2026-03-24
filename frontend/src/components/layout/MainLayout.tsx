@@ -11,11 +11,12 @@ import {
   LogoutOutlined,
   DownOutlined,
   SyncOutlined,
-  AuditOutlined,
   SettingOutlined,
   ExperimentOutlined,
   DiffOutlined,
   LockOutlined,
+  ThunderboltOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -34,9 +35,14 @@ const adminMenuItems = [
     label: '변경감지',
   },
   {
-    key: '/revision-needed',
-    icon: <AuditOutlined />,
-    label: '개정검토',
+    key: '/reviews',
+    icon: <CheckCircleOutlined />,
+    label: '승인관리',
+  },
+  {
+    key: '/admin/batch',
+    icon: <ThunderboltOutlined />,
+    label: '일괄 검토',
   },
   {
     key: '/laws',
@@ -77,11 +83,6 @@ const regularUserMenuItems = [
     key: '/ordinances',
     icon: <FileTextOutlined />,
     label: '자치법규관리',
-  },
-  {
-    key: '/revision-needed',
-    icon: <AuditOutlined />,
-    label: '개정검토',
   },
   {
     key: '/dashboard',

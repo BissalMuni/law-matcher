@@ -13,7 +13,7 @@ class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=100)
     password: str = Field(..., min_length=8, max_length=100)
     full_name: Optional[str] = Field(None, max_length=100)
-    user_type: str = Field(..., pattern="^(DEPARTMENT|GENERAL)$")
+    user_type: str = Field(..., pattern="^(DEPARTMENT|ADMIN)$")
     department_id: Optional[int] = None
 
     class Config:

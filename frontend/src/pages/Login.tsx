@@ -77,7 +77,7 @@ const Login = () => {
       const deptName = dept?.parent_name
         ? `${dept.parent_name} - ${dept.name}`
         : dept?.name || '부서'
-      await login('user', values.password, deptName)
+      await login('user', values.password, deptName, values.department)
       message.success('로그인 성공!')
       navigate('/ordinances')
     } catch (error) {
@@ -149,6 +149,7 @@ const Login = () => {
                   placeholder="부서 선택"
                   showSearch
                   optionFilterProp="children"
+                  listHeight={400}
                   filterOption={(input, option) =>
                     (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
                   }

@@ -33,6 +33,7 @@ class SimpleUser(BaseModel):
     username: str
     user_type: str  # "ADMIN" or "USER"
     full_name: str
+    department_id: int | None = None
     department_name: str | None = None
 
 
@@ -85,7 +86,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
         )
 
     # Determine user type for frontend
-    is_admin = user.user_type == "GENERAL"  # GENERAL = 관리자
+    is_admin = user.user_type == "ADMIN"
     frontend_user_type = "ADMIN" if is_admin else "USER"
 
     # Get department name
@@ -99,6 +100,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
         username=user.username,
         user_type=frontend_user_type,
         full_name=user.full_name or user.username,
+        department_id=user.department_id,
         department_name=dept_name,
     )
 
@@ -107,6 +109,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
         "sub": str(user.id),
         "username": user.username,
         "user_type": frontend_user_type,
+        "department_id": user.department_id,
         "department_name": dept_name,
     }
     access_token = create_access_token(token_data)
@@ -137,6 +140,7 @@ async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depe
         username=payload.get("username", ""),
         user_type=payload.get("user_type", "USER"),
         full_name="관리자" if payload.get("user_type") == "ADMIN" else payload.get("username", ""),
+        department_id=payload.get("department_id"),
         department_name=payload.get("department_name"),
     )
 

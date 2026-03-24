@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Table, Input, Select, Space, Typography, Button, message, Upload, Card, Modal, Form, Spin, List, Tabs, DatePicker, Checkbox, Tree, Divider, Tooltip } from 'antd'
-import { SyncOutlined, SearchOutlined, UploadOutlined, PlusOutlined, ReloadOutlined, DownloadOutlined, ApartmentOutlined } from '@ant-design/icons'
+import { SyncOutlined, SearchOutlined, UploadOutlined, PlusOutlined, ReloadOutlined, DownloadOutlined, ApartmentOutlined, LinkOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ordinanceApi, ordinanceManagementApi, departmentApi } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -127,88 +127,20 @@ export default function OrdinanceList() {
     queryFn: () => ordinanceApi.getDepartments(),
   })
 
-  // 트리 데이터 변환
+  // 트리 데이터 변환 (부서 마스터 테이블 기준 — 중복 방지)
   const treeData: TreeDataNode[] = useMemo(() => {
     if (!departmentTree?.bureaus) return []
-
-    const parentNames = new Set(departmentTree.bureaus.map((b) => b.name))
-
-    const inferParentAndChild = (departmentName: string): { parent: string; child: string } | null => {
-      if (departmentName.includes(' - ')) {
-        const [parent, ...rest] = departmentName.split(' - ')
-        const child = rest.join(' - ').trim()
-        if (parentNames.has(parent.trim()) && child) {
-          return { parent: parent.trim(), child }
-        }
-      }
-
-      const firstSpaceIdx = departmentName.indexOf(' ')
-      if (firstSpaceIdx > 0) {
-        const parent = departmentName.slice(0, firstSpaceIdx).trim()
-        const child = departmentName.slice(firstSpaceIdx + 1).trim()
-        if (parentNames.has(parent) && child) {
-          return { parent, child }
-        }
-      }
-
-      return null
-    }
 
     const buildChildren = (nodes: DepartmentTreeNode[]): TreeDataNode[] => {
       return nodes.map(node => ({
         title: `${node.name} (${node.ordinance_count})`,
-        key: node.name,
+        key: String(node.id),
         children: node.children.length > 0 ? buildChildren(node.children) : undefined,
       }))
     }
 
     const rootChildren = buildChildren(departmentTree.bureaus)
-    const representedKeys = new Set<string>()
-    const collectKeys = (nodes: TreeDataNode[]) => {
-      for (const node of nodes) {
-        representedKeys.add(String(node.key))
-        if (node.children) collectKeys(node.children)
-      }
-    }
-    collectKeys(rootChildren)
-
-    const rootByKey = new Map<string, TreeDataNode>()
-    for (const node of rootChildren) {
-      rootByKey.set(String(node.key), node)
-    }
-
-    // 직제 트리에 없는 실제 부서명(예: 감사담당관, 기획경제국 세무관리과)을 트리에 보강
-    for (const dept of ordinanceDepartments || []) {
-      const fullName = dept.name
-      const inferred = inferParentAndChild(fullName)
-      const candidateKey = inferred ? fullName : fullName
-
-      // 이미 트리에서 표현 가능한 경우 중복 추가하지 않음
-      if (representedKeys.has(candidateKey)) continue
-      if (inferred && representedKeys.has(inferred.child)) continue
-
-      if (inferred) {
-        const parentNode = rootByKey.get(inferred.parent)
-        if (parentNode) {
-          const children = parentNode.children ? [...parentNode.children] : []
-          children.push({
-            title: `${inferred.child} (${dept.count})`,
-            key: fullName,
-          })
-          parentNode.children = children
-          representedKeys.add(fullName)
-          continue
-        }
-      }
-
-      rootChildren.push({
-        title: `${fullName} (${dept.count})`,
-        key: fullName,
-      })
-      representedKeys.add(fullName)
-    }
-
-    const totalCount = (ordinanceDepartments || []).reduce((sum, d) => sum + d.count, 0)
+    const totalCount = departmentTree.bureaus.reduce((sum, b) => sum + b.ordinance_count, 0)
 
     return [
       {
@@ -218,7 +150,7 @@ export default function OrdinanceList() {
         children: rootChildren,
       },
     ]
-  }, [departmentTree, ordinanceDepartments])
+  }, [departmentTree])
 
   // 드롭다운용 부서 목록 (평면화)
   const departments = useMemo(() => {
@@ -247,7 +179,7 @@ export default function OrdinanceList() {
       const allKeys: React.Key[] = ['__all__']
       const collectKeys = (nodes: DepartmentTreeNode[]) => {
         for (const node of nodes) {
-          allKeys.push(node.name)
+          allKeys.push(String(node.id))
           if (node.children.length > 0) {
             collectKeys(node.children)
           }
@@ -261,14 +193,10 @@ export default function OrdinanceList() {
 
   // 일반 사용자는 자동으로 자신의 부서로 필터링
   useEffect(() => {
-    if (!isAdmin && userDepartment) {
-      // 부서명에서 "상위부서 - 하위부서" 형태인 경우 하위부서만 추출
-      const deptName = userDepartment.includes(' - ')
-        ? userDepartment.split(' - ').pop()
-        : userDepartment
-      setSelectedDepartment(deptName)
+    if (!isAdmin && user?.department_id) {
+      setSelectedDepartment(String(user.department_id))
     }
-  }, [isAdmin, userDepartment])
+  }, [isAdmin, user?.department_id])
 
   // 제개정구분 목록 조회
   const { data: revisionTypes } = useQuery({
@@ -284,7 +212,7 @@ export default function OrdinanceList() {
         size: pageSize,
         search: search || undefined,
         category,
-        department: selectedDepartment,
+        department_id: selectedDepartment,
         no_parent_law_filter: noParentLawFilter,
         needs_revision_filter: needsRevisionFilter,
         revision_type: revisionType,
@@ -659,23 +587,25 @@ export default function OrdinanceList() {
                     onClick={() => refetch()}
                     loading={isLoading}
                   >
-                    DB 조회
+                    조회
                   </Button>
                 </Tooltip>
 
-                  <Tooltip title="담당부서 배정 정보가 담긴 엑셀 파일을 업로드하여 일괄 반영합니다">
-                    <Upload {...uploadProps}>
-                      <Button icon={<UploadOutlined />}>담당부서 엑셀 업로드</Button>
-                    </Upload>
-                  </Tooltip>
+                  {isAdmin && (
+                    <Tooltip title="담당부서 배정 정보가 담긴 엑셀 파일을 업로드하여 일괄 반영합니다">
+                      <Upload {...uploadProps}>
+                        <Button icon={<UploadOutlined />}>담당부서 엑셀 업로드</Button>
+                      </Upload>
+                    </Tooltip>
+                  )}
                   <Tooltip title="자치법규정보시스템(ELIS)의 소관부서별 자치법규 목록 페이지로 이동합니다">
-                    <a
+                    <Button
+                      icon={<LinkOutlined />}
                       href="https://elis.go.kr/locgovalr/locgovSeAlrList"
                       target="_blank"
-                      rel="noopener noreferrer"
                     >
                       소관부서별 자치법규 목록
-                    </a>
+                    </Button>
                   </Tooltip>
                 </Space>
                 <Space>
@@ -687,15 +617,17 @@ export default function OrdinanceList() {
                       신규
                     </Button>
                   </Tooltip>
-                  <Tooltip title="DB에 저장된 자치법규의 상세 정보를 법제처 API 기준으로 최신화합니다">
-                    <Button
-                      icon={<ReloadOutlined />}
-                      onClick={() => updateOrdinanceInfoMutation.mutate()}
-                      loading={updateOrdinanceInfoMutation.isPending}
-                    >
-                      업데이트
-                    </Button>
-                  </Tooltip>
+                  {isAdmin && (
+                    <Tooltip title="DB에 저장된 자치법규의 상세 정보를 법제처 API 기준으로 최신화합니다">
+                      <Button
+                        icon={<ReloadOutlined />}
+                        onClick={() => updateOrdinanceInfoMutation.mutate()}
+                        loading={updateOrdinanceInfoMutation.isPending}
+                      >
+                        업데이트
+                      </Button>
+                    </Tooltip>
+                  )}
                   <Tooltip title="현재 필터 조건에 맞는 자치법규 목록을 엑셀 파일로 다운로드합니다">
                     <Button
                       icon={<DownloadOutlined />}
@@ -720,19 +652,21 @@ export default function OrdinanceList() {
                     </Button>
                   </Tooltip>
                   
-                  <Tooltip title="법제처 API에서 최신 자치법규 데이터를 가져와 DB에 반영합니다">
-                    <Button
-                      type="primary"
-                      icon={<SyncOutlined />}
-                      onClick={() => {
-                        setPasswordAction('sync')
-                        setPasswordModalOpen(true)
-                      }}
-                      loading={syncMutation.isPending}
-                    >
-                      법제처 동기화
-                    </Button>
-                  </Tooltip>
+                  {isAdmin && (
+                    <Tooltip title="법제처 API에서 최신 자치법규 데이터를 가져와 DB에 반영합니다">
+                      <Button
+                        type="primary"
+                        icon={<SyncOutlined />}
+                        onClick={() => {
+                          setPasswordAction('sync')
+                          setPasswordModalOpen(true)
+                        }}
+                        loading={syncMutation.isPending}
+                      >
+                        법제처 조례 동기화
+                      </Button>
+                    </Tooltip>
+                  )}
                 </Space>
               </Space>
             </div>

@@ -5,8 +5,9 @@
 export interface User {
   id: number
   username: string
-  user_type: 'ADMIN' | 'USER' | 'GENERAL' | 'DEPARTMENT'
+  user_type: 'ADMIN' | 'USER' | 'DEPARTMENT'
   full_name?: string
+  department_id?: number
   department_name?: string
 }
 
@@ -25,7 +26,7 @@ export interface TokenResponse {
 export interface AuthContextType {
   user: User | null
   token: string | null
-  login: (username: string, password: string, departmentName?: string) => Promise<void>
+  login: (username: string, password: string, departmentName?: string, departmentId?: number) => Promise<void>
   loginSimple: (role: 'admin' | 'user', name: string, departmentName?: string) => void
   logout: () => void
   isAuthenticated: boolean

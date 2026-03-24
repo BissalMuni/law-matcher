@@ -22,6 +22,7 @@ class AffectedOrdinanceArticle(BaseModel):
 class AiAnalyzeRequest(BaseModel):
     """AI 통합 분석 요청"""
     law_id: int = Field(..., description="분석 대상 상위법령 ID")
+    force: bool = Field(False, description="기존 성공 결과 삭제 후 재분석 (관리자 전용)")
 
 
 class AiAnalyzeResponse(BaseModel):
