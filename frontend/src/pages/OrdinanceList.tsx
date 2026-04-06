@@ -68,7 +68,7 @@ export default function OrdinanceList() {
   const [noParentLawFilter, setNoParentLawFilter] = useState<string | undefined>(() => searchParams.get('noParentLaw') || undefined)
   const [needsRevisionFilter, setNeedsRevisionFilter] = useState<string | undefined>(() => searchParams.get('needsRevision') || undefined)
   const [revisionType, setRevisionType] = useState<string | undefined>(() => searchParams.get('revisionType') || undefined)
-  const [excludeOtherLawRevision, setExcludeOtherLawRevision] = useState(() => searchParams.get('excludeOtherLaw') !== 'false')
+  const [excludeOtherLawRevision, setExcludeOtherLawRevision] = useState(() => searchParams.get('excludeOtherLaw') === 'true')
   const [reviewResultFilter, setReviewResultFilter] = useState<string | undefined>(() => searchParams.get('reviewResult') || undefined)
   const [statusFilter, setStatusFilter] = useState<string | undefined>(() => searchParams.get('status') || undefined)
   const [initialLoaded, setInitialLoaded] = useState(false)
@@ -641,6 +641,9 @@ export default function OrdinanceList() {
                             needs_revision_filter: needsRevisionFilter,
                             revision_type: revisionType,
                             exclude_other_law_revision: excludeOtherLawRevision || undefined,
+                            review_result_filter: reviewResultFilter,
+                            status: statusFilter,
+                            revision_status_filter: undefined,
                           })
                           message.success('엑셀 파일이 다운로드되었습니다.')
                         } catch (error) {
