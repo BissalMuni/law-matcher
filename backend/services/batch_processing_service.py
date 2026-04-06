@@ -2,6 +2,7 @@
 일괄 개정검토 처리 서비스
 5단계 파이프라인: 대상선정 → 개정판별 → 제개정이유수집 → AI분석 → 보고서
 """
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional, AsyncGenerator
@@ -469,32 +470,14 @@ class BatchProcessingService:
 
     # ===== Step 4: AI 분석 =====
 
-    async def run_step4_analyze(self, job_id: int) -> AsyncGenerator[dict, None]:
-        """Step 4: 데이터 확보된 조례에 대해 AI 분석 실행"""
-        job = await self.get_batch_job(job_id)
-        if not job:
-            raise ValueError("배치 작업을 찾을 수 없습니다")
-
-        # 대상: step3 collected + 수동 미제외 + step4 미처리(이미 완료된 건 스킵)
-        items_result = await self.db.execute(
-            select(BatchJobItem).where(
-                BatchJobItem.batch_job_id == job_id,
-                BatchJobItem.step3_result == "collected",
-                BatchJobItem.manually_excluded == False,
-                BatchJobItem.step4_result.is_(None),  # 이미 처리된 건 스킵
-            )
-        )
-        items = list(items_result.scalars().all())
-
-        job.current_step = "step4_analyze"
-        job.step4_status = "running"
-        job.step4_total = len(items)
-        job.step4_progress = 0
-        await self.db.commit()
-
-        analysis_service = LlmAnalysisService(self.db)
-
-        for i, item in enumerate(items):
+    async def _analyze_single_item(
+        self,
+        item: BatchJobItem,
+        analysis_service: LlmAnalysisService,
+        semaphore: asyncio.Semaphore,
+    ) -> dict:
+        """단일 조례에 대한 AI 분석 (동시성 제한 적용)"""
+        async with semaphore:
             try:
                 # 해당 조례의 상위법령 조회
                 mappings_result = await self.db.execute(
@@ -527,7 +510,6 @@ class BatchProcessingService:
                         if existing_result:
                             ai_results.append(existing_result)
                     except ValueError as e:
-                        # 제개정이유 데이터 없음 등 데이터 부족 → 재시도해도 동일
                         no_data_errors.append(str(e))
                         logger.warning(f"AI 분석 데이터 부족 (ord={item.ordinance_id}, law={mapping.law.id}): {e}")
                     except Exception as e:
@@ -556,7 +538,6 @@ class BatchProcessingService:
                     item.step4_ai_summary = "\n\n---\n\n".join(summaries) if summaries else None
                     item.step4_reason = f"AI 분석 완료 ({len(ai_results)}건)"
                 elif no_data_errors:
-                    # 제개정이유 데이터 없음 → 수동확인 필요 (재시도 불필요)
                     item.step4_result = "no_revision"
                     item.step4_reason = "제개정이유 데이터 없음 — 수동확인 필요"
                     item.final_result = "수동확인필요"
@@ -572,15 +553,80 @@ class BatchProcessingService:
                 logger.exception(f"Step4 error for ordinance {item.ordinance_id}: {e}")
 
             item.updated_at = datetime.utcnow()
-            job.step4_progress = i + 1
-            await self.db.commit()
-
-            yield {
-                "progress": i + 1,
-                "total": len(items),
+            return {
                 "ordinance_name": item.ordinance_name,
                 "result": item.step4_result,
             }
+
+    async def run_step4_analyze(self, job_id: int) -> AsyncGenerator[dict, None]:
+        """Step 4: 데이터 확보된 조례에 대해 AI 분석 실행 (병렬 배치 처리)"""
+        job = await self.get_batch_job(job_id)
+        if not job:
+            raise ValueError("배치 작업을 찾을 수 없습니다")
+
+        # 대상: step3 collected + 수동 미제외 + step4 미처리(이미 완료된 건 스킵)
+        items_result = await self.db.execute(
+            select(BatchJobItem).where(
+                BatchJobItem.batch_job_id == job_id,
+                BatchJobItem.step3_result == "collected",
+                BatchJobItem.manually_excluded == False,
+                BatchJobItem.step4_result.is_(None),
+            )
+        )
+        items = list(items_result.scalars().all())
+
+        job.current_step = "step4_analyze"
+        job.step4_status = "running"
+        job.step4_total = len(items)
+        job.step4_progress = 0
+        await self.db.commit()
+
+        analysis_service = LlmAnalysisService(self.db)
+        concurrency = settings.LLM_BATCH_CONCURRENCY
+        semaphore = asyncio.Semaphore(concurrency)
+        completed = 0
+
+        # 배치 단위로 병렬 처리 (동시 concurrency건)
+        for batch_start in range(0, len(items), concurrency):
+            batch = items[batch_start:batch_start + concurrency]
+
+            tasks = [
+                self._analyze_single_item(item, analysis_service, semaphore)
+                for item in batch
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # 배치 단위 DB 커밋 + 진행률 업데이트
+            for idx, result in enumerate(results):
+                completed += 1
+                if isinstance(result, Exception):
+                    item = batch[idx]
+                    item.step4_result = "error"
+                    item.step4_reason = str(result)[:500]
+                    item.final_result = "오류(AI)"
+                    item.updated_at = datetime.utcnow()
+                    logger.exception(f"Step4 batch error: {result}")
+                    result = {
+                        "ordinance_name": item.ordinance_name,
+                        "result": "error",
+                    }
+
+                job.step4_progress = completed
+                yield {
+                    "progress": completed,
+                    "total": len(items),
+                    **result,
+                }
+
+            await self.db.commit()
+
+        # LLM 클라이언트 정리
+        try:
+            from backend.services.llm_client import get_active_llm_client
+            client, _ = await get_active_llm_client(self.db)
+            await client.close()
+        except Exception:
+            pass
 
         job.step4_status = "completed"
         job.current_step = "step4_analyze"

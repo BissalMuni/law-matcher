@@ -81,59 +81,75 @@ class LlmClient(ABC):
 
 
 class ClaudeClient(LlmClient):
-    """Anthropic Claude API 클라이언트"""
+    """Anthropic Claude API 클라이언트 (커넥션 풀링)"""
+
+    _client = None
+
+    def _get_client(self):
+        if self._client is None:
+            import anthropic
+            self._client = anthropic.AsyncAnthropic(
+                api_key=self.api_key,
+                timeout=self.timeout,
+            )
+        return self._client
 
     async def generate(self, prompt: str, system_prompt: str) -> LlmResponse:
-        import anthropic
-
-        client = anthropic.AsyncAnthropic(
-            api_key=self.api_key,
-            timeout=self.timeout,
+        client = self._get_client()
+        response = await client.messages.create(
+            model=self.model_name,
+            max_tokens=8192,
+            system=system_prompt,
+            messages=[{"role": "user", "content": prompt}],
         )
-        try:
-            response = await client.messages.create(
-                model=self.model_name,
-                max_tokens=8192,
-                system=system_prompt,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            return LlmResponse(
-                content=response.content[0].text,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
-            )
-        finally:
-            await client.close()
+        return LlmResponse(
+            content=response.content[0].text,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
+
+    async def close(self):
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
 
 
 class ChatGptClient(LlmClient):
-    """OpenAI ChatGPT API 클라이언트"""
+    """OpenAI ChatGPT API 클라이언트 (커넥션 풀링)"""
+
+    _client = None
+
+    def _get_client(self):
+        if self._client is None:
+            import openai
+            self._client = openai.AsyncOpenAI(
+                api_key=self.api_key,
+                timeout=self.timeout,
+            )
+        return self._client
 
     async def generate(self, prompt: str, system_prompt: str) -> LlmResponse:
-        import openai
-
-        client = openai.AsyncOpenAI(
-            api_key=self.api_key,
-            timeout=self.timeout,
+        client = self._get_client()
+        response = await client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=8192,
         )
-        try:
-            response = await client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-                max_tokens=8192,
-            )
-            usage = response.usage
-            return LlmResponse(
-                content=response.choices[0].message.content or "",
-                input_tokens=usage.prompt_tokens if usage else 0,
-                output_tokens=usage.completion_tokens if usage else 0,
-            )
-        finally:
-            await client.close()
+        usage = response.usage
+        return LlmResponse(
+            content=response.choices[0].message.content or "",
+            input_tokens=usage.prompt_tokens if usage else 0,
+            output_tokens=usage.completion_tokens if usage else 0,
+        )
+
+    async def close(self):
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
 
 
 class GeminiClient(LlmClient):
@@ -162,6 +178,9 @@ class GeminiClient(LlmClient):
             input_tokens=getattr(usage_meta, "prompt_token_count", 0) if usage_meta else 0,
             output_tokens=getattr(usage_meta, "candidates_token_count", 0) if usage_meta else 0,
         )
+
+    async def close(self):
+        pass  # Gemini SDK는 stateless — 별도 정리 불필요
 
 
 # 프로바이더별 클라이언트 매핑

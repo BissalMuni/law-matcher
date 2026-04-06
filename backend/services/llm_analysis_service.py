@@ -23,7 +23,7 @@ from backend.models.llm_analysis_result import LlmAnalysisResult
 from backend.models.llm_provider import LlmProvider
 from backend.models.ordinance_review import OrdinanceReview
 from backend.services.llm_client import get_active_llm_client, LlmServiceUnavailableError
-from backend.services.llm_rate_limiter import check_rate_limit, RateLimitExceededError
+from backend.services.llm_rate_limiter import wait_for_rate_limit, RateLimitExceededError
 
 logger = logging.getLogger(__name__)
 
@@ -123,11 +123,8 @@ class LlmAnalysisService:
         except LlmServiceUnavailableError:
             raise
 
-        # 8. Rate Limit 검사
-        try:
-            await check_rate_limit(provider.rate_limit_per_minute)
-        except RateLimitExceededError:
-            raise
+        # 8. Rate Limit 검사 (배치 처리 시 슬롯 빌 때까지 대기)
+        await wait_for_rate_limit(provider.rate_limit_per_minute)
 
         # 9. 프롬프트 렌더링
         prompts = _load_prompts()

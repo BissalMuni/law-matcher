@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     GOOGLE_AI_API_KEY: str = ""
     LLM_TIMEOUT: int = 60  # LLM API 호출 타임아웃 (초)
     LLM_MAX_RETRIES: int = 2  # LLM API 최대 재시도 횟수
+    LLM_BATCH_CONCURRENCY: int = 5  # AI 배치 분석 동시 처리 수
 
     class Config:
         env_file = str(PROJECT_ROOT / ".env")  # 프로젝트 루트의 .env (절대 경로)
