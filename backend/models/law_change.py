@@ -20,6 +20,7 @@ class ApiStatus(str, enum.Enum):
     NO_CHANGE = "no_change"      # API 성공, 변경 없음
     NO_RESPONSE = "no_response"  # API 응답 없음
     NOT_FOUND = "not_found"      # API 응답은 있으나 정확히 일치하는 법령명 없음
+    ERROR = "error"              # 동기화 중 예외 발생
 
 
 class LawChange(Base):
@@ -57,7 +58,7 @@ class LawChange(Base):
 
     # 부서 정보 (소관부처)
     dept_name: Mapped[Optional[str]] = mapped_column(String(200), index=True)
-    dept_code: Mapped[Optional[int]] = mapped_column(Integer)
+    dept_code: Mapped[Optional[str]] = mapped_column(String(200))
 
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

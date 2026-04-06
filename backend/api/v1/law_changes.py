@@ -195,7 +195,10 @@ async def export_law_changes(
     api_status: Optional[str] = None,
     dept_name: Optional[str] = None,
     sync_date: Optional[str] = None,
+    sync_batch_id: Optional[str] = None,
     search: Optional[str] = None,
+    changed_field: Optional[str] = None,
+    revision_type: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """법령 변경 감지 로그 엑셀 다운로드"""
@@ -215,12 +218,22 @@ async def export_law_changes(
         sync_date_obj = datetime.strptime(sync_date, "%Y-%m-%d").date()
         filters.append(func.date(LawChange.sync_date) == sync_date_obj)
 
+    if sync_batch_id:
+        filters.append(LawChange.sync_batch_id == sync_batch_id)
+
+    if changed_field:
+        filters.append(LawChange.old_values[changed_field].isnot(None))
+
     query = select(LawChange).options(selectinload(LawChange.law))
     if filters:
         query = query.where(and_(*filters))
 
-    if search:
-        query = query.join(Law, LawChange.law_id == Law.id).where(Law.law_name.ilike(f"%{search}%"))
+    if search or revision_type:
+        query = query.join(Law, LawChange.law_id == Law.id)
+        if search:
+            query = query.where(Law.law_name.ilike(f"%{search}%"))
+        if revision_type:
+            query = query.where(Law.revision_type == revision_type)
 
     query = query.order_by(LawChange.sync_date.desc(), LawChange.id.desc())
 
@@ -330,6 +343,7 @@ async def get_sync_batches(
             func.count(LawChange.id).filter(LawChange.api_status == ApiStatus.NO_CHANGE).label("no_change"),
             func.count(LawChange.id).filter(LawChange.api_status == ApiStatus.NO_RESPONSE).label("no_response"),
             func.count(LawChange.id).filter(LawChange.api_status == ApiStatus.NOT_FOUND).label("not_found"),
+            func.count(LawChange.id).filter(LawChange.api_status == ApiStatus.ERROR).label("error"),
         )
         .where(LawChange.sync_batch_id.isnot(None))
         .group_by(LawChange.sync_batch_id)
@@ -345,6 +359,7 @@ async def get_sync_batches(
             "no_change": row[4],
             "no_response": row[5],
             "not_found": row[6],
+            "error": row[7],
         }
         for row in result.all()
     ]

@@ -27,7 +27,7 @@ class Law(Base):
 
     # 법령 식별자
     law_serial_no: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)  # 법령일련번호 (개정마다 변경)
-    law_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)  # 법령ID (법령당 고유, 최신 개정본 1건만 유지)
+    law_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)  # 법령ID (법령당 고유)
 
     # 법령 기본 정보
     law_name: Mapped[str] = mapped_column(String(500), nullable=False)  # 법령명한글
@@ -45,7 +45,7 @@ class Law(Base):
 
     # 소관부처 정보
     dept_name: Mapped[Optional[str]] = mapped_column(String(200))  # 소관부처명
-    dept_code: Mapped[Optional[int]] = mapped_column(Integer)  # 소관부처코드
+    dept_code: Mapped[Optional[str]] = mapped_column(String(200))  # 소관부처코드 (공동부령 시 쉼표 구분)
 
     # 공동부령 정보
     joint_dept_info: Mapped[Optional[str]] = mapped_column(String(50))  # 공동부령구분

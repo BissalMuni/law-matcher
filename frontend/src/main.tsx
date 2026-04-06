@@ -1,5 +1,9 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+
+dayjs.extend(utc)
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { SyncProvider } from './contexts/SyncContext'

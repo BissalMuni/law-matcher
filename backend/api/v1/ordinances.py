@@ -297,6 +297,9 @@ async def export_ordinances(
     needs_revision_filter: Optional[str] = None,
     revision_type: Optional[str] = None,
     exclude_other_law_revision: bool = False,
+    review_result_filter: Optional[str] = None,
+    status: Optional[str] = None,
+    revision_status_filter: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """자치법규 목록 엑셀 다운로드 (필터 적용)"""
@@ -315,6 +318,9 @@ async def export_ordinances(
         needs_revision_filter=needs_revision_filter,
         revision_type=revision_type,
         exclude_other_law_revision=exclude_other_law_revision,
+        review_result_filter=review_result_filter,
+        status_filter=status,
+        revision_status_filter=revision_status_filter,
     )
     items = result.get("items", [])
 
@@ -330,7 +336,7 @@ async def export_ordinances(
         top=Side(style='thin'), bottom=Side(style='thin')
     )
 
-    headers = ["자치법규명", "종류", "제개정", "공포일", "시행일", "소관부서", "상위법령수", "개정여부"]
+    headers = ["자치법규명", "종류", "제개정", "공포일", "시행일", "소관부서", "상위법령연결", "상위법령수", "개정여부", "검토결과"]
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.font = header_font
@@ -342,6 +348,19 @@ async def export_ordinances(
         needs_rev = item.get("needs_revision")
         revision_text = "개정대상" if needs_rev == 1 else "대상아님" if needs_rev == 0 else "-"
 
+        # 상위법령 연결상태
+        no_parent_law = item.get("no_parent_law", False)
+        parent_law_count = item.get("parent_law_count", 0)
+        if parent_law_count > 0:
+            law_link_text = "연결"
+        elif no_parent_law:
+            law_link_text = "연결불필요"
+        else:
+            law_link_text = "미연결"
+
+        # 검토결과
+        review_result = item.get("latest_review_result") or "-"
+
         row_data = [
             item.get("name", ""),
             item.get("category", ""),
@@ -349,18 +368,30 @@ async def export_ordinances(
             str(item.get("enacted_date", "") or ""),
             str(item.get("enforced_date", "") or ""),
             item.get("department", ""),
-            item.get("parent_law_count", 0),
+            law_link_text,
+            parent_law_count,
             revision_text,
+            review_result,
         ]
         for col, value in enumerate(row_data, 1):
             cell = ws.cell(row=row_idx, column=col, value=value)
             cell.border = thin_border
-            if col == 8 and needs_rev == 1:
+            if col == 7:  # 상위법령연결
+                if law_link_text == "연결":
+                    cell.font = Font(color="00B050")
+                elif law_link_text == "미연결":
+                    cell.font = Font(color="FF0000")
+            elif col == 9 and needs_rev == 1:  # 개정여부
                 cell.font = Font(color="FF0000")
-            elif col == 8 and needs_rev == 0:
+            elif col == 9 and needs_rev == 0:
                 cell.font = Font(color="00B050")
+            elif col == 10:  # 검토결과
+                if review_result == "개정필요":
+                    cell.font = Font(color="FF0000")
+                elif review_result == "개정불필요":
+                    cell.font = Font(color="00B050")
 
-    column_widths = [40, 8, 10, 12, 12, 15, 10, 10]
+    column_widths = [40, 8, 10, 12, 12, 15, 12, 10, 10, 12]
     for col, width in enumerate(column_widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
 

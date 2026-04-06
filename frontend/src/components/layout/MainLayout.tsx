@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, theme, Dropdown, Space, Avatar } from 'antd'
-import type { MenuProps } from 'antd'
+import { useState } from "react";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Layout, Menu, theme, Dropdown, Space, Avatar } from "antd";
+import type { MenuProps } from "antd";
 import {
   FileTextOutlined,
   TeamOutlined,
@@ -17,128 +17,131 @@ import {
   LockOutlined,
   ThunderboltOutlined,
   CheckCircleOutlined,
-} from '@ant-design/icons'
-import { useAuth } from '../../contexts/AuthContext'
+} from "@ant-design/icons";
+import { useAuth } from "../../contexts/AuthContext";
 
-const { Header, Sider, Content } = Layout
+const { Header, Sider, Content } = Layout;
 
 // Menu items for admin users (6 tabs)
 const adminMenuItems = [
   {
-    key: '/ordinances',
+    key: "/ordinances",
     icon: <FileTextOutlined />,
-    label: '자치법규관리',
+    label: "자치법규관리",
   },
   {
-    key: '/amendments',
-    icon: <SyncOutlined />,
-    label: '변경감지',
-  },
-  {
-    key: '/reviews',
-    icon: <CheckCircleOutlined />,
-    label: '승인관리',
-  },
-  {
-    key: '/admin/batch',
-    icon: <ThunderboltOutlined />,
-    label: '일괄 검토',
-  },
-  {
-    key: '/laws',
+    key: "/laws",
     icon: <BookOutlined />,
-    label: '법령관리',
+    label: "상위법령관리",
   },
- 
   {
-    key: '/departments',
+    key: "/amendments",
+    icon: <SyncOutlined />,
+    label: "법령변경감지",
+  },
+  {
+    key: "/reviews",
+    icon: <CheckCircleOutlined />,
+    label: "승인관리",
+  },
+  {
+    key: "/admin/batch",
+    icon: <ThunderboltOutlined />,
+    label: "일괄 검토",
+  },
+  {
+    key: "/departments",
     icon: <TeamOutlined />,
-    label: '부서관리',
+    label: "부서관리",
   },
   {
-    key: '/dashboard',
+    key: "/dashboard",
     icon: <BarChartOutlined />,
-    label: '현황',
+    label: "현황",
   },
   {
-    key: '/admin/settings',
+    key: "/admin/settings",
     icon: <SettingOutlined />,
-    label: 'LLM 설정',
+    label: "LLM 설정",
   },
   {
-    key: '/admin/ai-analytics',
+    key: "/admin/ai-analytics",
     icon: <ExperimentOutlined />,
-    label: 'AI 이력',
+    label: "AI 이력",
   },
   {
-    key: '/admin/detection-compare',
+    key: "/admin/detection-compare",
     icon: <DiffOutlined />,
-    label: '탭 비교',
+    label: "탭 비교",
   },
-]
+];
 
 // Menu items for regular users (3 tabs)
 const regularUserMenuItems = [
   {
-    key: '/ordinances',
+    key: "/ordinances",
     icon: <FileTextOutlined />,
-    label: '자치법규관리',
+    label: "자치법규관리",
   },
   {
-    key: '/dashboard',
+    key: "/dashboard",
     icon: <BarChartOutlined />,
-    label: '현황',
+    label: "현황",
   },
-]
+];
 
 export default function MainLayout() {
-  const [collapsed, setCollapsed] = useState(false)
-  const navigate = useNavigate()
-  const location = useLocation()
-  const { user, logout } = useAuth()
+  const [collapsed, setCollapsed] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout } = useAuth();
   const {
     token: { colorBgContainer },
-  } = theme.useToken()
+  } = theme.useToken();
 
   const handleMenuClick = ({ key }: { key: string }) => {
-    navigate(key)
-  }
+    navigate(key);
+  };
 
   const handleLogout = () => {
-    logout()
-    navigate('/landing')
-  }
+    logout();
+    navigate("/landing");
+  };
 
-  const userDropdownItems: MenuProps['items'] = [
+  const userDropdownItems: MenuProps["items"] = [
     {
-      key: 'change-password',
+      key: "change-password",
       icon: <LockOutlined />,
-      label: '비밀번호 변경',
-      onClick: () => navigate('/change-password'),
+      label: "비밀번호 변경",
+      onClick: () => navigate("/change-password"),
     },
     {
-      type: 'divider',
+      type: "divider",
     },
     {
-      key: 'logout',
+      key: "logout",
       icon: <LogoutOutlined />,
-      label: '로그아웃',
+      label: "로그아웃",
       onClick: handleLogout,
     },
-  ]
+  ];
 
   // Select menu items based on user type
-  const sidebarMenuItems = user?.user_type === 'ADMIN' ? adminMenuItems : regularUserMenuItems
+  const sidebarMenuItems =
+    user?.user_type === "ADMIN" ? adminMenuItems : regularUserMenuItems;
 
   // Match selectedKeys by pathname prefix for sub-routes
   const getSelectedKey = () => {
-    const menuKeys = sidebarMenuItems.map((item) => item.key)
-    const matched = menuKeys.find((key) => location.pathname === key || location.pathname.startsWith(key + '/'))
-    return matched ? [matched] : []
-  }
+    const menuKeys = sidebarMenuItems.map((item) => item.key);
+    const matched = menuKeys.find(
+      (key) =>
+        location.pathname === key || location.pathname.startsWith(key + "/"),
+    );
+    return matched ? [matched] : [];
+  };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: "100vh" }}>
       <Sider
         collapsible
         collapsed={collapsed}
@@ -148,14 +151,17 @@ export default function MainLayout() {
         <div
           style={{
             height: 64,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderBottom: '1px solid #f0f0f0',
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderBottom: "1px solid #f0f0f0",
           }}
         >
-          <h1 style={{ fontSize: collapsed ? 16 : 18, margin: 0 }}>
-            {collapsed ? 'LM' : 'Law Matcher'}
+          <h1
+            style={{ fontSize: collapsed ? 16 : 18, margin: 0, cursor: "pointer" }}
+            onClick={() => navigate("/ordinances")}
+          >
+            {collapsed ? "LM" : "Law Matcher"}
           </h1>
         </div>
         <Menu
@@ -168,27 +174,36 @@ export default function MainLayout() {
       <Layout>
         <Header
           style={{
-            padding: '0 24px',
+            padding: "0 24px",
             background: colorBgContainer,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            borderBottom: '1px solid #f0f0f0',
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottom: "1px solid #f0f0f0",
           }}
         >
           <h2 style={{ margin: 0 }}>OLM 자치법규 개정 검토 시스템</h2>
 
-          <Dropdown menu={{ items: userDropdownItems }} trigger={['click']}>
-            <Space style={{ cursor: 'pointer' }}>
+          <Dropdown menu={{ items: userDropdownItems }} trigger={["click"]}>
+            <Space style={{ cursor: "pointer" }}>
               <Avatar
                 size="small"
                 icon={<UserOutlined />}
-                style={{ backgroundColor: '#667eea' }}
+                style={{ backgroundColor: "#667eea" }}
               />
               <span>
                 {user?.username}
-                {user?.user_type === 'ADMIN' && (
-                  <span style={{ color: '#667eea', fontSize: '13px', fontWeight: 500 }}> (관리자)</span>
+                {user?.user_type === "ADMIN" && (
+                  <span
+                    style={{
+                      color: "#667eea",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {" "}
+                    (관리자)
+                  </span>
                 )}
               </span>
               <DownOutlined style={{ fontSize: 12 }} />
@@ -208,5 +223,5 @@ export default function MainLayout() {
         </Content>
       </Layout>
     </Layout>
-  )
+  );
 }

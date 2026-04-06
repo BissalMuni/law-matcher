@@ -67,6 +67,7 @@ interface SyncBatch {
   no_change: number
   no_response: number
   not_found: number
+  error: number
 }
 
 interface SyncProgress {
@@ -528,9 +529,11 @@ export default function LawChangeList() {
   ]
 
   const apiStatusConfig: Record<string, { color: string; text: string }> = {
-    success: { color: 'green', text: '성공' },
+    success: { color: 'green', text: '변경감지' },
+    no_change: { color: 'blue', text: '변경없음' },
     no_response: { color: 'red', text: '응답없음' },
     not_found: { color: 'orange', text: '미발견' },
+    error: { color: 'volcano', text: '오류' },
   }
 
   const columns = [
@@ -585,7 +588,7 @@ export default function LawChangeList() {
       dataIndex: 'sync_date',
       key: 'sync_date',
       width: 150,
-      render: (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm'),
+      render: (date: string) => dayjs.utc(date).local().format('YYYY-MM-DD HH:mm'),
     },
     {
       title: '작업',
@@ -765,7 +768,7 @@ export default function LawChangeList() {
               {log.type === 'changed' && log.law && (
                 <div style={{ width: '100%' }}>
                   <Tag color={log.law.api_status === 'success' ? 'green' : 'red'}>
-                    {log.law.api_status === 'success' ? '변경' : log.law.api_status === 'no_response' ? '응답없음' : '미발견'}
+                    {apiStatusConfig[log.law.api_status]?.text || log.law.api_status}
                   </Tag>
                   <Text strong>{log.law.law_name}</Text>
                   {log.law.api_status === 'success' && log.law.changes && Object.keys(log.law.changes).length > 0 && (
@@ -899,7 +902,7 @@ export default function LawChangeList() {
                       dataIndex: 'sync_date',
                       key: 'sync_date',
                       width: 180,
-                      render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
+                      render: (v: string) => dayjs.utc(v).local().format('YYYY-MM-DD HH:mm'),
                     },
                     {
                       title: '전체',
@@ -936,6 +939,14 @@ export default function LawChangeList() {
                       title: '미발견',
                       dataIndex: 'not_found',
                       key: 'not_found',
+                      width: 100,
+                      align: 'center' as const,
+                      render: (v: number) => <Text style={{ color: v > 0 ? '#ff4d4f' : undefined }}>{v}</Text>,
+                    },
+                    {
+                      title: '오류',
+                      dataIndex: 'error',
+                      key: 'error',
                       width: 100,
                       align: 'center' as const,
                       render: (v: number) => <Text style={{ color: v > 0 ? '#ff4d4f' : undefined }}>{v}</Text>,
@@ -995,131 +1006,166 @@ export default function LawChangeList() {
               disabled: !selectedBatchId,
               children: selectedBatchId ? (
                 <>
-                  {/* 통계 */}
-                  <Space style={{ marginBottom: 16 }}>
-                    <Text strong>{syncBatches?.find((b: SyncBatch) => b.sync_batch_id === selectedBatchId)?.sync_date ? dayjs(syncBatches.find((b: SyncBatch) => b.sync_batch_id === selectedBatchId).sync_date).format('YYYY-MM-DD HH:mm') : selectedBatchId}</Text>
-                    {stats && (
-                      <>
-                        <Tag>전체 {stats.total}</Tag>
-                        <Tag color="green">성공 {stats.by_api_status?.success || 0}</Tag>
-                        <Tag color="red">응답없음 {stats.by_api_status?.no_response || 0}</Tag>
-                        <Tag color="orange">미발견 {stats.by_api_status?.not_found || 0}</Tag>
-                      </>
+                  {/* 1행: 필터 + 엑셀 다운로드 */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Space wrap>
+                      <Space.Compact>
+                        <Input
+                          placeholder="법령명 검색"
+                          style={{ width: 200 }}
+                          allowClear
+                          onPressEnter={(e) => setSearch((e.target as HTMLInputElement).value)}
+                          onChange={(e) => !e.target.value && setSearch('')}
+                        />
+                        <Button
+                          icon={<SearchOutlined />}
+                          onClick={() => {
+                            const input = document.querySelector('input[placeholder="법령명 검색"]') as HTMLInputElement
+                            if (input) setSearch(input.value)
+                          }}
+                        />
+                      </Space.Compact>
+                      <Select
+                        placeholder="API상태"
+                        style={{ width: 120 }}
+                        allowClear
+                        value={apiStatus === 'all' ? undefined : apiStatus}
+                        onChange={(value) => {
+                          setApiStatus(value || 'all')
+                          setPage(1)
+                        }}
+                        options={[
+                          { value: 'all', label: '전체' },
+                          { value: 'success', label: '변경감지' },
+                          { value: 'no_change', label: '변경없음' },
+                          { value: 'no_response', label: '응답없음' },
+                          { value: 'not_found', label: '미발견' },
+                          { value: 'error', label: '오류' },
+                        ]}
+                      />
+                      <Select
+                        placeholder="변경내용"
+                        style={{ width: 140 }}
+                        allowClear
+                        value={changedField}
+                        onChange={(value) => {
+                          setChangedField(value)
+                          setPage(1)
+                        }}
+                        options={[
+                          { value: 'proclaimed_date', label: '공포일' },
+                          { value: 'enforced_date', label: '시행일' },
+                          { value: 'revision_type', label: '제개정구분' },
+                          { value: 'law_id', label: '법령ID' },
+                          { value: 'dept_name', label: '소관부처' },
+                        ]}
+                      />
+                      <Select
+                        placeholder="제개정구분"
+                        style={{ width: 140 }}
+                        allowClear
+                        value={revisionType}
+                        onChange={(value) => {
+                          setRevisionType(value)
+                          setPage(1)
+                        }}
+                        options={revisionTypes?.map((rt: { revision_type: string; count: number }) => ({
+                          value: rt.revision_type,
+                          label: `${rt.revision_type} (${rt.count})`,
+                        })) || []}
+                      />
+                    </Space>
+                    <Button
+                      icon={<DownloadOutlined />}
+                      onClick={async () => {
+                        try {
+                          await lawChangesApi.exportExcel({
+                            api_status: apiStatus === 'all' ? undefined : apiStatus,
+                            sync_batch_id: selectedBatchId,
+                            search,
+                            changed_field: changedField,
+                            revision_type: revisionType,
+                          })
+                          message.success('엑셀 파일이 다운로드되었습니다.')
+                          } catch (error) {
+                            message.error('엑셀 다운로드 중 오류가 발생했습니다.')
+                          }
+                        }}
+                      >
+                        엑셀 다운로드
+                      </Button>
+                  </div>
+
+                  {/* 2행: 통계 태그 + 삭제 버튼 */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <Space>
+                      <Text strong>{syncBatches?.find((b: SyncBatch) => b.sync_batch_id === selectedBatchId)?.sync_date ? dayjs.utc(syncBatches.find((b: SyncBatch) => b.sync_batch_id === selectedBatchId).sync_date).local().format('YYYY-MM-DD HH:mm') : selectedBatchId}</Text>
+                      {stats && (
+                        <>
+                          <Tag
+                            style={{ cursor: 'pointer' }}
+                            color={apiStatus === 'all' ? undefined : 'default'}
+                            onClick={() => { setApiStatus('all'); setPage(1) }}
+                          >전체 {stats.total}</Tag>
+                          <Tag
+                            style={{ cursor: 'pointer' }}
+                            color={apiStatus === 'success' ? 'green' : 'default'}
+                            onClick={() => { setApiStatus(apiStatus === 'success' ? 'all' : 'success'); setPage(1) }}
+                          >변경감지 {stats.by_api_status?.success || 0}</Tag>
+                          <Tag
+                            style={{ cursor: 'pointer' }}
+                            color={apiStatus === 'no_change' ? 'blue' : 'default'}
+                            onClick={() => { setApiStatus(apiStatus === 'no_change' ? 'all' : 'no_change'); setPage(1) }}
+                          >변경없음 {stats.by_api_status?.no_change || 0}</Tag>
+                          <Tag
+                            style={{ cursor: 'pointer' }}
+                            color={apiStatus === 'no_response' ? 'red' : 'default'}
+                            onClick={() => { setApiStatus(apiStatus === 'no_response' ? 'all' : 'no_response'); setPage(1) }}
+                          >응답없음 {stats.by_api_status?.no_response || 0}</Tag>
+                          <Tag
+                            style={{ cursor: 'pointer' }}
+                            color={apiStatus === 'not_found' ? 'orange' : 'default'}
+                            onClick={() => { setApiStatus(apiStatus === 'not_found' ? 'all' : 'not_found'); setPage(1) }}
+                          >미발견 {stats.by_api_status?.not_found || 0}</Tag>
+                          <Tag
+                            style={{ cursor: 'pointer' }}
+                            color={apiStatus === 'error' ? 'volcano' : 'default'}
+                            onClick={() => { setApiStatus(apiStatus === 'error' ? 'all' : 'error'); setPage(1) }}
+                          >오류 {stats.by_api_status?.error || 0}</Tag>
+                        </>
+                      )}
+                    </Space>
+                    {selectedRowKeys.length > 0 && (
+                      <Popconfirm
+                        title="법령 일괄 삭제"
+                        description={`선택된 ${selectedRowKeys.length}건의 법령과 관련된 모든 데이터가 삭제됩니다. 계속하시겠습니까?`}
+                        onConfirm={() => {
+                          const items = data?.items || []
+                          const lawIds = [
+                            ...new Set(
+                              items
+                                .filter((item: LawChange) => selectedRowKeys.includes(item.id))
+                                .map((item: LawChange) => item.law_id)
+                            ),
+                          ]
+                          bulkDeleteLawMutation.mutate(lawIds)
+                        }}
+                        okText="삭제"
+                        okButtonProps={{ danger: true }}
+                        cancelText="취소"
+                      >
+                        <Button
+                          danger
+                          icon={<DeleteOutlined />}
+                          loading={bulkDeleteLawMutation.isPending}
+                        >
+                          선택 삭제 ({selectedRowKeys.length})
+                        </Button>
+                      </Popconfirm>
                     )}
-                  </Space>
+                  </div>
 
-                  {/* 필터 */}
-                  <Space style={{ marginBottom: 16 }} wrap>
-            <Space.Compact>
-              <Input
-                placeholder="법령명 검색"
-                style={{ width: 200 }}
-                allowClear
-                onPressEnter={(e) => setSearch((e.target as HTMLInputElement).value)}
-                onChange={(e) => !e.target.value && setSearch('')}
-              />
-              <Button
-                icon={<SearchOutlined />}
-                onClick={() => {
-                  const input = document.querySelector('input[placeholder="법령명 검색"]') as HTMLInputElement
-                  if (input) setSearch(input.value)
-                }}
-              />
-            </Space.Compact>
-            <Select
-              style={{ width: 120 }}
-              value={apiStatus}
-              onChange={(value) => setApiStatus(value)}
-              options={[
-                { value: 'all', label: '전체' },
-                { value: 'success', label: '성공' },
-                { value: 'no_response', label: '응답없음' },
-                { value: 'not_found', label: '미발견' },
-              ]}
-            />
-            <Select
-              placeholder="변경내용"
-              style={{ width: 140 }}
-              allowClear
-              value={changedField}
-              onChange={(value) => {
-                setChangedField(value)
-                setPage(1)
-              }}
-              options={[
-                { value: 'proclaimed_date', label: '공포일' },
-                { value: 'enforced_date', label: '시행일' },
-                { value: 'revision_type', label: '제개정구분' },
-                { value: 'law_id', label: '법령ID' },
-                { value: 'dept_name', label: '소관부처' },
-              ]}
-            />
-            <Select
-              placeholder="제개정구분"
-              style={{ width: 140 }}
-              allowClear
-              value={revisionType}
-              onChange={(value) => {
-                setRevisionType(value)
-                setPage(1)
-              }}
-              options={revisionTypes?.map((rt: { revision_type: string; count: number }) => ({
-                value: rt.revision_type,
-                label: `${rt.revision_type} (${rt.count})`,
-              })) || []}
-            />
-
-            {/* 엑셀 다운로드 */}
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={async () => {
-                try {
-                  await lawChangesApi.exportExcel({
-                    api_status: apiStatus === 'all' ? undefined : apiStatus,
-                    sync_batch_id: selectedBatchId,
-                    search,
-                  })
-                  message.success('엑셀 파일이 다운로드되었습니다.')
-                } catch (error) {
-                  message.error('엑셀 다운로드 중 오류가 발생했습니다.')
-                }
-              }}
-            >
-              엑셀 다운로드
-            </Button>
-
-            {/* 일괄 삭제 */}
-            {selectedRowKeys.length > 0 && (
-              <Popconfirm
-                title="법령 일괄 삭제"
-                description={`선택된 ${selectedRowKeys.length}건의 법령과 관련된 모든 데이터가 삭제됩니다. 계속하시겠습니까?`}
-                onConfirm={() => {
-                  const items = data?.items || []
-                  const lawIds = [
-                    ...new Set(
-                      items
-                        .filter((item: LawChange) => selectedRowKeys.includes(item.id))
-                        .map((item: LawChange) => item.law_id)
-                    ),
-                  ]
-                  bulkDeleteLawMutation.mutate(lawIds)
-                }}
-                okText="삭제"
-                okButtonProps={{ danger: true }}
-                cancelText="취소"
-              >
-                <Button
-                  danger
-                  icon={<DeleteOutlined />}
-                  loading={bulkDeleteLawMutation.isPending}
-                >
-                  선택 삭제 ({selectedRowKeys.length})
-                </Button>
-              </Popconfirm>
-            )}
-          </Space>
-
-          {/* 테이블 */}
+                  {/* 테이블 */}
           <Table
             columns={columns}
             dataSource={data?.items || []}
@@ -1170,7 +1216,7 @@ export default function LawChangeList() {
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="동기화 일시">
-              {dayjs(selectedChange.sync_date).format('YYYY-MM-DD HH:mm:ss')}
+              {dayjs.utc(selectedChange.sync_date).local().format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
             <Descriptions.Item label="동기화 배치">
               {selectedChange.sync_batch_id || '-'}
@@ -1214,7 +1260,7 @@ export default function LawChangeList() {
               children: (
                 <div key={item.id}>
                   <div style={{ marginBottom: 4 }}>
-                    <Text strong>{dayjs(item.sync_date).format('YYYY-MM-DD HH:mm')}</Text>
+                    <Text strong>{dayjs.utc(item.sync_date).local().format('YYYY-MM-DD HH:mm')}</Text>
                     <Tag color={apiStatusConfig[item.api_status]?.color} style={{ marginLeft: 8 }}>
                       {apiStatusConfig[item.api_status]?.text}
                     </Tag>

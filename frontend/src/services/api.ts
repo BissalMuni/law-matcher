@@ -106,6 +106,9 @@ export const ordinanceApi = {
     needs_revision_filter?: string
     revision_type?: string
     exclude_other_law_revision?: boolean
+    review_result_filter?: string
+    status?: string
+    revision_status_filter?: string
   }) => {
     const { data } = await api.get('/ordinances/export', {
       params,
@@ -933,6 +936,8 @@ export const lawChangesApi = {
     sync_date?: string
     sync_batch_id?: string
     search?: string
+    changed_field?: string
+    revision_type?: string
   }) => {
     const response = await api.get('/law-changes/export', {
       params,

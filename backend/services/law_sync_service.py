@@ -39,7 +39,7 @@ class LawSearchResult:
         self.history_code = data.get("현행연혁코드")
         self.revision_type = data.get("제개정구분명")
         self.dept_name = data.get("소관부처명")
-        self.dept_code = int(data.get("소관부처코드", 0)) if data.get("소관부처코드") else None
+        self.dept_code = str(data.get("소관부처코드")) if data.get("소관부처코드") else None
         self.joint_dept_info = data.get("공동부령구분")
         self.joint_proclaimed_no = data.get("공포번호")  # 공동부령용
         self.self_other_law = data.get("자법타법여부")
@@ -1057,6 +1057,26 @@ class LawSyncService:
                             # SAVEPOINT 롤백 → 메인 트랜잭션 유효, 수정된 객체만 만료
                             self.db.expire(law)
                             failed += 1
+
+                            # 에러 기록을 law_changes에 저장
+                            if save_to_db:
+                                try:
+                                    async with self.db.begin_nested():
+                                        law_change = LawChange(
+                                            law_id=all_law_ids[idx],
+                                            sync_date=sync_date,
+                                            sync_batch_id=sync_batch_id,
+                                            api_status=ApiStatus.ERROR,
+                                            api_message=f"DB 저장 오류: {str(flush_err)[:400]}",
+                                            old_values=old_values if 'old_values' in dir() else None,
+                                            new_values=None,
+                                            dept_name=law.dept_name if law not in self.db.dirty else None,
+                                        )
+                                        self.db.add(law_change)
+                                        await self.db.flush()
+                                except Exception as e2:
+                                    logger.error("에러 기록 저장 실패 (law=%s): %s", law_name, e2)
+
                             yield {
                                 "type": "error",
                                 "current": current,
@@ -1175,6 +1195,24 @@ class LawSyncService:
                         "법령 동기화 오류 (law=%s): %s", law_name, e, exc_info=True,
                     )
                     failed += 1
+
+                    # 에러 기록을 law_changes에 저장
+                    if save_to_db:
+                        try:
+                            async with self.db.begin_nested():
+                                law_change = LawChange(
+                                    law_id=all_law_ids[idx],
+                                    sync_date=sync_date,
+                                    sync_batch_id=sync_batch_id,
+                                    api_status=ApiStatus.ERROR,
+                                    api_message=f"동기화 오류: {str(e)[:400]}",
+                                    new_values=None,
+                                )
+                                self.db.add(law_change)
+                                await self.db.flush()
+                        except Exception as e2:
+                            logger.error("에러 기록 저장 실패 (law=%s): %s", law_name, e2)
+
                     yield {
                         "type": "error",
                         "current": current,
