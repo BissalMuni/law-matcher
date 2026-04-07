@@ -11,6 +11,9 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy Korean font for PDF generation
+COPY fonts/malgun.ttf /app/fonts/malgun.ttf
+
 # Copy application into backend subdirectory for proper imports
 COPY . ./backend/
 

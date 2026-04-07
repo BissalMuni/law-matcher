@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Steps, Card, Button, Space, Typography, Table, Tag, Input, Select,
   Statistic, Row, Col, Progress, Modal, Form, message, Popconfirm,
-  Tabs, Badge, Checkbox, Alert, Spin, Divider,
+  Tabs, Badge, Checkbox, Alert, Spin, Divider, Tooltip,
 } from 'antd'
 import {
   PlayCircleOutlined, DownloadOutlined, DeleteOutlined,
@@ -395,7 +395,7 @@ function Step1Panel({ jobId, job, counts }: { jobId: number; job: BatchJob; coun
     <div>
       <Alert
         type="info"
-        message={`필터 조건: ${job.filter_params ? JSON.stringify(job.filter_params) : '전체'}`}
+        message="등록된 자치법규 중 검토 대상을 선정합니다. 상위법령이 매핑된 조례/규칙이 자동으로 포함됩니다."
         style={{ marginBottom: 16 }}
       />
 
@@ -561,31 +561,52 @@ function StepExecutionPanel({
 
 function Step2Panel({ jobId, job, counts }: { jobId: number; job: BatchJob; counts?: BatchStepCounts }) {
   return (
-    <StepExecutionPanel
-      jobId={jobId} job={job} step="step2" stepNum={2} counts={counts}
-      passLabel="개정대상" failLabel="해당없음"
-      passKey="needs_revision" failKey="no_revision"
-    />
+    <div>
+      <Alert
+        type="info"
+        message="상위법령의 최근 개정 여부를 확인하여, 조례 개정이 필요한 대상을 판별합니다."
+        style={{ marginBottom: 16 }}
+      />
+      <StepExecutionPanel
+        jobId={jobId} job={job} step="step2" stepNum={2} counts={counts}
+        passLabel="개정대상" failLabel="해당없음"
+        passKey="needs_revision" failKey="no_revision"
+      />
+    </div>
   )
 }
 
 function Step3Panel({ jobId, job, counts }: { jobId: number; job: BatchJob; counts?: BatchStepCounts }) {
   return (
-    <StepExecutionPanel
-      jobId={jobId} job={job} step="step3" stepNum={3} counts={counts}
-      passLabel="데이터확보" failLabel="데이터없음"
-      passKey="collected" failKey="no_data"
-    />
+    <div>
+      <Alert
+        type="info"
+        message="개정 대상 법령의 제·개정이유, 개정문 등 AI 분석에 필요한 데이터를 법제처에서 수집합니다."
+        style={{ marginBottom: 16 }}
+      />
+      <StepExecutionPanel
+        jobId={jobId} job={job} step="step3" stepNum={3} counts={counts}
+        passLabel="데이터확보" failLabel="데이터없음"
+        passKey="collected" failKey="no_data"
+      />
+    </div>
   )
 }
 
 function Step4Panel({ jobId, job, counts }: { jobId: number; job: BatchJob; counts?: BatchStepCounts }) {
   return (
-    <StepExecutionPanel
-      jobId={jobId} job={job} step="step4" stepNum={4} counts={counts}
-      passLabel="개정필요" failLabel="개정불필요"
-      passKey="needs_revision" failKey="no_revision"
-    />
+    <div>
+      <Alert
+        type="info"
+        message="수집된 데이터를 바탕으로 AI가 조례별 개정 필요성을 분석하고, 영향받는 조문과 검토 의견을 생성합니다."
+        style={{ marginBottom: 16 }}
+      />
+      <StepExecutionPanel
+        jobId={jobId} job={job} step="step4" stepNum={4} counts={counts}
+        passLabel="개정필요" failLabel="개정불필요"
+        passKey="needs_revision" failKey="no_revision"
+      />
+    </div>
   )
 }
 
@@ -612,15 +633,22 @@ function Step5Panel({ jobId, job }: { jobId: number; job: BatchJob }) {
 
   return (
     <div>
+      <Alert
+        type="info"
+        message="전체 분석 결과를 종합하여 보고서를 생성하고, Excel·Word·PDF 형식으로 다운로드할 수 있습니다."
+        style={{ marginBottom: 16 }}
+      />
       <Space style={{ marginBottom: 16 }}>
-        <Button
-          type="primary"
-          icon={<FileTextOutlined />}
-          onClick={generateReport}
-          loading={loading}
-        >
-          보고서 생성
-        </Button>
+        <Tooltip title="각 단계의 분석 결과를 집계하여 보고서 데이터를 생성합니다. 이미 생성된 경우 최신 데이터로 갱신됩니다.">
+          <Button
+            type="primary"
+            icon={<FileTextOutlined />}
+            onClick={generateReport}
+            loading={loading}
+          >
+            보고서 생성
+          </Button>
+        </Tooltip>
         <Button
           icon={<DownloadOutlined />}
           onClick={() => batchApi.exportExcel(jobId)}

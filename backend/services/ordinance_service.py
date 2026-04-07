@@ -412,7 +412,7 @@ class OrdinanceService:
 
         # 법령명으로 DB 검색 (법령유형은 프론트/법제처 간 명칭 차이가 있으므로 제외)
         result = await self.db.execute(
-            select(Law).where(Law.law_name == law_name)
+            select(Law).where(Law.law_name == law_name).limit(1)
         )
         law = result.scalar_one_or_none()
 

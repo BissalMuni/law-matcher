@@ -199,7 +199,7 @@ class LlmServiceUnavailableError(Exception):
 async def get_active_llm_client(db: AsyncSession) -> tuple[LlmClient, LlmProvider]:
     """DB에서 활성 프로바이더를 조회하여 해당 클라이언트와 프로바이더 정보를 반환"""
     result = await db.execute(
-        select(LlmProvider).where(LlmProvider.is_active == True)
+        select(LlmProvider).where(LlmProvider.is_active == True).limit(1)
     )
     provider = result.scalar_one_or_none()
 

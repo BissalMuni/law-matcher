@@ -253,7 +253,7 @@ class BatchProcessingService:
                 select(LlmAnalysisResult).where(
                     LlmAnalysisResult.ordinance_id == item.ordinance_id,
                     LlmAnalysisResult.law_id == mapping.law.id,
-                )
+                ).order_by(LlmAnalysisResult.law_proclaimed_date.desc()).limit(1)
             )
             ai = ai_result.scalar_one_or_none()
             if ai:
@@ -504,7 +504,7 @@ class BatchProcessingService:
                                 LlmAnalysisResult.ordinance_id == item.ordinance_id,
                                 LlmAnalysisResult.law_id == mapping.law.id,
                                 LlmAnalysisResult.status == "success",
-                            )
+                            ).order_by(LlmAnalysisResult.law_proclaimed_date.desc()).limit(1)
                         )
                         existing_result = existing.scalar_one_or_none()
                         if existing_result:
@@ -765,7 +765,7 @@ class BatchProcessingService:
                             LlmAnalysisResult.ordinance_id == item.ordinance_id,
                             LlmAnalysisResult.law_id == mapping.law.id,
                             LlmAnalysisResult.status == "success",
-                        )
+                        ).order_by(LlmAnalysisResult.law_proclaimed_date.desc()).limit(1)
                     )
                     ai = ar.scalar_one_or_none()
                     if ai:
