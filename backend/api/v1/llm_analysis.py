@@ -97,6 +97,27 @@ async def ai_analyze(
         )
 
 
+@router.delete("/{ordinance_id}/ai-results/{law_id}")
+async def delete_ai_results(
+    ordinance_id: int,
+    law_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """AI 분석 결과 삭제 — 해당 조례+법령의 모든 분석 결과 삭제"""
+    from sqlalchemy import select, delete
+    from backend.models.llm_analysis_result import LlmAnalysisResult
+
+    result = await db.execute(
+        delete(LlmAnalysisResult).where(
+            LlmAnalysisResult.ordinance_id == ordinance_id,
+            LlmAnalysisResult.law_id == law_id,
+        )
+    )
+    await db.commit()
+    return {"deleted": result.rowcount}
+
+
 @router.get("/{ordinance_id}/ai-results", response_model=AiResultsResponse)
 async def get_ai_results(
     ordinance_id: int,

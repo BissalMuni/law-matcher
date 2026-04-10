@@ -484,7 +484,17 @@ export default function OrdinanceDetail() {
         </Button>
       </Space>
 
-      <Title level={4}>{ordinance?.name}</Title>
+      <Title level={4}>
+        {ordinance?.name ? (
+          <a
+            href={`https://www.law.go.kr/자치법규/${encodeURIComponent(ordinance.name)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {ordinance.name} <LinkOutlined style={{ fontSize: '0.7em' }} />
+          </a>
+        ) : null}
+      </Title>
 
       {!detectionAlertDismissed && !!detectionResults?.results?.some((result: DetectionResult) => result.needs_revision) && (
         <Alert
@@ -519,7 +529,9 @@ export default function OrdinanceDetail() {
                 <Tag color={
                   ordinance.revision_status === '검토대기' ? 'warning' :
                     ordinance.revision_status === '검토중' ? 'processing' :
-                      ordinance.revision_status === '개정확정' ? 'error' : 'default'
+                      ordinance.revision_status === '재검토중' ? 'error' :
+                        ordinance.revision_status === '개정확정' ? 'error' :
+                          ordinance.revision_status === '검토완료' ? 'blue' : 'default'
                 }>
                   {ordinance.revision_status}
                 </Tag>
@@ -699,7 +711,7 @@ export default function OrdinanceDetail() {
         title="검토결과"
         style={{ marginBottom: 16 }}
         extra={
-          ordinance?.revision_status === '검토중' ? (
+          (ordinance?.revision_status === '검토중' || ordinance?.revision_status === '재검토중') ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAddReview}>
               검토의견 추가
             </Button>

@@ -510,6 +510,11 @@ export const aiApi = {
     const { data } = await api.get(`/ordinances/${ordinanceId}/ai-results`, { params })
     return data
   },
+
+  deleteResults: async (ordinanceId: number, lawId: number) => {
+    const { data } = await api.delete(`/ordinances/${ordinanceId}/ai-results/${lawId}`)
+    return data
+  },
 }
 
 // Admin API (LLM 프로바이더 관리)

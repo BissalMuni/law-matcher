@@ -9,7 +9,7 @@ import pandas as pd
 from datetime import datetime, date
 from typing import Optional, List
 from fastapi import UploadFile
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,6 +18,7 @@ from backend.models.department import Department
 from backend.models.law import Law
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.models.ordinance_review import OrdinanceReview
+from backend.models.revision_detection_result import RevisionDetectionResult
 from backend.core.exceptions import NotFoundError
 from backend.schemas.ordinance import OrdinanceReviewCreate, OrdinanceReviewUpdate
 from backend.external.moleg_client import MolegClient
@@ -117,55 +118,92 @@ class OrdinanceService:
             query = query.where(Ordinance.no_parent_law == True)
 
         # 개정대상 필터
+        # 로직: 2단계(승인된 검토의견)가 있으면 최종값, 없으면 1단계(자동판별) 사용
+        # 여러 법령 중 하나라도 "개정필요"면 전체 "개정필요"
         if needs_revision_filter:
-            # 승인된 "개정불필요" 리뷰가 있는 조례 제외용 서브쿼리
-            approved_no_revision_subquery = (
+            has_mapping_subquery = select(OrdinanceLawMapping.ordinance_id).distinct()
+
+            # 승인된 "개정필요" 검토가 있는 조례 (하나라도 있으면 개정필요)
+            approved_revision_needed_subquery = (
                 select(OrdinanceReview.ordinance_id)
                 .where(OrdinanceReview.approval_status == "approved")
-                .where(OrdinanceReview.review_result == "개정불필요")
+                .where(OrdinanceReview.review_result == "개정필요")
                 .distinct()
             )
-            # 상위법령이 있는 조례만 (매핑 존재)
-            has_mapping_subquery = select(OrdinanceLawMapping.ordinance_id).distinct()
+            # 승인된 검토가 존재하는 조례
+            has_approved_review_subquery = (
+                select(OrdinanceReview.ordinance_id)
+                .where(OrdinanceReview.approval_status == "approved")
+                .distinct()
+            )
+
+            # 1단계 자동판별: 판별 결과 또는 시행일 비교
+            detection_revision_subquery = (
+                select(RevisionDetectionResult.ordinance_id)
+                .where(RevisionDetectionResult.needs_revision == True)
+                .distinct()
+            )
+            has_detection_subquery = (
+                select(RevisionDetectionResult.ordinance_id).distinct()
+            )
+            fallback_revision_subquery = (
+                select(OrdinanceLawMapping.ordinance_id)
+                .join(Law, OrdinanceLawMapping.law_id == Law.id)
+                .where(Law.enforced_date.isnot(None))
+            )
+            if exclude_other_law_revision:
+                fallback_revision_subquery = fallback_revision_subquery.where(Law.revision_type != '타법개정')
+            fallback_revision_subquery = (
+                fallback_revision_subquery
+                .group_by(OrdinanceLawMapping.ordinance_id)
+                .having(func.max(Law.enforced_date) > Ordinance.enacted_date)
+            )
+
             if needs_revision_filter == "needs_revision":
-                # 상위법령 시행일이 조례 공포일보다 최신인 경우
-                revision_subquery = (
-                    select(OrdinanceLawMapping.ordinance_id)
-                    .join(Law, OrdinanceLawMapping.law_id == Law.id)
-                    .where(Law.enforced_date.isnot(None))
-                )
-                if exclude_other_law_revision:
-                    revision_subquery = revision_subquery.where(Law.revision_type != '타법개정')
-                revision_subquery = (
-                    revision_subquery
-                    .group_by(OrdinanceLawMapping.ordinance_id)
-                    .having(func.max(Law.enforced_date) > Ordinance.enacted_date)
-                )
                 query = query.where(
                     Ordinance.id.in_(has_mapping_subquery),
-                    Ordinance.enacted_date.isnot(None),
-                    Ordinance.id.in_(revision_subquery),
-                    # 승인된 "개정불필요" 검토가 있는 조례는 제외
-                    Ordinance.id.notin_(approved_no_revision_subquery),
+                    or_(
+                        # 2단계: 승인된 검토 중 하나라도 "개정필요"
+                        Ordinance.id.in_(approved_revision_needed_subquery),
+                        # 1단계: 승인된 검토 없고, 자동판별이 개정필요
+                        and_(
+                            Ordinance.id.notin_(has_approved_review_subquery),
+                            or_(
+                                Ordinance.id.in_(detection_revision_subquery),
+                                and_(
+                                    Ordinance.id.notin_(has_detection_subquery),
+                                    Ordinance.enacted_date.isnot(None),
+                                    Ordinance.id.in_(fallback_revision_subquery),
+                                ),
+                            ),
+                        ),
+                    ),
                 )
             elif needs_revision_filter == "no_revision":
-                # 상위법령 시행일이 조례 공포일 이하인 경우
-                revision_subquery = (
-                    select(OrdinanceLawMapping.ordinance_id)
-                    .join(Law, OrdinanceLawMapping.law_id == Law.id)
-                    .where(Law.enforced_date.isnot(None))
-                )
-                if exclude_other_law_revision:
-                    revision_subquery = revision_subquery.where(Law.revision_type != '타법개정')
-                revision_subquery = (
-                    revision_subquery
-                    .group_by(OrdinanceLawMapping.ordinance_id)
-                    .having(func.max(Law.enforced_date) > Ordinance.enacted_date)
-                )
                 query = query.where(
                     Ordinance.id.in_(has_mapping_subquery),
-                    Ordinance.enacted_date.isnot(None),
-                    Ordinance.id.notin_(revision_subquery),
+                    or_(
+                        # 2단계: 승인된 검토가 있고, 모두 "개정불필요"
+                        and_(
+                            Ordinance.id.in_(has_approved_review_subquery),
+                            Ordinance.id.notin_(approved_revision_needed_subquery),
+                        ),
+                        # 1단계: 승인된 검토 없고, 자동판별이 개정불필요
+                        and_(
+                            Ordinance.id.notin_(has_approved_review_subquery),
+                            or_(
+                                and_(
+                                    Ordinance.id.in_(has_detection_subquery),
+                                    Ordinance.id.notin_(detection_revision_subquery),
+                                ),
+                                and_(
+                                    Ordinance.id.notin_(has_detection_subquery),
+                                    Ordinance.enacted_date.isnot(None),
+                                    Ordinance.id.notin_(fallback_revision_subquery),
+                                ),
+                            ),
+                        ),
+                    ),
                 )
 
         # 검토 상태 필터 (revision_status 컬럼 기반)
@@ -192,8 +230,8 @@ class OrdinanceService:
                     .group_by(OrdinanceReview.ordinance_id)
                     .subquery()
                 )
-                matched_subquery = (
-                    select(OrdinanceReview.ordinance_id)
+                latest_review_join = (
+                    select(OrdinanceReview.ordinance_id, OrdinanceReview.review_result, OrdinanceReview.approval_status)
                     .join(
                         latest_review_subquery,
                         and_(
@@ -201,9 +239,12 @@ class OrdinanceService:
                             OrdinanceReview.created_at == latest_review_subquery.c.max_created,
                         )
                     )
-                    .where(OrdinanceReview.review_result == review_result_filter)
                 )
-                query = query.where(Ordinance.id.in_(matched_subquery))
+                if review_result_filter == "반려":
+                    matched_subquery = latest_review_join.where(OrdinanceReview.approval_status == "rejected")
+                else:
+                    matched_subquery = latest_review_join.where(OrdinanceReview.review_result == review_result_filter)
+                query = query.where(Ordinance.id.in_(select(matched_subquery.subquery().c.ordinance_id)))
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
@@ -236,44 +277,67 @@ class OrdinanceService:
             )
             law_revision_types = [row[0] for row in law_revision_types_result.all()]
 
-            # 개정여부: 상위법령 중 가장 최근 시행일이 조례 공포일보다 최신이면 1(빨간불), 아니면 0(초록불)
+            # === 1단계: 자동판별 (시스템 일자 비교) ===
             needs_revision = None
-            if parent_law_count > 0 and ordinance.enacted_date:
-                enforced_query = (
-                    select(func.max(Law.enforced_date))
-                    .select_from(OrdinanceLawMapping)
-                    .join(Law, OrdinanceLawMapping.law_id == Law.id)
-                    .where(OrdinanceLawMapping.ordinance_id == ordinance.id)
-                    .where(Law.enforced_date.isnot(None))
-                )
-                if exclude_other_law_revision:
-                    enforced_query = enforced_query.where(Law.revision_type != '타법개정')
-                max_enforced_date = await self.db.scalar(enforced_query)
-                if max_enforced_date:
-                    needs_revision = 1 if max_enforced_date > ordinance.enacted_date else 0
+            if parent_law_count > 0:
+                detection_count = await self.db.scalar(
+                    select(func.count())
+                    .select_from(RevisionDetectionResult)
+                    .where(RevisionDetectionResult.ordinance_id == ordinance.id)
+                ) or 0
+                if detection_count > 0:
+                    # 판별 결과 존재: 하나라도 needs_revision=True이면 개정필요
+                    has_revision = await self.db.scalar(
+                        select(func.count())
+                        .select_from(RevisionDetectionResult)
+                        .where(RevisionDetectionResult.ordinance_id == ordinance.id)
+                        .where(RevisionDetectionResult.needs_revision == True)
+                    ) or 0
+                    needs_revision = 1 if has_revision > 0 else 0
+                elif ordinance.enacted_date:
+                    # 판별 결과 없음: 시행일 비교로 폴백
+                    enforced_query = (
+                        select(func.max(Law.enforced_date))
+                        .select_from(OrdinanceLawMapping)
+                        .join(Law, OrdinanceLawMapping.law_id == Law.id)
+                        .where(OrdinanceLawMapping.ordinance_id == ordinance.id)
+                        .where(Law.enforced_date.isnot(None))
+                    )
+                    if exclude_other_law_revision:
+                        enforced_query = enforced_query.where(Law.revision_type != '타법개정')
+                    max_enforced_date = await self.db.scalar(enforced_query)
+                    if max_enforced_date:
+                        needs_revision = 1 if max_enforced_date > ordinance.enacted_date else 0
 
-            # 최신 검토결과 조회
-            latest_review_result = await self.db.scalar(
-                select(OrdinanceReview.review_result)
+            # === 2단계: 검토의견 (AI분석→담당자검토→관리자승인) ===
+            # 승인된 검토의견이 있으면 2단계가 최종값
+            # 여러 법령에 대한 검토 중 하나라도 "개정필요"면 전체 "개정필요"
+            latest_review_result = None
+            review_rows = (await self.db.execute(
+                select(OrdinanceReview.review_result, OrdinanceReview.approval_status)
                 .where(OrdinanceReview.ordinance_id == ordinance.id)
                 .order_by(OrdinanceReview.created_at.desc())
-                .limit(1)
-            )
+            )).all()
+            if review_rows:
+                if review_rows[0].approval_status == "rejected":
+                    latest_review_result = "반려"
+                else:
+                    approved_results = [
+                        r.review_result for r in review_rows
+                        if r.approval_status == "approved"
+                    ]
+                    if any(r == "개정필요" for r in approved_results):
+                        latest_review_result = "개정필요"
+                    elif approved_results:
+                        latest_review_result = approved_results[0]
+                    else:
+                        latest_review_result = review_rows[0].review_result
 
-            # 승인된 검토결과로 needs_revision 오버라이드
-            approved_result = (await self.db.execute(
-                select(OrdinanceReview.review_result)
-                .where(OrdinanceReview.ordinance_id == ordinance.id)
-                .where(OrdinanceReview.approval_status == "approved")
-                .order_by(OrdinanceReview.approved_at.desc())
-                .limit(1)
-            )).scalar_one_or_none()
-
-            if approved_result:
-                if approved_result == "개정불필요":
-                    needs_revision = 0  # 초록불
-                elif approved_result == "개정필요":
-                    needs_revision = 2  # 주황불 (개정필요 확정)
+            # 2단계 결과가 있으면 1단계를 오버라이드 (최종값)
+            if latest_review_result == "개정불필요":
+                needs_revision = 0  # 초록불
+            elif latest_review_result == "개정필요":
+                needs_revision = 2  # 주황불 (개정필요 확정)
 
             # Convert to dict and add count
             ordinance_dict = {
@@ -1429,7 +1493,7 @@ class OrdinanceService:
                         mapping.reviewed_law_date = mapping.law.proclaimed_date
 
             elif approval_status == "rejected":
-                ordinance.revision_status = "검토대기"
+                ordinance.revision_status = "재검토중"  # 반려 → 재검토중 (빨간색 표시, 담당자가 바로 새 검토의견 등록 가능)
 
         await self.db.commit()
 

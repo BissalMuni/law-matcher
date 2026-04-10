@@ -1,8 +1,7 @@
-import { Button, message, Popconfirm, Tooltip } from 'antd'
-import { ExperimentOutlined, LoadingOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Button, message, Popconfirm, Space, Tooltip } from 'antd'
+import { DeleteOutlined, ExperimentOutlined, LoadingOutlined } from '@ant-design/icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiApi } from '../../services/api'
-import { useAuth } from '../../contexts/AuthContext'
 
 interface AiAnalysisButtonProps {
   ordinanceId: number
@@ -17,7 +16,7 @@ interface AiAnalysisButtonProps {
 /**
  * "AI 분석" 버튼 — 1회 클릭으로 통합 분석 실행
  * FR-011: 담당자 명시적 요청으로만 수행
- * FR-012: 완료 시 비활성화 (관리자는 재분석 가능)
+ * FR-012: 완료 시 비활성화 (삭제 후 재분석 가능)
  */
 export default function AiAnalysisButton({
   ordinanceId,
@@ -27,14 +26,16 @@ export default function AiAnalysisButton({
   onSuccess,
 }: AiAnalysisButtonProps) {
   const queryClient = useQueryClient()
-  const { user } = useAuth()
-  const isAdmin = user?.user_type === 'ADMIN'
 
-  const mutation = useMutation({
-    mutationFn: (force: boolean = false) => aiApi.analyze(ordinanceId, lawId, force),
-    onSuccess: () => {
-      message.success('AI 분석이 완료되었습니다')
-      queryClient.invalidateQueries({ queryKey: ['ai-results', ordinanceId] })
+  const analyzeMutation = useMutation({
+    mutationFn: () => aiApi.analyze(ordinanceId, lawId, false),
+    onSuccess: (data: any) => {
+      if (data?.status === 'failed') {
+        message.error(data?.error_message || 'AI 분석에 실패했습니다. 직접 검토해 주세요')
+      } else {
+        message.success('AI 분석이 완료되었습니다')
+      }
+      queryClient.invalidateQueries({ queryKey: ['ai-results', String(ordinanceId)] })
       onSuccess?.()
     },
     onError: (error: any) => {
@@ -44,49 +45,62 @@ export default function AiAnalysisButton({
     },
   })
 
-  // 관리자는 항상 실행 가능, 일반 사용자는 성공 결과 있으면 비활성화
-  const isDisabled = !isAdmin && hasExistingResult
+  const deleteMutation = useMutation({
+    mutationFn: () => aiApi.deleteResults(ordinanceId, lawId),
+    onSuccess: () => {
+      message.success('기존 분석 결과가 삭제되었습니다')
+      queryClient.invalidateQueries({ queryKey: ['ai-results', String(ordinanceId)] })
+    },
+    onError: () => {
+      message.error('분석 결과 삭제에 실패했습니다')
+    },
+  })
 
-  const getTooltip = () => {
-    if (hasExistingResult && isAdmin) return 'AI 분석 완료 — 재분석 가능'
-    if (hasExistingResult) return 'AI 분석이 이미 완료되었습니다'
-    if (hasFailedResult) return '이전 분석 실패 — 재시도 가능'
-    return 'AI가 개정내용 요약과 검토의견 초안을 생성합니다'
-  }
+  const isPending = analyzeMutation.isPending || deleteMutation.isPending
 
-  // 관리자가 이미 완료된 분석을 재실행할 때는 확인 팝업
-  if (hasExistingResult && isAdmin) {
+  if (hasExistingResult) {
     return (
-      <Popconfirm
-        title="AI 재분석"
-        description="기존 분석 결과를 삭제하고 다시 분석합니다."
-        onConfirm={() => mutation.mutate(true)}
-        okText="재분석"
-        cancelText="취소"
-      >
-        <Tooltip title={getTooltip()}>
+      <Space size="small">
+        <Tooltip title="AI 분석이 이미 완료되었습니다">
           <Button
-            icon={mutation.isPending ? <LoadingOutlined /> : <ReloadOutlined />}
-            loading={mutation.isPending}
-            disabled={mutation.isPending}
+            icon={<ExperimentOutlined />}
+            disabled
           >
-            {mutation.isPending ? 'AI 분석 중...' : 'AI 재분석'}
+            AI 분석 완료
           </Button>
         </Tooltip>
-      </Popconfirm>
+        <Popconfirm
+          title="AI 분석 삭제"
+          description="기존 분석 결과를 삭제합니다. 재분석하려면 삭제 후 AI 분석 버튼을 다시 클릭하세요."
+          onConfirm={() => deleteMutation.mutate()}
+          okText="삭제"
+          cancelText="취소"
+          okButtonProps={{ danger: true }}
+        >
+          <Tooltip title="기존 분석 결과 삭제">
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              loading={deleteMutation.isPending}
+              disabled={isPending}
+              size="small"
+            />
+          </Tooltip>
+        </Popconfirm>
+      </Space>
     )
   }
 
   return (
-    <Tooltip title={getTooltip()}>
+    <Tooltip title={hasFailedResult ? '이전 분석 실패 — 재시도 가능' : 'AI가 개정내용 요약과 검토의견 초안을 생성합니다'}>
       <Button
-        type={hasExistingResult ? 'default' : 'primary'}
-        icon={mutation.isPending ? <LoadingOutlined /> : <ExperimentOutlined />}
-        onClick={() => mutation.mutate(false)}
-        loading={mutation.isPending}
-        disabled={isDisabled || mutation.isPending}
+        type="primary"
+        icon={isPending ? <LoadingOutlined /> : <ExperimentOutlined />}
+        onClick={() => analyzeMutation.mutate()}
+        loading={analyzeMutation.isPending}
+        disabled={isPending}
       >
-        {mutation.isPending ? 'AI 분석 중...' : hasExistingResult ? 'AI 분석 완료' : 'AI 분석'}
+        {analyzeMutation.isPending ? 'AI 분석 중...' : 'AI 분석'}
       </Button>
     </Tooltip>
   )

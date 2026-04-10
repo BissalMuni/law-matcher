@@ -87,17 +87,27 @@ class LlmAnalysisService:
             raise ValueError("해당 법령과 조례의 연결 정보를 찾을 수 없습니다")
 
         # 4. 1회 실행 검증 (UNIQUE + status 확인)
+        #    현재 proclaimed_date 기준으로 기존 결과 조회
+        #    이전 공포일의 결과는 이력으로 보존
         existing = await self._get_existing_result(
             ordinance_id, law_id, law.proclaimed_date
         )
-        if existing and existing.status == "success":
-            if force:
-                await self.db.delete(existing)
+        if force:
+            # 관리자 재분석: 같은 ordinance+law의 모든 결과 삭제 (공포일 변경/잘못된 입력 대응)
+            all_existing = (await self.db.execute(
+                select(LlmAnalysisResult).where(
+                    LlmAnalysisResult.ordinance_id == ordinance_id,
+                    LlmAnalysisResult.law_id == law_id,
+                )
+            )).scalars().all()
+            for old in all_existing:
+                await self.db.delete(old)
+            if all_existing:
                 await self.db.flush()
-            else:
-                raise ConflictError("이미 AI 분석이 완료되었습니다", existing.id)
-        # 실패/중단(pending) 건은 재시도 허용 — 기존 레코드 삭제 후 재생성
-        if existing and existing.status in ("failed", "pending"):
+        elif existing and existing.status == "success":
+            raise ConflictError("이미 AI 분석이 완료되었습니다", existing.id)
+        elif existing and existing.status in ("failed", "pending"):
+            # 실패/중단 건은 재시도 허용
             await self.db.delete(existing)
             await self.db.flush()
 
@@ -211,7 +221,18 @@ class LlmAnalysisService:
 
         except Exception as e:
             result.status = "failed"
-            result.error_message = f"AI 분석 실패: {str(e)}"
+            error_str = str(e)
+            # 사용자에게 보여줄 메시지는 간결하게, 원문은 로그에만 기록
+            if "credit balance" in error_str or "billing" in error_str.lower():
+                result.error_message = "AI 서비스 크레딧이 부족합니다. 관리자에게 문의하세요."
+            elif "rate limit" in error_str.lower() or "429" in error_str:
+                result.error_message = "AI 요청이 너무 많습니다. 잠시 후 다시 시도하세요."
+            elif "timeout" in error_str.lower():
+                result.error_message = "AI 응답 시간이 초과되었습니다. 다시 시도하세요."
+            elif "401" in error_str or "authentication" in error_str.lower() or "api key" in error_str.lower():
+                result.error_message = "AI 서비스 인증에 실패했습니다. 관리자에게 문의하세요."
+            else:
+                result.error_message = "AI 분석 중 오류가 발생했습니다. 다시 시도하거나 직접 검토해 주세요."
             logger.error(f"AI 분석 실패 (ord={ordinance_id}, law={law_id}): {e}")
 
         await self.db.flush()

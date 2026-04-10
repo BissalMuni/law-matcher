@@ -462,17 +462,43 @@ export default function OrdinanceList() {
       key: 'needs_revision',
       width: 80,
       align: 'center' as const,
-      render: (value: number | null) => {
+      render: (value: number | null, record: any) => {
         if (value === null || value === undefined) return '-'
-        const colorMap: Record<number, string> = {
-          0: '#52c41a',  // 초록: 개정불필요 (확정 또는 날짜 기준)
-          1: '#f5222d',  // 빨강: 개정대상 (미검토)
-          2: '#fa8c16',  // 주황: 개정필요 (확정)
+        const isAuto = !record.latest_review_result || value === 1
+        let color: string
+        let shape: 'circle' | 'pentagon'
+        if (value === 1) {
+          color = '#fa8c16'   // 주황: 개정필요 (자동판별)
+          shape = 'circle'
+        } else if (value === 2) {
+          color = '#f5222d'   // 빨강: 개정필요 (담당자 검토완료)
+          shape = 'pentagon'
+        } else if (isAuto) {
+          color = '#52c41a'   // 초록: 개정불필요 (자동판별)
+          shape = 'circle'
+        } else {
+          color = '#1890ff'   // 파랑: 개정불필요 (담당자 검토완료)
+          shape = 'pentagon'
+        }
+        if (shape === 'pentagon') {
+          return (
+            <span style={{
+              display: 'inline-block',
+              width: 24,
+              height: 24,
+              backgroundColor: color,
+              clipPath: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
+            }} />
+          )
         }
         return (
-          <span style={{ color: colorMap[value] || '#f5222d', fontSize: 48 }}>
-            ●
-          </span>
+          <span style={{
+            display: 'inline-block',
+            width: 24,
+            height: 24,
+            backgroundColor: color,
+            borderRadius: '50%',
+          }} />
         )
       },
     },
@@ -480,24 +506,47 @@ export default function OrdinanceList() {
       title: '검토의견',
       dataIndex: 'latest_review_result',
       key: 'latest_review_result',
-      width: 100,
+      width: 120,
       align: 'center' as const,
       render: (value: string | null, record: any) => {
-        if (!value) return '-'
         const colorMap: Record<string, string> = {
           '개정필요': '#f5222d',
           '개정불필요': '#52c41a',
           '검토중': '#fa8c16',
+          '재검토중': '#f5222d',
+          '반려': '#f5222d',
           '보류': '#000000',
         }
-        return (
-          <a
-            onClick={() => navigate(`/ordinances/${record.id}`)}
-            style={{ color: colorMap[value] || '#333' }}
-          >
-            {value}
-          </a>
-        )
+        // 2단계 검토의견이 있으면 표시
+        if (value) {
+          const isReviewed = value === '개정필요' || value === '개정불필요'
+          return (
+            <a
+              onClick={() => navigate(`/ordinances/${record.id}`)}
+              style={{ color: colorMap[value] || '#333' }}
+            >
+              {value}{isReviewed && <div style={{ fontSize: 11, color: '#888' }}>담당자 검토완료</div>}
+            </a>
+          )
+        }
+        // 1단계 자동판별 결과만 있는 경우
+        if (record.needs_revision === 1) {
+          return (
+            <a onClick={() => navigate(`/ordinances/${record.id}`)} style={{ color: '#f5222d' }}>
+              개정필요
+              <div style={{ fontSize: 11, color: '#888' }}>자동판별</div>
+            </a>
+          )
+        }
+        if (record.needs_revision === 0) {
+          return (
+            <a onClick={() => navigate(`/ordinances/${record.id}`)} style={{ color: '#52c41a' }}>
+              개정불필요
+              <div style={{ fontSize: 11, color: '#888' }}>자동판별</div>
+            </a>
+          )
+        }
+        return '-'
       },
     },
   ]
@@ -767,6 +816,8 @@ export default function OrdinanceList() {
                       { value: '개정필요', label: '개정필요' },
                       { value: '개정불필요', label: '개정불필요' },
                       { value: '검토중', label: '검토중' },
+                      { value: '재검토중', label: '재검토중' },
+                      { value: '반려', label: '반려' },
                       { value: '보류', label: '보류' },
                       { value: '미검토', label: '미검토' },
                     ]}
