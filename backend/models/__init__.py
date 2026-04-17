@@ -17,6 +17,7 @@ from backend.models.law_revision_reason import LawRevisionReason
 from backend.models.revision_detection_result import RevisionDetectionResult
 from backend.models.ordinance_text import OrdinanceText
 from backend.models.batch_job import BatchJob, BatchJobItem
+from backend.models.sync_settings import SyncSettings
 
 __all__ = [
     "User",
@@ -37,4 +38,5 @@ __all__ = [
     "OrdinanceText",
     "BatchJob",
     "BatchJobItem",
+    "SyncSettings",
 ]

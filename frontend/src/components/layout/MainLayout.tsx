@@ -60,11 +60,6 @@ const adminMenuItems = [
     label: "현황",
   },
   {
-    key: "/admin/settings",
-    icon: <SettingOutlined />,
-    label: "LLM 설정",
-  },
-  {
     key: "/admin/ai-analytics",
     icon: <ExperimentOutlined />,
     label: "AI 이력",
@@ -73,6 +68,11 @@ const adminMenuItems = [
     key: "/admin/detection-compare",
     icon: <DiffOutlined />,
     label: "탭 비교",
+  },
+  {
+    key: "/admin/settings",
+    icon: <SettingOutlined />,
+    label: "설정",
   },
 ];
 
@@ -158,7 +158,11 @@ export default function MainLayout() {
           }}
         >
           <h1
-            style={{ fontSize: collapsed ? 16 : 18, margin: 0, cursor: "pointer" }}
+            style={{
+              fontSize: collapsed ? 16 : 18,
+              margin: 0,
+              cursor: "pointer",
+            }}
             onClick={() => navigate("/ordinances")}
           >
             {collapsed ? "LM" : "Law Matcher"}

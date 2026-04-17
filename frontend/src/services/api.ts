@@ -538,6 +538,28 @@ export const adminApi = {
     const { data } = await api.get('/admin/ai-analytics', { params })
     return data
   },
+
+  getSyncSettings: async () => {
+    const { data } = await api.get('/admin/sync-settings')
+    return data as SyncSettingsResponse
+  },
+
+  updateSyncSettings: async (updateData: {
+    auto_sync_enabled?: boolean
+    interval_hours?: number
+  }) => {
+    const { data } = await api.patch('/admin/sync-settings', updateData)
+    return data as SyncSettingsResponse
+  },
+}
+
+export interface SyncSettingsResponse {
+  auto_sync_enabled: boolean
+  interval_hours: number
+  last_sync_at: string | null
+  next_sync_at: string | null
+  updated_at: string
+  updated_by: number | null
 }
 
 // Batch Processing API (일괄 개정검토)

@@ -218,5 +218,39 @@ def sync_laws_background() -> dict[str, Any]:
 
 @celery_app.task(name="backend.tasks.sync_all_laws_daily")
 def sync_all_laws_daily() -> dict[str, Any]:
-    """매일 9:00 자동 실행 - 전체 법령 동기화."""
+    """레거시 호환용. 스케줄러는 check_sync_schedule 사용."""
     return asyncio.run(_run_law_sync_with_progress())
+
+
+async def _check_and_run_sync() -> dict[str, Any]:
+    """DB의 SyncSettings 확인 후 자동 동기화 조건 충족 시 실행."""
+    from datetime import datetime, timedelta
+    from backend.models.sync_settings import SyncSettings
+
+    async with async_session() as db:
+        result = await db.execute(select(SyncSettings).where(SyncSettings.id == 1))
+        row = result.scalar_one_or_none()
+        if row is None or not row.auto_sync_enabled:
+            return {"skipped": "auto_sync_disabled"}
+
+        now = datetime.utcnow()
+        if row.next_sync_at is None or row.next_sync_at > now:
+            return {"skipped": "not_due", "next_sync_at": str(row.next_sync_at)}
+
+        row.last_sync_at = now
+        row.next_sync_at = now + timedelta(hours=row.interval_hours)
+        await db.commit()
+
+    logger.info("자동 동기화 실행: %s", now.isoformat())
+    sync_result = await _run_law_sync_with_progress()
+    return {"ran": True, "result": sync_result}
+
+
+@celery_app.task(name="backend.tasks.check_sync_schedule")
+def check_sync_schedule() -> dict[str, Any]:
+    """5분마다 실행 - SyncSettings 조회 후 자동 동기화 조건 충족 시 실행."""
+    try:
+        return asyncio.run(_check_and_run_sync())
+    except Exception as e:
+        logger.error("check_sync_schedule 실패: %s", e, exc_info=True)
+        raise

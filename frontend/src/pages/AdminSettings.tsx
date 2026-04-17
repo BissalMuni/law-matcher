@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Card, Table, Switch, InputNumber, Select, Input, Button, message, Tag, Space, Typography } from 'antd'
-import { CheckCircleOutlined, CloseCircleOutlined, SaveOutlined, CloudServerOutlined, DatabaseOutlined } from '@ant-design/icons'
+import { Card, Table, Switch, InputNumber, Select, Input, Button, message, Tag, Space, Tabs, Typography } from 'antd'
+import { CheckCircleOutlined, CloseCircleOutlined, SaveOutlined, CloudServerOutlined, DatabaseOutlined, SyncOutlined, ApiOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../services/api'
 import type { LlmProvider, LlmProviderListResponse } from '../types/api'
+import SyncSettingsTab from '../components/admin/SyncSettingsTab'
 
 const { Title, Text } = Typography
 
@@ -173,22 +174,37 @@ export default function AdminSettings() {
 
   return (
     <div>
-      <Title level={4}>LLM 설정</Title>
-      <Card>
-        <Table
-          dataSource={data?.providers || []}
-          columns={columns}
-          rowKey="id"
-          loading={isLoading}
-          pagination={false}
-          size="small"
-        />
-        <div style={{ marginTop: 16 }}>
-          <Text type="secondary">
-            활성 프로바이더는 1개만 설정할 수 있습니다. API 키는 서버 환경변수(ENV) 또는 DB에서 관리할 수 있습니다.
-          </Text>
-        </div>
-      </Card>
+      <Title level={4}>설정</Title>
+      <Tabs
+        items={[
+          {
+            key: 'llm',
+            label: <span><ApiOutlined /> LLM 설정</span>,
+            children: (
+              <Card>
+                <Table
+                  dataSource={data?.providers || []}
+                  columns={columns}
+                  rowKey="id"
+                  loading={isLoading}
+                  pagination={false}
+                  size="small"
+                />
+                <div style={{ marginTop: 16 }}>
+                  <Text type="secondary">
+                    활성 프로바이더는 1개만 설정할 수 있습니다. API 키는 서버 환경변수(ENV) 또는 DB에서 관리할 수 있습니다.
+                  </Text>
+                </div>
+              </Card>
+            ),
+          },
+          {
+            key: 'sync',
+            label: <span><SyncOutlined /> 동기화 설정</span>,
+            children: <SyncSettingsTab />,
+          },
+        ]}
+      />
     </div>
   )
 }

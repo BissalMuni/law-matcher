@@ -2,7 +2,6 @@
 Celery application configuration.
 """
 from celery import Celery
-from celery.schedules import crontab
 
 from backend.core.config import settings
 
@@ -23,12 +22,9 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
-    "sync-all-laws-daily": {
-        "task": "backend.tasks.sync_all_laws_daily",
-        "schedule": crontab(
-            hour=settings.CELERY_BEAT_SYNC_HOUR,
-            minute=settings.CELERY_BEAT_SYNC_MINUTE,
-        ),
+    "check-sync-schedule": {
+        "task": "backend.tasks.check_sync_schedule",
+        "schedule": 300.0,  # 5분마다 DB에서 자동 동기화 설정 확인
     },
 }
 

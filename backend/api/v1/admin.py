@@ -16,6 +16,7 @@ from backend.core.config import settings
 from backend.core.llm_models import AVAILABLE_MODELS
 from backend.models.user import User
 from backend.models.llm_provider import LlmProvider
+from backend.models.sync_settings import SyncSettings
 from backend.schemas.llm import (
     AvailableModel,
     LlmProviderResponse,
@@ -23,6 +24,7 @@ from backend.schemas.llm import (
     LlmProviderUpdate,
     AiAnalyticsResponse,
 )
+from backend.schemas.sync_settings import SyncSettingsResponse, SyncSettingsUpdate
 
 router = APIRouter()
 
@@ -414,3 +416,67 @@ async def get_ai_analytics(
 
     service = LlmAnalysisService(db)
     return await service.get_ai_analytics(start, end)
+
+
+async def _get_or_create_sync_settings(db: AsyncSession) -> SyncSettings:
+    result = await db.execute(select(SyncSettings).where(SyncSettings.id == 1))
+    settings_row = result.scalar_one_or_none()
+    if settings_row is None:
+        settings_row = SyncSettings(id=1, auto_sync_enabled=False, interval_hours=24)
+        db.add(settings_row)
+        await db.commit()
+        await db.refresh(settings_row)
+    return settings_row
+
+
+@router.get("/sync-settings", response_model=SyncSettingsResponse)
+async def get_sync_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """법령 자동 동기화 설정 조회 (관리자)"""
+    row = await _get_or_create_sync_settings(db)
+    return SyncSettingsResponse(
+        auto_sync_enabled=row.auto_sync_enabled,
+        interval_hours=row.interval_hours,
+        last_sync_at=row.last_sync_at,
+        next_sync_at=row.next_sync_at,
+        updated_at=row.updated_at,
+        updated_by=row.updated_by,
+    )
+
+
+@router.patch("/sync-settings", response_model=SyncSettingsResponse)
+async def update_sync_settings(
+    body: SyncSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """법령 자동 동기화 설정 변경 (관리자)"""
+    row = await _get_or_create_sync_settings(db)
+    now = datetime.utcnow()
+
+    if body.auto_sync_enabled is not None:
+        row.auto_sync_enabled = body.auto_sync_enabled
+    if body.interval_hours is not None:
+        row.interval_hours = body.interval_hours
+
+    if row.auto_sync_enabled:
+        base = row.last_sync_at or now
+        row.next_sync_at = base + timedelta(hours=row.interval_hours)
+    else:
+        row.next_sync_at = None
+
+    row.updated_at = now
+    row.updated_by = current_user.id
+    await db.commit()
+    await db.refresh(row)
+
+    return SyncSettingsResponse(
+        auto_sync_enabled=row.auto_sync_enabled,
+        interval_hours=row.interval_hours,
+        last_sync_at=row.last_sync_at,
+        next_sync_at=row.next_sync_at,
+        updated_at=row.updated_at,
+        updated_by=row.updated_by,
+    )
