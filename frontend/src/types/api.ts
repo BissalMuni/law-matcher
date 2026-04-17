@@ -30,6 +30,47 @@ export interface DashboardSummary {
   revision_completed_count: number
 }
 
+export interface RevisionTypeCount {
+  revision_type: string
+  count: number
+}
+
+export interface OrdinanceRevisionTree {
+  total_count: number
+  no_revision_count: number
+  needs_revision_count: number
+  by_revision_type: RevisionTypeCount[]
+}
+
+export interface LatestSyncStats {
+  sync_date: string | null
+  total_laws: number
+  by_revision_type: RevisionTypeCount[]
+}
+
+export interface DepartmentInputStats {
+  id: number
+  name: string
+  total_ordinances: number
+  ordinances_with_laws: number
+  ordinances_without_laws: number
+  progress_rate: number
+}
+
+export interface DepartmentInputStatsResponse {
+  total_ordinances: number
+  total_with_laws: number
+  total_without_laws: number
+  overall_progress_rate: number
+  departments: DepartmentInputStats[]
+}
+
+export interface LawChangeStatsResponse {
+  total: number
+  by_api_status: Record<string, number>
+  by_dept: Array<{ dept_name: string; total: number }>
+}
+
 // === 006-llm-review-assistant ===
 
 export interface AffectedOrdinanceArticle {
