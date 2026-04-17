@@ -313,6 +313,7 @@ class OrdinanceService:
             # 승인된 검토의견이 있으면 2단계가 최종값
             # 여러 법령에 대한 검토 중 하나라도 "개정필요"면 전체 "개정필요"
             latest_review_result = None
+            latest_approval_status = None
             review_rows = (await self.db.execute(
                 select(OrdinanceReview.review_result, OrdinanceReview.approval_status)
                 .where(OrdinanceReview.ordinance_id == ordinance.id)
@@ -321,6 +322,7 @@ class OrdinanceService:
             if review_rows:
                 if review_rows[0].approval_status == "rejected":
                     latest_review_result = "반려"
+                    latest_approval_status = "rejected"
                 else:
                     approved_results = [
                         r.review_result for r in review_rows
@@ -328,16 +330,22 @@ class OrdinanceService:
                     ]
                     if any(r == "개정필요" for r in approved_results):
                         latest_review_result = "개정필요"
+                        latest_approval_status = "approved"
                     elif approved_results:
                         latest_review_result = approved_results[0]
+                        latest_approval_status = "approved"
                     else:
                         latest_review_result = review_rows[0].review_result
+                        latest_approval_status = review_rows[0].approval_status
 
             # 2단계 결과가 있으면 1단계를 오버라이드 (최종값)
-            if latest_review_result == "개정불필요":
-                needs_revision = 0  # 초록불
-            elif latest_review_result == "개정필요":
-                needs_revision = 2  # 주황불 (개정필요 확정)
+            if latest_approval_status == "approved":
+                if latest_review_result == "개정불필요":
+                    needs_revision = 0  # 초록불 (관리자 승인)
+                elif latest_review_result == "개정필요":
+                    needs_revision = 2  # 빨강불 (관리자 승인)
+            elif latest_review_result in ("개정불필요", "개정필요"):
+                needs_revision = 3  # 주황불 오각형 (담당자 제출, 관리자 미승인)
 
             # Convert to dict and add count
             ordinance_dict = {

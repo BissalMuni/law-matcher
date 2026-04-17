@@ -462,34 +462,18 @@ export default function OrdinanceList() {
       key: 'needs_revision',
       width: 80,
       align: 'center' as const,
-      render: (value: number | null, record: any) => {
+      render: (value: number | null) => {
         if (value === null || value === undefined) return '-'
-        const isAuto = !record.latest_review_result || value === 1
         let color: string
-        let shape: 'circle' | 'pentagon'
-        if (value === 1) {
-          color = '#fa8c16'   // 주황: 개정필요 (자동판별)
-          shape = 'circle'
-        } else if (value === 2) {
-          color = '#f5222d'   // 빨강: 개정필요 (담당자 검토완료)
-          shape = 'pentagon'
-        } else if (isAuto) {
-          color = '#52c41a'   // 초록: 개정불필요 (자동판별)
-          shape = 'circle'
+        if (value === 1 || value === 2) {
+          // 빨강: 변경감지/검토중(자동판별 개정필요) 또는 개정확정(관리자 승인)
+          color = '#f5222d'
+        } else if (value === 3) {
+          // 주황: 담당자 제출 미승인 또는 관리자 반려(재검토중)
+          color = '#fa8c16'
         } else {
-          color = '#1890ff'   // 파랑: 개정불필요 (담당자 검토완료)
-          shape = 'pentagon'
-        }
-        if (shape === 'pentagon') {
-          return (
-            <span style={{
-              display: 'inline-block',
-              width: 24,
-              height: 24,
-              backgroundColor: color,
-              clipPath: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)',
-            }} />
-          )
+          // 초록: 개정불필요
+          color = '#52c41a'
         }
         return (
           <span style={{

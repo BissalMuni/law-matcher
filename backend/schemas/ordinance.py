@@ -299,7 +299,7 @@ class LawChangeResponse(BaseModel):
     old_values: Optional[dict] = None
     new_values: Optional[dict] = None
     dept_name: Optional[str] = None
-    dept_code: Optional[int] = None
+    dept_code: Optional[str] = None
     created_at: datetime
 
     class Config:

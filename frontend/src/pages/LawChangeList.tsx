@@ -55,7 +55,7 @@ interface LawChange {
   old_values: Record<string, any> | null
   new_values: Record<string, any> | null
   dept_name: string | null
-  dept_code: number | null
+  dept_code: string | null
   created_at: string
 }
 
@@ -1103,32 +1103,32 @@ export default function LawChangeList() {
                       {stats && (
                         <>
                           <Tag
-                            style={{ cursor: 'pointer' }}
-                            color={apiStatus === 'all' ? undefined : 'default'}
+                            style={{ cursor: 'pointer', fontWeight: apiStatus === 'all' ? 600 : 400 }}
+                            color={apiStatus === 'all' ? 'processing' : 'default'}
                             onClick={() => { setApiStatus('all'); setPage(1) }}
                           >전체 {stats.total}</Tag>
                           <Tag
-                            style={{ cursor: 'pointer' }}
+                            style={{ cursor: 'pointer', fontWeight: apiStatus === 'success' ? 600 : 400 }}
                             color={apiStatus === 'success' ? 'green' : 'default'}
                             onClick={() => { setApiStatus(apiStatus === 'success' ? 'all' : 'success'); setPage(1) }}
                           >변경감지 {stats.by_api_status?.success || 0}</Tag>
                           <Tag
-                            style={{ cursor: 'pointer' }}
+                            style={{ cursor: 'pointer', fontWeight: apiStatus === 'no_change' ? 600 : 400 }}
                             color={apiStatus === 'no_change' ? 'blue' : 'default'}
                             onClick={() => { setApiStatus(apiStatus === 'no_change' ? 'all' : 'no_change'); setPage(1) }}
                           >변경없음 {stats.by_api_status?.no_change || 0}</Tag>
                           <Tag
-                            style={{ cursor: 'pointer' }}
+                            style={{ cursor: 'pointer', fontWeight: apiStatus === 'no_response' ? 600 : 400 }}
                             color={apiStatus === 'no_response' ? 'red' : 'default'}
                             onClick={() => { setApiStatus(apiStatus === 'no_response' ? 'all' : 'no_response'); setPage(1) }}
                           >응답없음 {stats.by_api_status?.no_response || 0}</Tag>
                           <Tag
-                            style={{ cursor: 'pointer' }}
+                            style={{ cursor: 'pointer', fontWeight: apiStatus === 'not_found' ? 600 : 400 }}
                             color={apiStatus === 'not_found' ? 'orange' : 'default'}
                             onClick={() => { setApiStatus(apiStatus === 'not_found' ? 'all' : 'not_found'); setPage(1) }}
                           >미발견 {stats.by_api_status?.not_found || 0}</Tag>
                           <Tag
-                            style={{ cursor: 'pointer' }}
+                            style={{ cursor: 'pointer', fontWeight: apiStatus === 'error' ? 600 : 400 }}
                             color={apiStatus === 'error' ? 'volcano' : 'default'}
                             onClick={() => { setApiStatus(apiStatus === 'error' ? 'all' : 'error'); setPage(1) }}
                           >오류 {stats.by_api_status?.error || 0}</Tag>
