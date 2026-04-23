@@ -495,6 +495,32 @@ class OrdinanceService:
         api_result = await self._search_law_from_api(law_name)
 
         if api_result:
+            # 이름 표기 차이로 인한 중복 방지 — DB UNIQUE 제약 모두 사전 체크:
+            #   laws.law_id         UNIQUE  (법령 단위 고유키)
+            #   laws.law_serial_no  UNIQUE  (ix_laws_law_serial_no; 개정 단위 MST)
+            # 둘 중 하나라도 DB에 이미 있으면 그 row를 재사용해 새 row를 만들지 않음.
+            if api_result.law_id:
+                existing = (await self.db.execute(
+                    select(Law).where(Law.law_id == api_result.law_id).limit(1)
+                )).scalar_one_or_none()
+                if existing:
+                    logger.info(
+                        "중복 방지(law_id 일치): 입력 '%s' → law_id=%d 기존 row(id=%d, '%s') 재사용",
+                        law_name, api_result.law_id, existing.id, existing.law_name,
+                    )
+                    return existing
+
+            if api_result.law_serial_no:
+                existing = (await self.db.execute(
+                    select(Law).where(Law.law_serial_no == api_result.law_serial_no).limit(1)
+                )).scalar_one_or_none()
+                if existing:
+                    logger.info(
+                        "중복 방지(law_serial_no 일치): 입력 '%s' → law_serial_no=%d 기존 row(id=%d, '%s') 재사용",
+                        law_name, api_result.law_serial_no, existing.id, existing.law_name,
+                    )
+                    return existing
+
             # 법제처 API 결과로 정확한 정보의 법령 생성
             law = Law(
                 law_serial_no=api_result.law_serial_no,
