@@ -1,100 +1,108 @@
 """
 AI 분석 API 엔드포인트
-POST /ordinances/{id}/ai-analyze — AI 통합 분석 실행
-GET /ordinances/{id}/ai-results — AI 분석 결과 조회
+POST /ordinances/{id}/ai-analyze — Celery 태스크 enqueue (202 Accepted, task_id 반환)
+GET  /ordinances/ai-analyze/tasks/{task_id} — 태스크 상태/결과 폴링
+GET  /ordinances/{id}/ai-results — 저장된 AI 분석 결과 조회
 """
-import asyncio
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import get_db, get_current_user
 from backend.models.user import User
-from backend.schemas.llm import AiAnalyzeRequest, AiAnalyzeResponse, AiResultsResponse, AiResultItem
-from backend.services.llm_analysis_service import (
-    LlmAnalysisService,
-    ConflictError,
+from backend.schemas.llm import (
+    AiAnalyzeRequest,
+    AiAnalyzeResponse,
+    AiAnalyzeTaskAccepted,
+    AiAnalyzeTaskStatus,
+    AiResultsResponse,
+    AiResultItem,
 )
-from backend.services.llm_client import LlmServiceUnavailableError
-from backend.services.llm_rate_limiter import RateLimitExceededError
-from backend.core.config import settings
+from backend.services.llm_analysis_service import LlmAnalysisService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.post("/{ordinance_id}/ai-analyze", response_model=AiAnalyzeResponse)
+@router.post(
+    "/{ordinance_id}/ai-analyze",
+    response_model=AiAnalyzeTaskAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def ai_analyze(
     ordinance_id: int,
     body: AiAnalyzeRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    AI 통합 분석 실행 — 1회 호출로 개정내용 요약 + 검토의견 초안 동시 생성
-    30초 타임아웃, 동기 응답
+    AI 통합 분석 요청 — Celery 백그라운드 태스크로 분리.
+    즉시 202 Accepted + task_id를 반환하며, 클라이언트는
+    GET /ordinances/ai-analyze/tasks/{task_id} 로 상태/결과를 폴링한다.
     """
-    service = LlmAnalysisService(db)
+    from backend.tasks import ai_analyze_task
 
-    try:
-        # 관리자만 force 재분석 가능
-        force = body.force and current_user.user_type == "ADMIN"
-        result = await asyncio.wait_for(
-            service.analyze_ordinance(ordinance_id, body.law_id, force=force),
-            timeout=settings.LLM_TIMEOUT + 5,  # 약간의 여유
-        )
-        await db.commit()
-        return result
+    force = bool(body.force) and current_user.user_type == "ADMIN"
+    async_result = ai_analyze_task.delay(ordinance_id, body.law_id, force)
+    response.status_code = status.HTTP_202_ACCEPTED
+    return AiAnalyzeTaskAccepted(task_id=async_result.id, state="PENDING")
 
-    except asyncio.TimeoutError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="AI 분석 시간이 초과되었습니다. 다시 시도해 주세요",
+
+@router.get(
+    "/ai-analyze/tasks/{task_id}",
+    response_model=AiAnalyzeTaskStatus,
+)
+async def ai_analyze_status(
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """AI 분석 Celery 태스크 상태/결과 폴링."""
+    from backend.celery_app import celery_app
+
+    async_result = celery_app.AsyncResult(task_id)
+    state = async_result.state  # PENDING | STARTED | RETRY | SUCCESS | FAILURE
+
+    if state in ("PENDING", "STARTED", "RETRY"):
+        return AiAnalyzeTaskStatus(task_id=task_id, state=state, ready=False)
+
+    if state == "FAILURE":
+        # 예기치 못한 예외 — 워커가 raise 한 경우
+        einfo = async_result.info
+        error_detail = str(einfo) if einfo else "AI 분석 태스크 실패"
+        return AiAnalyzeTaskStatus(
+            task_id=task_id,
+            state=state,
+            ready=True,
+            error_code="UNEXPECTED",
+            error_detail=error_detail,
+            http_status=502,
         )
-    except ConflictError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"detail": str(e), "existing_result_id": e.existing_result_id},
+
+    # SUCCESS — 태스크 본체가 dict 를 반환. 성공/실패 분기.
+    payload = async_result.result or {}
+    if isinstance(payload, dict) and payload.get("ok"):
+        return AiAnalyzeTaskStatus(
+            task_id=task_id,
+            state=state,
+            ready=True,
+            result=AiAnalyzeResponse.model_validate(payload["result"]),
+            http_status=200,
         )
-    except LlmServiceUnavailableError as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(e),
-        )
-    except RateLimitExceededError as e:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(e),
-        )
-    except ValueError as e:
-        error_msg = str(e)
-        if "찾을 수 없습니다" in error_msg:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail=error_msg
-            )
-        elif "연결 정보" in error_msg:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg
-            )
-        elif "제개정이유" in error_msg:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=error_msg
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg
-            )
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"AI 분석 예외: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="AI 분석을 수행할 수 없습니다. 직접 검토해 주세요",
-        )
+
+    # 앱 레벨 에러 (ConflictError / RateLimit / ValueError 등)
+    return AiAnalyzeTaskStatus(
+        task_id=task_id,
+        state=state,
+        ready=True,
+        error_code=payload.get("error_code", "UNEXPECTED"),
+        error_detail=payload.get("error_detail"),
+        existing_result_id=payload.get("existing_result_id"),
+        http_status=payload.get("status_code", 500),
+    )
 
 
 @router.delete("/{ordinance_id}/ai-results/{law_id}")

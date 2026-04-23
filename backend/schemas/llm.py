@@ -46,6 +46,24 @@ class AiAnalyzeResponse(BaseModel):
         from_attributes = True
 
 
+class AiAnalyzeTaskAccepted(BaseModel):
+    """AI 분석 Celery 작업 enqueue 응답 (202)"""
+    task_id: str
+    state: str = "PENDING"
+
+
+class AiAnalyzeTaskStatus(BaseModel):
+    """AI 분석 태스크 상태 폴링 응답"""
+    task_id: str
+    state: str  # PENDING | STARTED | RETRY | SUCCESS | FAILURE
+    ready: bool
+    result: Optional[AiAnalyzeResponse] = None
+    error_code: Optional[str] = None
+    error_detail: Optional[str] = None
+    existing_result_id: Optional[int] = None
+    http_status: Optional[int] = None  # 동기 엔드포인트에서 반환했을 HTTP 코드
+
+
 class AiResultItem(BaseModel):
     """AI 분석 결과 항목 (법령별)"""
     id: int
