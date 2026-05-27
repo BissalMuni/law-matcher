@@ -18,6 +18,15 @@ from backend.models.revision_detection_result import RevisionDetectionResult
 from backend.models.ordinance_text import OrdinanceText
 from backend.models.batch_job import BatchJob, BatchJobItem
 from backend.models.sync_settings import SyncSettings
+from backend.models.drafting import (
+    DraftingProject,
+    DraftingStage,
+    DraftingSection,
+    DraftingMessage,
+    DraftingValidation,
+    DraftingReference,
+    DraftingSnapshot,
+)
 
 __all__ = [
     "User",
@@ -39,4 +48,11 @@ __all__ = [
     "BatchJob",
     "BatchJobItem",
     "SyncSettings",
+    "DraftingProject",
+    "DraftingStage",
+    "DraftingSection",
+    "DraftingMessage",
+    "DraftingValidation",
+    "DraftingReference",
+    "DraftingSnapshot",
 ]

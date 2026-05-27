@@ -17,6 +17,7 @@ import {
   LockOutlined,
   ThunderboltOutlined,
   CheckCircleOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -28,6 +29,11 @@ const adminMenuItems = [
     key: "/ordinances",
     icon: <FileTextOutlined />,
     label: "자치법규관리",
+  },
+  {
+    key: "/drafting",
+    icon: <EditOutlined />,
+    label: "입안심사",
   },
   {
     key: "/laws",
@@ -82,6 +88,11 @@ const regularUserMenuItems = [
     key: "/ordinances",
     icon: <FileTextOutlined />,
     label: "자치법규관리",
+  },
+  {
+    key: "/drafting",
+    icon: <EditOutlined />,
+    label: "입안심사",
   },
   {
     key: "/dashboard",

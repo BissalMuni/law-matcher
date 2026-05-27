@@ -1,0 +1,1047 @@
+{
+  "version": 1,
+  "criteria": [
+    {
+      "id": "ebansimsa/1.1",
+      "title": "제1장 자치법규 입안의 의의",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.1-제1장_자치법규_입안의_의의.md",
+      "enabled": true,
+      "text_lines": 21
+    },
+    {
+      "id": "ebansimsa/1.2.1",
+      "title": "자치법규 관계 법령",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.2.1-자치법규_관계_법령.md",
+      "enabled": true,
+      "text_lines": 44
+    },
+    {
+      "id": "ebansimsa/1.2.2",
+      "title": "자치법규의 종류",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.2.2-자치법규의_종류.md",
+      "enabled": true,
+      "text_lines": 16
+    },
+    {
+      "id": "ebansimsa/1.2.3",
+      "title": "입법의 필요성 및 가능 여부 판단",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.2.3-입법의_필요성_및_가능_여부_판단.md",
+      "enabled": true,
+      "text_lines": 16
+    },
+    {
+      "id": "ebansimsa/1.2.4",
+      "title": "입법형식의 선택",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.2.4-입법형식의_선택.md",
+      "enabled": true,
+      "text_lines": 45
+    },
+    {
+      "id": "ebansimsa/1.2.5",
+      "title": "개정제정방식의 선택",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.2.5-개정제정방식의_선택.md",
+      "enabled": true,
+      "text_lines": 11
+    },
+    {
+      "id": "ebansimsa/1.2.6",
+      "title": "자치법규의 효력",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.2.6-자치법규의_효력.md",
+      "enabled": true,
+      "text_lines": 50
+    },
+    {
+      "id": "ebansimsa/1.3.1",
+      "title": "소관사무의 원칙",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.3.1-소관사무의_원칙.md",
+      "enabled": true,
+      "text_lines": 302
+    },
+    {
+      "id": "ebansimsa/1.3.2",
+      "title": "법령 우위의 원칙",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.3.2-법령_우위의_원칙.md",
+      "enabled": true,
+      "text_lines": 97
+    },
+    {
+      "id": "ebansimsa/1.3.3",
+      "title": "법률 유보의 원칙",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.3.3-법률_유보의_원칙.md",
+      "enabled": true,
+      "text_lines": 54
+    },
+    {
+      "id": "ebansimsa/1.3.4",
+      "title": "집행기관과 의결기관 간 견제와 균형의 원리",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.3.4-집행기관과_의결기관_간_견제와_균형의_원리.md",
+      "enabled": true,
+      "text_lines": 139
+    },
+    {
+      "id": "ebansimsa/1.3.5",
+      "title": "법의 일반원칙",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\1.3.5-법의_일반원칙.md",
+      "enabled": true,
+      "text_lines": 162
+    },
+    {
+      "id": "ebansimsa/2.1.1",
+      "title": "개관",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.1.1-개관.md",
+      "enabled": true,
+      "text_lines": 13
+    },
+    {
+      "id": "ebansimsa/2.1.2",
+      "title": "목적규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.1.2-목적규정.md",
+      "enabled": true,
+      "text_lines": 57
+    },
+    {
+      "id": "ebansimsa/2.1.3",
+      "title": "기본이념에 관한 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.1.3-기본이념에_관한_규정.md",
+      "enabled": true,
+      "text_lines": 18
+    },
+    {
+      "id": "ebansimsa/2.1.4",
+      "title": "정의규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.1.4-정의규정.md",
+      "enabled": true,
+      "text_lines": 89
+    },
+    {
+      "id": "ebansimsa/2.1.5",
+      "title": "해석규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.1.5-해석규정.md",
+      "enabled": true,
+      "text_lines": 19
+    },
+    {
+      "id": "ebansimsa/2.1.6",
+      "title": "시장 등의 책무책임 등에 관한 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.1.6-시장_등의_책무책임_등에_관한_규정.md",
+      "enabled": true,
+      "text_lines": 42
+    },
+    {
+      "id": "ebansimsa/2.1.7",
+      "title": "적용 범위에 관한 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.1.7-적용_범위에_관한_규정.md",
+      "enabled": true,
+      "text_lines": 42
+    },
+    {
+      "id": "ebansimsa/2.1.8",
+      "title": "다른 조례 또는 규칙과의 관계에 관한 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.1.8-다른_조례_또는_규칙과의_관계에_관한_규정.md",
+      "enabled": true,
+      "text_lines": 45
+    },
+    {
+      "id": "ebansimsa/2.2.1",
+      "title": "지방공무원",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.1-지방공무원.md",
+      "enabled": true,
+      "text_lines": 62
+    },
+    {
+      "id": "ebansimsa/2.2.10",
+      "title": "권한의 위임 및 위탁",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.10-권한의_위임_및_위탁.md",
+      "enabled": true,
+      "text_lines": 235
+    },
+    {
+      "id": "ebansimsa/2.2.11",
+      "title": "과태료",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.11-과태료.md",
+      "enabled": true,
+      "text_lines": 99
+    },
+    {
+      "id": "ebansimsa/2.2.2",
+      "title": "보조출연",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.2-보조출연.md",
+      "enabled": true,
+      "text_lines": 265
+    },
+    {
+      "id": "ebansimsa/2.2.3",
+      "title": "공유재산의 관리처분",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.3-공유재산의_관리처분.md",
+      "enabled": true,
+      "text_lines": 319
+    },
+    {
+      "id": "ebansimsa/2.2.4",
+      "title": "재정회계 제도",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.4-재정회계_제도.md",
+      "enabled": true,
+      "text_lines": 144
+    },
+    {
+      "id": "ebansimsa/2.2.5",
+      "title": "기금",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.5-기금.md",
+      "enabled": true,
+      "text_lines": 74
+    },
+    {
+      "id": "ebansimsa/2.2.6",
+      "title": "사용료수수료",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.6-사용료수수료.md",
+      "enabled": true,
+      "text_lines": 195
+    },
+    {
+      "id": "ebansimsa/2.2.7",
+      "title": "위원회",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.7-위원회.md",
+      "enabled": true,
+      "text_lines": 345
+    },
+    {
+      "id": "ebansimsa/2.2.8",
+      "title": "행정절차",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.8-행정절차.md",
+      "enabled": true,
+      "text_lines": 72
+    },
+    {
+      "id": "ebansimsa/2.2.9",
+      "title": "출자출연 기관 및 공기업",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.2.9-출자출연_기관_및_공기업.md",
+      "enabled": true,
+      "text_lines": 73
+    },
+    {
+      "id": "ebansimsa/2.3.1",
+      "title": "개관",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.3.1-개관.md",
+      "enabled": true,
+      "text_lines": 37
+    },
+    {
+      "id": "ebansimsa/2.3.2",
+      "title": "시행일에 관한 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.3.2-시행일에_관한_규정.md",
+      "enabled": true,
+      "text_lines": 65
+    },
+    {
+      "id": "ebansimsa/2.3.3",
+      "title": "유효기간에 관한 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.3.3-유효기간에_관한_규정.md",
+      "enabled": true,
+      "text_lines": 60
+    },
+    {
+      "id": "ebansimsa/2.3.4",
+      "title": "다른 조례 또는 규칙을 폐지하는 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.3.4-다른_조례_또는_규칙을_폐지하는_규정.md",
+      "enabled": true,
+      "text_lines": 26
+    },
+    {
+      "id": "ebansimsa/2.3.5",
+      "title": "조례 또는 규칙의 시행을 위한 준비행위에 관한 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.3.5-조례_또는_규칙의_시행을_위한_준비행위에_관한_규정.md",
+      "enabled": true,
+      "text_lines": 15
+    },
+    {
+      "id": "ebansimsa/2.3.6",
+      "title": "적용례 특례 및 경과조치에 관한 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.3.6-적용례_특례_및_경과조치에_관한_규정.md",
+      "enabled": true,
+      "text_lines": 391
+    },
+    {
+      "id": "ebansimsa/2.3.7",
+      "title": "다른 조례 또는 규칙의 개정에 관한 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.3.7-다른_조례_또는_규칙의_개정에_관한_규정.md",
+      "enabled": true,
+      "text_lines": 39
+    },
+    {
+      "id": "ebansimsa/2.3.8",
+      "title": "다른 조례 또는 규칙과의 관계에 관한 규정",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\2.3.8-다른_조례_또는_규칙과의_관계에_관한_규정.md",
+      "enabled": true,
+      "text_lines": 60
+    },
+    {
+      "id": "ebansimsa/3.1.2",
+      "title": "자치법규의 제명",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.1.2-자치법규의_제명.md",
+      "enabled": true,
+      "text_lines": 21
+    },
+    {
+      "id": "ebansimsa/3.1.3",
+      "title": "본칙 및 부칙의 체제",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.1.3-본칙_및_부칙의_체제.md",
+      "enabled": true,
+      "text_lines": 21
+    },
+    {
+      "id": "ebansimsa/3.1.4",
+      "title": "자치법규 조항의 구성방법",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.1.4-자치법규_조항의_구성방법.md",
+      "enabled": true,
+      "text_lines": 24
+    },
+    {
+      "id": "ebansimsa/3.1.5",
+      "title": "별표나 별지 서식의 사용 방법",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.1.5-별표나_별지_서식의_사용_방법.md",
+      "enabled": true,
+      "text_lines": 33
+    },
+    {
+      "id": "ebansimsa/3.1.6",
+      "title": "자치법규안 작성 형식",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.1.6-자치법규안_작성_형식.md",
+      "enabled": true,
+      "text_lines": 76
+    },
+    {
+      "id": "ebansimsa/3.2.1",
+      "title": "개정 방식의 유형과 기준",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.2.1-개정_방식의_유형과_기준.md",
+      "enabled": true,
+      "text_lines": 21
+    },
+    {
+      "id": "ebansimsa/3.2.2",
+      "title": "일부개정 방식",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.2.2-일부개정_방식.md",
+      "enabled": true,
+      "text_lines": 572
+    },
+    {
+      "id": "ebansimsa/3.2.3",
+      "title": "전부개정 방식",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.2.3-전부개정_방식.md",
+      "enabled": true,
+      "text_lines": 24
+    },
+    {
+      "id": "ebansimsa/3.2.4",
+      "title": "폐지 방식",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.2.4-폐지_방식.md",
+      "enabled": true,
+      "text_lines": 31
+    },
+    {
+      "id": "ebansimsa/3.2.5",
+      "title": "관련성 있는 자치법규를 함께 개정하는 방식",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.2.5-관련성_있는_자치법규를_함께_개정하는_방식.md",
+      "enabled": true,
+      "text_lines": 57
+    },
+    {
+      "id": "ebansimsa/3.3.1",
+      "title": "용어 사용 기준",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.3.1-용어_사용_기준.md",
+      "enabled": true,
+      "text_lines": 14
+    },
+    {
+      "id": "ebansimsa/3.3.2",
+      "title": "한자어 외래어 등 용어의 정비",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.3.2-한자어_외래어_등_용어의_정비.md",
+      "enabled": true,
+      "text_lines": 216
+    },
+    {
+      "id": "ebansimsa/3.3.3",
+      "title": "자치법규 조항의 인용표시 방법",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.3.3-자치법규_조항의_인용표시_방법.md",
+      "enabled": true,
+      "text_lines": 62
+    },
+    {
+      "id": "ebansimsa/3.3.4",
+      "title": "약칭과 준용 등 특수한 표현",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.3.4-약칭과_준용_등_특수한_표현.md",
+      "enabled": true,
+      "text_lines": 118
+    },
+    {
+      "id": "ebansimsa/3.4.2",
+      "title": "문장 바르게 쓰기",
+      "scope": "per_article",
+      "wiki_path": "output\\ebansimsa\\wiki\\3.4.2-문장_바르게_쓰기.md",
+      "enabled": true,
+      "text_lines": 391
+    },
+    {
+      "id": "ebansimsa/4.1",
+      "title": "자치법규 입안 체크리스트",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\4.1-자치법규_입안_체크리스트.md",
+      "enabled": true,
+      "text_lines": 66
+    },
+    {
+      "id": "ebansimsa/4.2.2",
+      "title": "주요 자치입법절차",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\4.2.2-주요_자치입법절차.md",
+      "enabled": true,
+      "text_lines": 64
+    },
+    {
+      "id": "ebansimsa/4.2.3",
+      "title": "주민 청구에 의한 조례 주민조례발안",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\4.2.3-주민_청구에_의한_조례_주민조례발안.md",
+      "enabled": true,
+      "text_lines": 84
+    },
+    {
+      "id": "ebansimsa/4.3",
+      "title": "조례 작성례",
+      "scope": "document_level",
+      "wiki_path": "output\\ebansimsa\\wiki\\4.3-조례_작성례.md",
+      "enabled": true,
+      "text_lines": 148
+    },
+    {
+      "id": "jungbigijun/1.1",
+      "title": "제1절 알기 쉬운 법령 만들기알법 사업 경과",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\1.1-제1절_알기_쉬운_법령_만들기알법_사업_경과.md",
+      "enabled": true,
+      "text_lines": 24
+    },
+    {
+      "id": "jungbigijun/1.2",
+      "title": "제2절 알법의 필요성",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\1.2-제2절_알법의_필요성.md",
+      "enabled": true,
+      "text_lines": 16
+    },
+    {
+      "id": "jungbigijun/1.3",
+      "title": "제3절 알법의 기본 원칙",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\1.3-제3절_알법의_기본_원칙.md",
+      "enabled": true,
+      "text_lines": 37
+    },
+    {
+      "id": "jungbigijun/2.1",
+      "title": "제1절 용어 정비의 원칙",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.1-제1절_용어_정비의_원칙.md",
+      "enabled": true,
+      "text_lines": 40
+    },
+    {
+      "id": "jungbigijun/2.2.1.1",
+      "title": "쉬운 말로 고치기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.1.1-쉬운_말로_고치기.md",
+      "enabled": true,
+      "text_lines": 118
+    },
+    {
+      "id": "jungbigijun/2.2.1.10",
+      "title": "굳어진 용어는 그대로 쓰기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.1.10-굳어진_용어는_그대로_쓰기.md",
+      "enabled": true,
+      "text_lines": 41
+    },
+    {
+      "id": "jungbigijun/2.2.1.2",
+      "title": "쉬운 말로 풀어 쓰기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.1.2-쉬운_말로_풀어_쓰기.md",
+      "enabled": true,
+      "text_lines": 41
+    },
+    {
+      "id": "jungbigijun/2.2.1.3",
+      "title": "축약어 풀어 쓰기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.1.3-축약어_풀어_쓰기.md",
+      "enabled": true,
+      "text_lines": 45
+    },
+    {
+      "id": "jungbigijun/2.2.1.4",
+      "title": "문맥에 따라 고쳐 쓰기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.1.4-문맥에_따라_고쳐_쓰기.md",
+      "enabled": true,
+      "text_lines": 126
+    },
+    {
+      "id": "jungbigijun/2.2.1.5",
+      "title": "설명 붙이기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.1.5-설명_붙이기.md",
+      "enabled": true,
+      "text_lines": 40
+    },
+    {
+      "id": "jungbigijun/2.2.1.6",
+      "title": "한자를 같이 쓰기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.1.6-한자를_같이_쓰기.md",
+      "enabled": true,
+      "text_lines": 23
+    },
+    {
+      "id": "jungbigijun/2.2.1.7",
+      "title": "바꿀 수 있는 것만이라도 우선 바꾸기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.1.7-바꿀_수_있는_것만이라도_우선_바꾸기.md",
+      "enabled": true,
+      "text_lines": 35
+    },
+    {
+      "id": "jungbigijun/2.2.1.8",
+      "title": "한문 투 표현 고치기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.1.8-한문_투_표현_고치기.md",
+      "enabled": true,
+      "text_lines": 35
+    },
+    {
+      "id": "jungbigijun/2.2.1.9",
+      "title": "한자어의 본뜻대로 바르게 쓰기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.1.9-한자어의_본뜻대로_바르게_쓰기.md",
+      "enabled": true,
+      "text_lines": 40
+    },
+    {
+      "id": "jungbigijun/2.2.2.1",
+      "title": "일본식 한자어",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.2.1-일본식_한자어.md",
+      "enabled": true,
+      "text_lines": 181
+    },
+    {
+      "id": "jungbigijun/2.2.2.2",
+      "title": "일본식 외래어",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.2.2-일본식_외래어.md",
+      "enabled": true,
+      "text_lines": 40
+    },
+    {
+      "id": "jungbigijun/2.2.3.1",
+      "title": "전문용어의 뜻과 정비 필요성",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.3.1-전문용어의_뜻과_정비_필요성.md",
+      "enabled": true,
+      "text_lines": 10
+    },
+    {
+      "id": "jungbigijun/2.2.3.3",
+      "title": "전문용어 정비 유형 및 예시",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.3.3-전문용어_정비_유형_및_예시.md",
+      "enabled": true,
+      "text_lines": 122
+    },
+    {
+      "id": "jungbigijun/2.2.3.4",
+      "title": "분야별 전문용어 정비 목록",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.3.4-분야별_전문용어_정비_목록.md",
+      "enabled": true,
+      "text_lines": 58
+    },
+    {
+      "id": "jungbigijun/2.2.4.1",
+      "title": "외래어와 외국어의 순화 및 정비",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.4.1-외래어와_외국어의_순화_및_정비.md",
+      "enabled": true,
+      "text_lines": 72
+    },
+    {
+      "id": "jungbigijun/2.2.4.2",
+      "title": "외래어와 외국어 표기 시 유의사항",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.4.2-외래어와_외국어_표기_시_유의사항.md",
+      "enabled": true,
+      "text_lines": 83
+    },
+    {
+      "id": "jungbigijun/2.2.4.3",
+      "title": "법령 이름 속의 외국어",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.4.3-법령_이름_속의_외국어.md",
+      "enabled": true,
+      "text_lines": 18
+    },
+    {
+      "id": "jungbigijun/2.2.4.4",
+      "title": "원어외국 글자 표기 시 대문자소문자 사용법",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.4.4-원어외국_글자_표기_시_대문자소문자_사용법.md",
+      "enabled": true,
+      "text_lines": 33
+    },
+    {
+      "id": "jungbigijun/2.2.5.1",
+      "title": "차별적 용어의 정비",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.5.1-차별적_용어의_정비.md",
+      "enabled": true,
+      "text_lines": 73
+    },
+    {
+      "id": "jungbigijun/2.2.5.2",
+      "title": "권위적 용어의 정비",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.5.2-권위적_용어의_정비.md",
+      "enabled": true,
+      "text_lines": 45
+    },
+    {
+      "id": "jungbigijun/2.2.6.1",
+      "title": "관용적 표현",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.6.1-관용적_표현.md",
+      "enabled": true,
+      "text_lines": 220
+    },
+    {
+      "id": "jungbigijun/2.2.6.2",
+      "title": "조사",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.6.2-조사.md",
+      "enabled": true,
+      "text_lines": 92
+    },
+    {
+      "id": "jungbigijun/2.2.6.3",
+      "title": "숫자",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.6.3-숫자.md",
+      "enabled": true,
+      "text_lines": 49
+    },
+    {
+      "id": "jungbigijun/2.2.6.4",
+      "title": "준말과 본딧말",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.6.4-준말과_본딧말.md",
+      "enabled": true,
+      "text_lines": 49
+    },
+    {
+      "id": "jungbigijun/2.2.6.5",
+      "title": "통일해서 쓸 용어",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.6.5-통일해서_쓸_용어.md",
+      "enabled": true,
+      "text_lines": 52
+    },
+    {
+      "id": "jungbigijun/2.2.6.6",
+      "title": "구별해서 쓸 용어",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.6.6-구별해서_쓸_용어.md",
+      "enabled": true,
+      "text_lines": 104
+    },
+    {
+      "id": "jungbigijun/2.2.7.1",
+      "title": "띄어쓰기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.7.1-띄어쓰기.md",
+      "enabled": true,
+      "text_lines": 233
+    },
+    {
+      "id": "jungbigijun/2.2.7.2",
+      "title": "두음법칙",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.7.2-두음법칙.md",
+      "enabled": true,
+      "text_lines": 33
+    },
+    {
+      "id": "jungbigijun/2.2.7.3",
+      "title": "문장부호",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\2.2.7.3-문장부호.md",
+      "enabled": true,
+      "text_lines": 130
+    },
+    {
+      "id": "jungbigijun/3.1",
+      "title": "제1절 문장 정비의 원칙",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.1-제1절_문장_정비의_원칙.md",
+      "enabled": true,
+      "text_lines": 24
+    },
+    {
+      "id": "jungbigijun/3.2.1",
+      "title": "바른 문장 쓰기",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.1-바른_문장_쓰기.md",
+      "enabled": true,
+      "text_lines": 12
+    },
+    {
+      "id": "jungbigijun/3.2.1.1",
+      "title": "주어를 분명히 밝힌다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.1.1-주어를_분명히_밝힌다.md",
+      "enabled": true,
+      "text_lines": 180
+    },
+    {
+      "id": "jungbigijun/3.2.1.2",
+      "title": "목적어를 분명히 밝힌다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.1.2-목적어를_분명히_밝힌다.md",
+      "enabled": true,
+      "text_lines": 85
+    },
+    {
+      "id": "jungbigijun/3.2.1.3",
+      "title": "주어와 서술어의 관계를 명확히 한다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.1.3-주어와_서술어의_관계를_명확히_한다.md",
+      "enabled": true,
+      "text_lines": 36
+    },
+    {
+      "id": "jungbigijun/3.2.2.1",
+      "title": "긴 문장은 짧게 나누어 쓴다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.2.1-긴_문장은_짧게_나누어_쓴다.md",
+      "enabled": true,
+      "text_lines": 270
+    },
+    {
+      "id": "jungbigijun/3.2.2.2",
+      "title": "중복되거나 불필요한 내용은 삭제한다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.2.2-중복되거나_불필요한_내용은_삭제한다.md",
+      "enabled": true,
+      "text_lines": 105
+    },
+    {
+      "id": "jungbigijun/3.2.3.1",
+      "title": "또는 및의 접속 관계를 분명하게 쓴다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.3.1-또는_및의_접속_관계를_분명하게_쓴다.md",
+      "enabled": true,
+      "text_lines": 79
+    },
+    {
+      "id": "jungbigijun/3.2.3.2",
+      "title": "의미가 불명확한 수식어를 쓰지 않는다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.3.2-의미가_불명확한_수식어를_쓰지_않는다.md",
+      "enabled": true,
+      "text_lines": 18
+    },
+    {
+      "id": "jungbigijun/3.2.3.3",
+      "title": "중의적 다의적 표현은 정확한 표현으로 고쳐 쓴다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.3.3-중의적_다의적_표현은_정확한_표현으로_고쳐_쓴다.md",
+      "enabled": true,
+      "text_lines": 14
+    },
+    {
+      "id": "jungbigijun/3.2.3.4",
+      "title": "이중 부정문은 되도록 긍정문으로 쓴다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.3.4-이중_부정문은_되도록_긍정문으로_쓴다.md",
+      "enabled": true,
+      "text_lines": 32
+    },
+    {
+      "id": "jungbigijun/3.2.3.5",
+      "title": "지시어의 내용을 직접 쓴다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.3.5-지시어의_내용을_직접_쓴다.md",
+      "enabled": true,
+      "text_lines": 66
+    },
+    {
+      "id": "jungbigijun/3.2.3.6",
+      "title": "문맥상 필요한 내용을 생략하지 않는다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.3.6-문맥상_필요한_내용을_생략하지_않는다.md",
+      "enabled": true,
+      "text_lines": 81
+    },
+    {
+      "id": "jungbigijun/3.2.4.1",
+      "title": "되도록 능동문으로 쓴다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.4.1-되도록_능동문으로_쓴다.md",
+      "enabled": true,
+      "text_lines": 70
+    },
+    {
+      "id": "jungbigijun/3.2.4.2",
+      "title": "일본어 투 표현을 쓰지 않는다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.4.2-일본어_투_표현을_쓰지_않는다.md",
+      "enabled": true,
+      "text_lines": 599
+    },
+    {
+      "id": "jungbigijun/3.2.4.3",
+      "title": "어순을 자연스럽게 한다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.4.3-어순을_자연스럽게_한다.md",
+      "enabled": true,
+      "text_lines": 60
+    },
+    {
+      "id": "jungbigijun/3.2.5.1",
+      "title": "표를 활용한다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.5.1-표를_활용한다.md",
+      "enabled": true,
+      "text_lines": 14
+    },
+    {
+      "id": "jungbigijun/3.2.5.2",
+      "title": "계산식을 활용한다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.5.2-계산식을_활용한다.md",
+      "enabled": true,
+      "text_lines": 22
+    },
+    {
+      "id": "jungbigijun/3.2.5.3",
+      "title": "그림을 활용한다",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\3.2.5.3-그림을_활용한다.md",
+      "enabled": true,
+      "text_lines": 47
+    },
+    {
+      "id": "jungbigijun/4.1",
+      "title": "법률 작성례",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\4.1-법률_작성례.md",
+      "enabled": true,
+      "text_lines": 249
+    },
+    {
+      "id": "jungbigijun/4.2",
+      "title": "대통령령 작성례",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\4.2-대통령령_작성례.md",
+      "enabled": true,
+      "text_lines": 203
+    },
+    {
+      "id": "jungbigijun/4.3",
+      "title": "부령 작성례",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\4.3-부령_작성례.md",
+      "enabled": true,
+      "text_lines": 155
+    },
+    {
+      "id": "jungbigijun/5.1",
+      "title": "한글 맞춤법",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\5.1-한글_맞춤법.md",
+      "enabled": true,
+      "text_lines": 685
+    },
+    {
+      "id": "jungbigijun/5.2",
+      "title": "외래어 표기법",
+      "scope": "per_article",
+      "wiki_path": "output\\jungbigijun\\wiki\\5.2-외래어_표기법.md",
+      "enabled": true,
+      "text_lines": 129
+    }
+  ],
+  "excluded": [
+    {
+      "id": "ebansimsa/0.1.1",
+      "reason": "meta file"
+    },
+    {
+      "id": "ebansimsa/0.2.1",
+      "reason": "meta file"
+    },
+    {
+      "id": "ebansimsa/0.2.2",
+      "reason": "meta file"
+    },
+    {
+      "id": "ebansimsa/0.2.3",
+      "reason": "meta file"
+    },
+    {
+      "id": "ebansimsa/0.2.4",
+      "reason": "meta file"
+    },
+    {
+      "id": "ebansimsa/3.1.1",
+      "reason": "stub (6 text lines)"
+    },
+    {
+      "id": "ebansimsa/3.4.1",
+      "reason": "stub (9 text lines)"
+    },
+    {
+      "id": "ebansimsa/4.2",
+      "reason": "stub (4 text lines)"
+    },
+    {
+      "id": "ebansimsa/4.2.1",
+      "reason": "stub (6 text lines)"
+    },
+    {
+      "id": "jungbigijun/0.1.1",
+      "reason": "meta file"
+    },
+    {
+      "id": "jungbigijun/0.2.1",
+      "reason": "meta file"
+    },
+    {
+      "id": "jungbigijun/0.2.2",
+      "reason": "meta file"
+    },
+    {
+      "id": "jungbigijun/0.2.3",
+      "reason": "meta file"
+    },
+    {
+      "id": "jungbigijun/0.2.4",
+      "reason": "meta file"
+    },
+    {
+      "id": "jungbigijun/2.2",
+      "reason": "stub (5 text lines)"
+    },
+    {
+      "id": "jungbigijun/2.2.1",
+      "reason": "stub (4 text lines)"
+    },
+    {
+      "id": "jungbigijun/2.2.2",
+      "reason": "stub (4 text lines)"
+    },
+    {
+      "id": "jungbigijun/2.2.3",
+      "reason": "stub (4 text lines)"
+    },
+    {
+      "id": "jungbigijun/2.2.3.2",
+      "reason": "stub (9 text lines)"
+    },
+    {
+      "id": "jungbigijun/2.2.4",
+      "reason": "stub (4 text lines)"
+    },
+    {
+      "id": "jungbigijun/2.2.5",
+      "reason": "stub (5 text lines)"
+    },
+    {
+      "id": "jungbigijun/2.2.6",
+      "reason": "stub (4 text lines)"
+    },
+    {
+      "id": "jungbigijun/2.2.7",
+      "reason": "stub (6 text lines)"
+    },
+    {
+      "id": "jungbigijun/3.2",
+      "reason": "stub (5 text lines)"
+    },
+    {
+      "id": "jungbigijun/3.2.2",
+      "reason": "stub (9 text lines)"
+    },
+    {
+      "id": "jungbigijun/3.2.3",
+      "reason": "stub (6 text lines)"
+    },
+    {
+      "id": "jungbigijun/3.2.4",
+      "reason": "stub (4 text lines)"
+    },
+    {
+      "id": "jungbigijun/3.2.5",
+      "reason": "stub (5 text lines)"
+    }
+  ]
+}

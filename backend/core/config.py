@@ -65,6 +65,13 @@ class Settings(BaseSettings):
     LLM_MAX_RETRIES: int = 2  # LLM API 최대 재시도 횟수
     LLM_BATCH_CONCURRENCY: int = 5  # AI 배치 분석 동시 처리 수
 
+    # 입안심사(drafting) 모듈 — law-ebansimsa 통합 기능 플래그
+    DRAFTING_ENABLED: bool = True
+    # 입안심사 LLM 모델 (Anthropic). ANTHROPIC_API_KEY를 공유해 호출한다.
+    DRAFTING_MODEL: str = "claude-sonnet-4-20250514"  # 작성/정밀검증
+    DRAFTING_FAST_MODEL: str = "claude-haiku-4-5-20251001"  # 인라인 힌트
+    DRAFTING_CONCURRENCY: int = 8  # 검증 매트릭스 동시 호출 수
+
     class Config:
         env_file = str(PROJECT_ROOT / ".env")  # 프로젝트 루트의 .env (절대 경로)
         case_sensitive = True

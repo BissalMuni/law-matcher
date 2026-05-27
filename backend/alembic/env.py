@@ -20,6 +20,13 @@ from backend.models import (
     LawAmendment,
     AmendmentReview,
     LawChange,
+    DraftingProject,
+    DraftingStage,
+    DraftingSection,
+    DraftingMessage,
+    DraftingValidation,
+    DraftingReference,
+    DraftingSnapshot,
 )
 
 # this is the Alembic Config object, which provides

@@ -53,6 +53,9 @@ coverage/
 cache/
 data/
 law.json
+# 입안심사(drafting) 기준·위키 데이터는 런타임에 읽으므로 추적한다 (data/ 제외 예외)
+!backend/drafting/data/
+!backend/drafting/data/**
 
 # Test results
 test_*.json
