@@ -22,6 +22,15 @@ class StageStatusUpdate(BaseModel):
     stale_reason: Optional[str] = None
 
 
+class ProjectUpdateRequest(BaseModel):
+    kind: Optional[str] = None
+    title: Optional[str] = None
+    municipality: Optional[str] = None
+    source_url: Optional[str] = None
+    status: Optional[str] = None
+    progress: Optional[int] = None
+
+
 class SectionUpsertRequest(BaseModel):
     id: Optional[int] = None
     project_id: int
@@ -93,6 +102,7 @@ class SectionOut(BaseModel):
     original_body: Optional[str] = None
     change_type: Optional[str] = None
     sort_order: int
+    mapped_criteria: Optional[list[dict]] = None
 
 
 class MessageOut(BaseModel):

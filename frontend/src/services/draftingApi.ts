@@ -100,6 +100,7 @@ export interface DraftingSection {
   original_body: string | null
   change_type: string | null
   sort_order: number
+  mapped_criteria: CriterionCell[] | null
 }
 
 export interface ProjectDetail extends DraftingProject {
@@ -172,6 +173,13 @@ export const draftingApi = {
     const res = await draftingClient.get(`/projects/${id}`)
     return res.data
   },
+  updateProject: async (
+    id: number,
+    body: Partial<Pick<DraftingProject, 'kind' | 'title' | 'municipality' | 'status' | 'progress'>>,
+  ): Promise<DraftingProject> => {
+    const res = await draftingClient.patch(`/projects/${id}`, body)
+    return res.data
+  },
   deleteProject: async (id: number): Promise<void> => {
     await draftingClient.delete(`/projects/${id}`)
   },
@@ -200,6 +208,11 @@ export const draftingApi = {
   deleteSection: async (sectionId: number): Promise<void> => {
     await draftingClient.delete(`/sections/${sectionId}`)
   },
+  // 조문에 적용되는 기준 AI 매핑 + 저장 (적용 기준 칩)
+  mapSectionCriteria: async (sectionId: number): Promise<CriterionCell[]> => {
+    const res = await draftingClient.post(`/sections/${sectionId}/map-criteria`)
+    return res.data.criteria
+  },
 
   // 메시지
   listMessages: async (stageId: number): Promise<DraftingMessage[]> => {
@@ -218,6 +231,11 @@ export const draftingApi = {
   listCriteria: async (): Promise<CriterionCell[]> => {
     const res = await draftingClient.get('/criteria')
     return res.data.criteria
+  },
+  // 위키 기준 본문 (registry id, 예: "ebansimsa/2.1.2")
+  getCriterionContent: async (id: string): Promise<string> => {
+    const res = await draftingClient.get('/criteria/content', { params: { id } })
+    return res.data.content
   },
 
   // 검증

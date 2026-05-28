@@ -141,6 +141,8 @@ class DraftingSection(Base):
     original_body: Mapped[Optional[str]] = mapped_column(Text)  # 개정 모드 로드 원본
     change_type: Mapped[Optional[str]] = mapped_column(String(20))  # unchanged|add|modify|delete
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    # 이 조문에 적용되는 기준 캐시 (AI 매핑 결과): [{criterion_id, source, title}]
+    mapped_criteria: Mapped[Optional[dict]] = mapped_column(JSONB)
 
     # Relationships
     project: Mapped["DraftingProject"] = relationship(back_populates="sections")

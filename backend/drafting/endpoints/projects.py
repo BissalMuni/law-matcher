@@ -11,6 +11,7 @@ from backend.drafting.api_schemas import (
     ProjectCreateRequest,
     ProjectDetailOut,
     ProjectOut,
+    ProjectUpdateRequest,
     SectionOut,
     SectionUpsertRequest,
     SnapshotCreateRequest,
@@ -67,6 +68,17 @@ async def get_project(project_id: int, db: AsyncSession = Depends(get_db)) -> Pr
     return detail
 
 
+@router.patch("/projects/{project_id}", response_model=ProjectOut)
+async def update_project(
+    project_id: int, body: ProjectUpdateRequest, db: AsyncSession = Depends(get_db)
+) -> ProjectOut:
+    service = DraftingService(db)
+    project = await service.update_project(project_id, body.model_dump(exclude_unset=True))
+    if not project:
+        raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다.")
+    return ProjectOut.model_validate(project)
+
+
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: int, db: AsyncSession = Depends(get_db)) -> dict:
     service = DraftingService(db)
@@ -119,6 +131,18 @@ async def delete_section(section_id: int, db: AsyncSession = Depends(get_db)) ->
     if not ok:
         raise HTTPException(status_code=404, detail="조문을 찾을 수 없습니다.")
     return {"deleted": True}
+
+
+@router.post("/sections/{section_id}/map-criteria")
+async def map_section_criteria(
+    section_id: int, db: AsyncSession = Depends(get_db)
+) -> dict:
+    """조문에 적용되는 기준을 AI로 추려 저장하고 반환한다 (적용 기준 칩)."""
+    service = DraftingService(db)
+    chosen = await service.map_section_criteria(section_id)
+    if chosen is None:
+        raise HTTPException(status_code=404, detail="조문을 찾을 수 없습니다.")
+    return {"criteria": chosen}
 
 
 # ---------- 메시지 ----------

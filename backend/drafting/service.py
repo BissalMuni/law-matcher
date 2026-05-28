@@ -34,6 +34,23 @@ from backend.models.law import Law
 _ARTICLE_NO = re.compile(r"제(\d+)조")
 _ARTICLE_LABEL = re.compile(r"^(제\d+조(?:의\d+)?\s*(?:\([^)]*\))?)")
 
+
+def classify_stage_key(title: str, label: str) -> str:
+    """조문 제목/라벨로 적절한 표준 단계 key를 추정한다 (개정 조문 자동 분류).
+
+    매칭 안 되는 일반 조문은 본칙(main)으로 보낸다.
+    """
+    t = f"{title} {label}"
+    if "목적" in t:
+        return "purpose"
+    if "정의" in t:
+        return "definition"
+    if any(k in t for k in ("적용", "범위", "책무", "책임", "적용대상")):
+        return "scope"
+    if any(k in t for k in ("부칙", "시행일", "경과조치")):
+        return "supplementary"
+    return "main"
+
 # 표준 8단계 템플릿 (StageKey ↔ 라벨 ↔ 근거 위키 섹션)
 STAGE_TEMPLATE: list[dict] = [
     {"key": "meta", "label": "제명·종류", "wiki_ref": "ebansimsa/3.1.1", "required": True},
@@ -239,14 +256,17 @@ class DraftingService:
         await self.db.flush()
 
         # 개정 모드: 등록 조례 조문 시드 (원본 보존 → original_body)
+        # 조문 제목으로 적절한 단계에 자동 분류한다 (목적→목적규정 등). 단계 클릭이 정상 동작하도록.
         if ordinance_id and kind in ("amend_partial", "amend_full"):
             main_stage = stages_by_key["main"]
             sections = await self.parse_ordinance_sections(ordinance_id)
             for sec in sections:
+                key = classify_stage_key(sec["title"], sec["article_label"])
+                target_stage = stages_by_key.get(key, main_stage)
                 self.db.add(
                     DraftingSection(
                         project_id=project.id,
-                        stage_id=main_stage.id,
+                        stage_id=target_stage.id,
                         article_no=sec["article_no"],
                         article_label=sec["article_label"],
                         title=sec["title"],
@@ -260,6 +280,63 @@ class DraftingService:
         await self.db.commit()
         await self.db.refresh(project)
         return project
+
+    async def update_project(self, project_id: int, fields: dict) -> Optional[DraftingProject]:
+        """프로젝트 메타(제명/종류/지자체/상태/진행률) 수정."""
+        project = (
+            await self.db.execute(
+                select(DraftingProject).where(DraftingProject.id == project_id)
+            )
+        ).scalar_one_or_none()
+        if not project:
+            return None
+        for f in ("kind", "title", "municipality", "source_url", "status", "progress"):
+            if f in fields and fields[f] is not None:
+                setattr(project, f, fields[f])
+        await self.db.commit()
+        await self.db.refresh(project)
+        return project
+
+    async def map_section_criteria(self, section_id: int) -> Optional[list[dict]]:
+        """조문에 적용되는 기준을 AI로 추려 section.mapped_criteria에 저장하고 반환한다.
+
+        조문 선택 시 '적용 기준 칩'으로 표시된다 (조문 중심 UI).
+        """
+        from backend.drafting.criteria import catalog as load_catalog
+        from backend.drafting.llm import DraftingLLM
+
+        section = (
+            await self.db.execute(
+                select(DraftingSection).where(DraftingSection.id == section_id)
+            )
+        ).scalar_one_or_none()
+        if not section:
+            return None
+
+        cat = load_catalog()  # [{criterion_id, source, title}]
+        catalog_text = "\n".join(
+            f"- {c['source']}/{c['criterion_id']}: {c['title'] or ''}" for c in cat
+        )
+        system = (
+            "당신은 조례 심사자다. 주어진 조문에 '실제로 적용되는' 입안심사·정비 기준만 고른다.\n"
+            "조문의 성격(정의·목적·벌칙·위임 등)과 직접 관련된 기준만 선택하고, "
+            "무관한 기준은 절대 넣지 마라.\n"
+            "반드시 아래 JSON 형식으로만 답하라(다른 텍스트 금지):\n"
+            '{"criterion_ids": ["<source>/<id>", ...]}\n'
+            "id 는 카탈로그의 'source/id' 표기를 그대로 쓴다."
+        )
+        user = (
+            f"[조문] {section.article_label or ''} {section.title}\n{section.body}\n\n"
+            f"[기준 카탈로그]\n{catalog_text}"
+        )
+        client = DraftingLLM()
+        result = await client.call(system, user, max_tokens=512)
+        ids = set(result.get("criterion_ids", [])) if isinstance(result, dict) else set()
+        chosen = [c for c in cat if f"{c['source']}/{c['criterion_id']}" in ids]
+
+        section.mapped_criteria = chosen
+        await self.db.commit()
+        return chosen
 
     async def list_projects(self) -> list[DraftingProject]:
         rows = (

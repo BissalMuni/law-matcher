@@ -9,6 +9,7 @@ import {
   Statistic,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -35,10 +36,14 @@ interface Props {
 }
 
 /** 정밀 검증 매트릭스 — 선택한 기준 × 조문을 셀 단위로 판단 */
+const rowKeyOf = (r: ValidationCellResult) =>
+  `${r.article_id}|${r.source}/${r.criterion_id}`
+
 export default function ValidationPanel({ sections }: Props) {
   const [selectedCriteria, setSelectedCriteria] = useState<string[]>([])
   const [running, setRunning] = useState(false)
   const [results, setResults] = useState<ValidationCellResult[]>([])
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([])
   const [summary, setSummary] = useState<{ total: number; filled: number; complete: boolean } | null>(
     null,
   )
@@ -76,6 +81,8 @@ export default function ValidationPanel({ sections }: Props) {
       }))
       const res = await draftingApi.validatePrecise({ articles, criteria })
       setResults(res.results)
+      // 부적합 행은 사유가 바로 보이도록 자동으로 펼친다
+      setExpandedKeys(res.results.filter((r) => r.verdict === 'fail').map(rowKeyOf))
       setSummary({ total: res.total_cells, filled: res.filled_cells, complete: res.complete })
     } catch {
       message.error('검증 실행에 실패했습니다. (ANTHROPIC_API_KEY 설정 확인)')
@@ -85,11 +92,11 @@ export default function ValidationPanel({ sections }: Props) {
   }
 
   const columns: ColumnsType<ValidationCellResult> = [
-    { title: '조문', dataIndex: 'article_id', key: 'article_id', width: 150 },
+    { title: '조문', dataIndex: 'article_id', key: 'article_id', width: 120, ellipsis: true },
     {
       title: '기준',
       key: 'criterion',
-      width: 140,
+      width: 110,
       render: (_, r) => (
         <Tag color="geekblue">
           {r.source}/{r.criterion_id}
@@ -100,7 +107,7 @@ export default function ValidationPanel({ sections }: Props) {
       title: '판정',
       dataIndex: 'verdict',
       key: 'verdict',
-      width: 90,
+      width: 80,
       filters: [
         { text: '적합', value: 'pass' },
         { text: '부적합', value: 'fail' },
@@ -108,14 +115,32 @@ export default function ValidationPanel({ sections }: Props) {
         { text: '미판정', value: 'pending' },
       ],
       onFilter: (value, r) => r.verdict === value,
-      render: (v: string) => {
+      render: (v: string, r) => {
         const t = VERDICT_TAG[v] ?? { text: v, color: 'default' }
-        return <Tag color={t.color}>{t.text}</Tag>
+        const tag = <Tag color={t.color}>{t.text}</Tag>
+        return r.reason ? <Tooltip title={r.reason}>{tag}</Tooltip> : tag
       },
     },
-    { title: '사유', dataIndex: 'reason', key: 'reason', ellipsis: true },
-    { title: '수정 제안', dataIndex: 'suggestion', key: 'suggestion', ellipsis: true },
   ]
+
+  const expandedRowRender = (r: ValidationCellResult) => (
+    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+      {r.reason ? (
+        <div>
+          <Text strong type={r.verdict === 'fail' ? 'danger' : undefined}>사유: </Text>
+          <Text>{r.reason}</Text>
+        </div>
+      ) : (
+        <Text type="secondary">상세 사유 없음</Text>
+      )}
+      {r.suggestion && (
+        <div>
+          <Text strong type="success">수정 제안: </Text>
+          <Text>{r.suggestion}</Text>
+        </div>
+      )}
+    </Space>
+  )
 
   if (sections.length === 0) {
     return <Empty description="검증할 조문이 없습니다. 본칙에 조문을 먼저 작성하세요." />
@@ -179,11 +204,17 @@ export default function ValidationPanel({ sections }: Props) {
             />
           )}
           <Table
-            rowKey={(r) => `${r.article_id}|${r.source}/${r.criterion_id}`}
+            rowKey={rowKeyOf}
             size="small"
             columns={columns}
             dataSource={results}
             pagination={{ pageSize: 20 }}
+            expandable={{
+              expandedRowRender,
+              rowExpandable: (r) => Boolean(r.reason || r.suggestion),
+              expandedRowKeys: expandedKeys,
+              onExpandedRowsChange: (keys) => setExpandedKeys(keys as string[]),
+            }}
           />
         </>
       )}
