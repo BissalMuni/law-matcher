@@ -17,6 +17,8 @@ import {
   LockOutlined,
   ThunderboltOutlined,
   CheckCircleOutlined,
+  EditOutlined,
+  ReadOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -28,6 +30,16 @@ const adminMenuItems = [
     key: "/ordinances",
     icon: <FileTextOutlined />,
     label: "자치법규관리",
+  },
+  {
+    key: "/drafting",
+    icon: <EditOutlined />,
+    label: "입안심사",
+  },
+  {
+    key: "/drafting/wiki",
+    icon: <ReadOutlined />,
+    label: "입안심사 기준",
   },
   {
     key: "/laws",
@@ -84,6 +96,16 @@ const regularUserMenuItems = [
     label: "자치법규관리",
   },
   {
+    key: "/drafting",
+    icon: <EditOutlined />,
+    label: "입안심사",
+  },
+  {
+    key: "/drafting/wiki",
+    icon: <ReadOutlined />,
+    label: "입안심사 기준",
+  },
+  {
     key: "/dashboard",
     icon: <BarChartOutlined />,
     label: "현황",
@@ -133,11 +155,13 @@ export default function MainLayout() {
   // Match selectedKeys by pathname prefix for sub-routes
   const getSelectedKey = () => {
     const menuKeys = sidebarMenuItems.map((item) => item.key);
-    const matched = menuKeys.find(
+    const matches = menuKeys.filter(
       (key) =>
         location.pathname === key || location.pathname.startsWith(key + "/"),
     );
-    return matched ? [matched] : [];
+    // 가장 구체적인(긴) 키를 선택해 하위 경로(예: /drafting/wiki) 하이라이트 정확도를 높인다
+    const best = matches.sort((a, b) => b.length - a.length)[0];
+    return best ? [best] : [];
   };
 
   return (

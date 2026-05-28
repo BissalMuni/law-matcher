@@ -73,8 +73,15 @@ class RevisionDetectionService:
         matched = match_articles_to_ordinance(extracted_articles, mapped_articles)
 
         note = None
-        if law.revision_type == "타법개정" and not reason.revision_reason:
-            note = "타법개정 - 상세 확인 필요"
+        if law.revision_type == "타법개정":
+            if reason.revision_reason:
+                note = (
+                    "타법개정: 아래 제개정이유는 원인이 된 타법의 개정이유이며, "
+                    "이 법령 자체의 개정 목적이 아닐 수 있습니다. "
+                    "개정문에서 이 법령의 변경 조항을 확인하세요."
+                )
+            else:
+                note = "타법개정 - 상세 확인 필요"
 
         detected_at = datetime.utcnow()
         return {

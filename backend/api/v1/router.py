@@ -4,6 +4,7 @@ API v1 Router - Aggregates all endpoint routers
 from fastapi import APIRouter
 
 from backend.api.v1 import ordinances, sync, amendments, reviews, dashboard, departments, laws, law_changes, auth, admin, llm_analysis, batch
+from backend.drafting.router import router as drafting_router
 
 api_router = APIRouter()
 
@@ -77,4 +78,10 @@ api_router.include_router(
     batch.router,
     prefix="/batch",
     tags=["batch"]
+)
+
+api_router.include_router(
+    drafting_router,
+    prefix="/drafting",
+    tags=["drafting"]
 )

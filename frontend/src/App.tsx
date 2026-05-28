@@ -23,6 +23,9 @@ import AiAnalytics from './pages/AiAnalytics'
 import DetectionCompare from './pages/DetectionCompare'
 import ChangePassword from './pages/ChangePassword'
 import BatchProcessing from './pages/BatchProcessing'
+import DraftingList from './pages/drafting/DraftingList'
+import DraftingWorkspace from './pages/drafting/DraftingWorkspace'
+import DraftingWiki from './pages/drafting/DraftingWiki'
 import { maintenanceApi } from './services/api'
 
 function App() {
@@ -81,6 +84,9 @@ function App() {
                 {/* Shared routes (ADMIN + USER) */}
                 <Route path="ordinances" element={<OrdinanceList />} />
                 <Route path="ordinances/:id" element={<OrdinanceDetail />} />
+                <Route path="drafting" element={<DraftingList />} />
+                <Route path="drafting/wiki" element={<DraftingWiki />} />
+                <Route path="drafting/:id" element={<DraftingWorkspace />} />
                 <Route path="dashboard" element={<Dashboard />} />
 
                 {/* ADMIN only routes */}

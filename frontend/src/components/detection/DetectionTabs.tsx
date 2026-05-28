@@ -14,7 +14,7 @@ interface Props {
 
 export default function DetectionTabs({ ordinanceId, lawMap }: Props) {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState('A')
+  const [activeTab, setActiveTab] = useState('C')
   const [targetLawId, setTargetLawId] = useState<number | undefined>(undefined)
 
   const { data, isLoading } = useQuery({

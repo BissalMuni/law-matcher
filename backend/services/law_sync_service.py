@@ -730,13 +730,51 @@ class LawSyncService:
         moleg_client = MolegClient(api_key=self.api_key, base_url=settings.MOLEG_API_BASE_URL)
         try:
             for law in all_laws:
+                law_name_for_log = law.law_name
                 try:
                     exact_match, _, _ = await self._resolve_exact_match(law, moleg_client)
 
                     if exact_match:
-                        # 법령 정보 업데이트
-                        law.law_id = exact_match.law_id
-                        law.law_serial_no = exact_match.law_serial_no
+                        # law_id UniqueViolation 방지
+                        if exact_match.law_id and exact_match.law_id != law.law_id:
+                            conflict_stmt = select(Law.id).where(
+                                and_(
+                                    Law.law_id == exact_match.law_id,
+                                    Law.id != law.id,
+                                )
+                            )
+                            conflict = (await self.db.execute(conflict_stmt)).scalar_one_or_none()
+                            if conflict:
+                                logger.warning(
+                                    "law_id 충돌: '%s'(id=%d)의 law_id를 %d로 변경 시 "
+                                    "기존 법령(id=%d)과 충돌 — law_id 업데이트 생략",
+                                    law_name_for_log, law.id, exact_match.law_id, conflict,
+                                )
+                            else:
+                                law.law_id = exact_match.law_id
+                        elif exact_match.law_id:
+                            law.law_id = exact_match.law_id
+
+                        # law_serial_no UNIQUE 방지
+                        if exact_match.law_serial_no and exact_match.law_serial_no != law.law_serial_no:
+                            serial_conflict_stmt = select(Law.id).where(
+                                and_(
+                                    Law.law_serial_no == exact_match.law_serial_no,
+                                    Law.id != law.id,
+                                )
+                            )
+                            serial_conflict = (
+                                await self.db.execute(serial_conflict_stmt)
+                            ).scalar_one_or_none()
+                            if serial_conflict:
+                                logger.warning(
+                                    "law_serial_no 충돌: '%s'(id=%d)의 law_serial_no를 %d로 변경 시 "
+                                    "기존 법령(id=%d)과 충돌 — law_serial_no 업데이트 생략",
+                                    law_name_for_log, law.id, exact_match.law_serial_no, serial_conflict,
+                                )
+                            else:
+                                law.law_serial_no = exact_match.law_serial_no
+
                         law.law_abbr = exact_match.law_abbr
                         law.proclaimed_date = exact_match.proclaimed_date
                         law.proclaimed_no = exact_match.proclaimed_no
@@ -747,20 +785,38 @@ class LawSyncService:
                         law.dept_code = exact_match.dept_code
                         law.detail_link = exact_match.detail_link
                         law.last_synced_at = datetime.utcnow()
-                        updated += 1
+
+                        try:
+                            await self.db.flush()
+                            updated += 1
+                        except Exception as flush_err:
+                            logger.error(
+                                "법령 '%s' DB flush 실패: %s", law_name_for_log, flush_err,
+                            )
+                            await self.db.rollback()
+                            failed += 1
                     else:
+                        logger.info(
+                            "법령 '%s'(id=%d): 법제처 API 매칭 없음 → 업데이트 건너뜀",
+                            law_name_for_log, law.id,
+                        )
                         failed += 1
 
                     # Rate limiting
                     await asyncio.sleep(0.3)
 
                 except Exception as e:
-                    logger.error("법령 '%s' 업데이트 실패: %s", law.law_name, e)
+                    logger.error("법령 '%s' 업데이트 실패: %s", law_name_for_log, e)
                     failed += 1
         finally:
             await moleg_client.close()
 
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except Exception as commit_err:
+            logger.error("상위법령 동기화 최종 커밋 실패: %s", commit_err)
+            await self.db.rollback()
+            raise
 
         return {
             "total_laws": total_laws,
@@ -789,12 +845,51 @@ class LawSyncService:
         moleg_client = MolegClient(api_key=self.api_key, base_url=settings.MOLEG_API_BASE_URL)
         try:
             for law in laws:
+                law_name_for_log = law.law_name
                 try:
                     exact_match, _, _ = await self._resolve_exact_match(law, moleg_client)
 
                     if exact_match:
-                        law.law_id = exact_match.law_id
-                        law.law_serial_no = exact_match.law_serial_no
+                        # law_id UniqueViolation 방지: 다른 row가 이미 해당 law_id를 쓰면 유지
+                        if exact_match.law_id and exact_match.law_id != law.law_id:
+                            conflict_stmt = select(Law.id).where(
+                                and_(
+                                    Law.law_id == exact_match.law_id,
+                                    Law.id != law.id,
+                                )
+                            )
+                            conflict = (await self.db.execute(conflict_stmt)).scalar_one_or_none()
+                            if conflict:
+                                logger.warning(
+                                    "law_id 충돌: '%s'(id=%d)의 law_id를 %d로 변경 시 "
+                                    "기존 법령(id=%d)과 충돌 — law_id 업데이트 생략",
+                                    law_name_for_log, law.id, exact_match.law_id, conflict,
+                                )
+                            else:
+                                law.law_id = exact_match.law_id
+                        elif exact_match.law_id:
+                            law.law_id = exact_match.law_id
+
+                        # law_serial_no UNIQUE 방지 (ix_laws_law_serial_no unique index)
+                        if exact_match.law_serial_no and exact_match.law_serial_no != law.law_serial_no:
+                            serial_conflict_stmt = select(Law.id).where(
+                                and_(
+                                    Law.law_serial_no == exact_match.law_serial_no,
+                                    Law.id != law.id,
+                                )
+                            )
+                            serial_conflict = (
+                                await self.db.execute(serial_conflict_stmt)
+                            ).scalar_one_or_none()
+                            if serial_conflict:
+                                logger.warning(
+                                    "law_serial_no 충돌: '%s'(id=%d)의 law_serial_no를 %d로 변경 시 "
+                                    "기존 법령(id=%d)과 충돌 — law_serial_no 업데이트 생략",
+                                    law_name_for_log, law.id, exact_match.law_serial_no, serial_conflict,
+                                )
+                            else:
+                                law.law_serial_no = exact_match.law_serial_no
+
                         law.law_abbr = exact_match.law_abbr
                         law.proclaimed_date = exact_match.proclaimed_date
                         law.proclaimed_no = exact_match.proclaimed_no
@@ -805,19 +900,37 @@ class LawSyncService:
                         law.dept_code = exact_match.dept_code
                         law.detail_link = exact_match.detail_link
                         law.last_synced_at = datetime.utcnow()
-                        updated += 1
+
+                        try:
+                            await self.db.flush()
+                            updated += 1
+                        except Exception as flush_err:
+                            logger.error(
+                                "법령 '%s' DB flush 실패: %s", law_name_for_log, flush_err,
+                            )
+                            await self.db.rollback()
+                            failed += 1
                     else:
+                        logger.info(
+                            "법령 '%s'(id=%d): 법제처 API 매칭 없음 → 업데이트 건너뜀",
+                            law_name_for_log, law.id,
+                        )
                         failed += 1
 
                     await asyncio.sleep(0.3)
 
                 except Exception as e:
-                    logger.error("법령 '%s' 업데이트 실패: %s", law.law_name, e)
+                    logger.error("법령 '%s' 업데이트 실패: %s", law_name_for_log, e)
                     failed += 1
         finally:
             await moleg_client.close()
 
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except Exception as commit_err:
+            logger.error("상위법령 동기화 최종 커밋 실패: %s", commit_err)
+            await self.db.rollback()
+            raise
 
         return {
             "total_laws": total_laws,

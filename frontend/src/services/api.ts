@@ -499,10 +499,47 @@ export const maintenanceApi = {
 }
 
 // AI Analysis API (006-llm-review-assistant)
+//
+// 2026-04: 동기 호출 → Celery 태스크로 변경. POST 는 즉시 task_id 를 반환하고,
+// 이 함수는 내부적으로 상태 엔드포인트를 폴링하여 기존 호출부와 동일한 모양의
+// 결과를 resolve 한다 (hasExistingResult/onSuccess 로직 유지).
+const AI_POLL_INTERVAL_MS = 2000
+const AI_POLL_MAX_ATTEMPTS = 180  // 2s * 180 = 최대 6분
+
 export const aiApi = {
   analyze: async (ordinanceId: number, lawId: number, force: boolean = false) => {
-    const { data } = await api.post(`/ordinances/${ordinanceId}/ai-analyze`, { law_id: lawId, force })
-    return data
+    const { data: accepted } = await api.post(
+      `/ordinances/${ordinanceId}/ai-analyze`,
+      { law_id: lawId, force },
+    )
+    const taskId: string | undefined = accepted?.task_id
+    if (!taskId) {
+      throw new Error('AI 분석 태스크 id 를 받지 못했습니다')
+    }
+
+    for (let attempt = 0; attempt < AI_POLL_MAX_ATTEMPTS; attempt++) {
+      await new Promise((r) => setTimeout(r, AI_POLL_INTERVAL_MS))
+      const { data: statusData } = await api.get(`/ordinances/ai-analyze/tasks/${taskId}`)
+      if (!statusData?.ready) continue
+
+      if (statusData.result) {
+        return statusData.result
+      }
+
+      // 앱 레벨 에러 — axios 스타일 에러로 wrap 해서 기존 onError 핸들러와 호환
+      const err: any = new Error(statusData.error_detail || 'AI 분석 실패')
+      err.response = {
+        status: statusData.http_status || 500,
+        data: {
+          detail: statusData.error_detail,
+          error_code: statusData.error_code,
+          existing_result_id: statusData.existing_result_id,
+        },
+      }
+      throw err
+    }
+
+    throw new Error('AI 분석 폴링 타임아웃 — 잠시 후 다시 시도해 주세요')
   },
 
   getResults: async (ordinanceId: number, lawId?: number) => {

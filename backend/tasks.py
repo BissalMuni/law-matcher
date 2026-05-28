@@ -254,3 +254,89 @@ def check_sync_schedule() -> dict[str, Any]:
     except Exception as e:
         logger.error("check_sync_schedule 실패: %s", e, exc_info=True)
         raise
+
+
+# --- AI 분석 비동기 실행 ---------------------------------------------------
+#
+# 동기 POST /ai-analyze 가 504 Gateway Timeout을 일으키는 문제(긴 LLM 호출)를
+# 해결하기 위해 Celery 태스크로 분리. 클라이언트는 task_id 를 받아 폴링한다.
+
+async def _run_ai_analyze(
+    ordinance_id: int, law_id: int, force: bool,
+) -> dict[str, Any]:
+    """AI 분석 본체 — 태스크 워커에서 호출. 성공/실패를 항상 dict로 반환."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+    from backend.services.llm_analysis_service import LlmAnalysisService, ConflictError
+    from backend.services.llm_client import LlmServiceUnavailableError
+    from backend.services.llm_rate_limiter import RateLimitExceededError
+    from backend.schemas.llm import AiAnalyzeResponse
+
+    task_engine = create_async_engine(settings.DATABASE_URL, future=True)
+    task_session = async_sessionmaker(task_engine, class_=AsyncSession, expire_on_commit=False)
+
+    try:
+        async with task_session() as db:
+            service = LlmAnalysisService(db)
+            try:
+                result = await service.analyze_ordinance(
+                    ordinance_id, law_id, force=force,
+                )
+                await db.commit()
+                payload = AiAnalyzeResponse.model_validate(result).model_dump(mode="json")
+                return {"ok": True, "result": payload}
+            except ConflictError as e:
+                return {
+                    "ok": False,
+                    "error_code": "CONFLICT",
+                    "status_code": 409,
+                    "error_detail": str(e),
+                    "existing_result_id": getattr(e, "existing_result_id", None),
+                }
+            except LlmServiceUnavailableError as e:
+                return {
+                    "ok": False,
+                    "error_code": "SERVICE_UNAVAILABLE",
+                    "status_code": 503,
+                    "error_detail": str(e),
+                }
+            except RateLimitExceededError as e:
+                return {
+                    "ok": False,
+                    "error_code": "RATE_LIMIT",
+                    "status_code": 429,
+                    "error_detail": str(e),
+                }
+            except ValueError as e:
+                msg = str(e)
+                if "찾을 수 없습니다" in msg:
+                    code, status_code = "NOT_FOUND", 404
+                elif "연결 정보" in msg:
+                    code, status_code = "BAD_REQUEST", 400
+                elif "제개정이유" in msg:
+                    code, status_code = "UNPROCESSABLE", 422
+                else:
+                    code, status_code = "BAD_REQUEST", 400
+                return {"ok": False, "error_code": code, "status_code": status_code, "error_detail": msg}
+            except Exception as e:
+                logger.error("AI 분석 태스크 예외 (ord=%d, law=%d): %s", ordinance_id, law_id, e, exc_info=True)
+                await db.rollback()
+                return {
+                    "ok": False,
+                    "error_code": "UNEXPECTED",
+                    "status_code": 502,
+                    "error_detail": "AI 분석을 수행할 수 없습니다. 직접 검토해 주세요",
+                }
+    finally:
+        await task_engine.dispose()
+
+
+@celery_app.task(
+    name="backend.tasks.ai_analyze",
+    bind=True,
+    # LLM_TIMEOUT(최대 180) + 여유 60 = hard limit 240초. 필요 시 config로 조정.
+    soft_time_limit=settings.LLM_TIMEOUT + 30,
+    time_limit=settings.LLM_TIMEOUT + 60,
+)
+def ai_analyze_task(self, ordinance_id: int, law_id: int, force: bool = False) -> dict[str, Any]:
+    """AI 통합 분석 (Celery 백그라운드 실행)."""
+    return asyncio.run(_run_ai_analyze(ordinance_id, law_id, force))
