@@ -5,7 +5,6 @@ Constitution VIII: 1회 실행 원칙, AI 입출력 보존
 import hashlib
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -18,7 +17,6 @@ from backend.core.config import settings
 from backend.models.law import Law
 from backend.models.ordinance import Ordinance
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
-from backend.models.ordinance_text import OrdinanceText
 from backend.models.llm_analysis_result import LlmAnalysisResult
 from backend.models.llm_provider import LlmProvider
 from backend.models.ordinance_review import OrdinanceReview
@@ -386,74 +384,16 @@ class LlmAnalysisService:
             return None
 
     async def _get_or_fetch_ordinance_text(self, ordinance: Ordinance) -> Optional[str]:
-        """조례 전문 조회 — DB 캐시 확인 → 없으면 법제처 API fetch → 저장"""
-        # DB 캐시 확인
-        result = await self.db.execute(
-            select(OrdinanceText).where(OrdinanceText.ordinance_id == ordinance.id)
+        """조례 전문 조회 — DB 캐시 확인 → 없으면 법제처 API fetch → 저장.
+
+        공용 헬퍼(ordinance_text_service)에 위임한다. 입안심사 시드와 동일 로직.
+        """
+        from backend.services.ordinance_text_service import get_or_fetch_ordinance_text
+
+        row = await get_or_fetch_ordinance_text(
+            self.db, ordinance, settings.MOLEG_API_KEY
         )
-        cached = result.scalar_one_or_none()
-        if cached and cached.full_text:
-            return cached.full_text
-
-        # serial_no 없으면 API 호출 불가
-        if not ordinance.serial_no:
-            logger.warning("조례 serial_no 없음, 조례 전문 fetch 불가 (ordinance_id=%d)", ordinance.id)
-            return None
-
-        # 법제처 API에서 조례 전문 조회
-        try:
-            from backend.external.moleg_client import MolegClient
-            moleg = MolegClient(api_key=settings.MOLEG_API_KEY)
-            try:
-                detail = await moleg.get_ordinance_detail(ordinance.serial_no)
-            finally:
-                await moleg.close()
-
-            # 조문 텍스트 직렬화
-            full_text = self._build_full_text(detail.articles)
-            articles_json = [
-                {
-                    "article_no": a.article_no,
-                    "article_title": a.article_title,
-                    "article_content": a.article_content,
-                }
-                for a in detail.articles
-            ]
-
-            # DB에 저장 (기존 레코드 있으면 업데이트)
-            if cached:
-                cached.full_text = full_text
-                cached.articles_json = articles_json
-                cached.fetched_at = datetime.utcnow()
-            else:
-                new_text = OrdinanceText(
-                    ordinance_id=ordinance.id,
-                    serial_no=ordinance.serial_no,
-                    full_text=full_text,
-                    articles_json=articles_json,
-                    fetched_at=datetime.utcnow(),
-                )
-                self.db.add(new_text)
-            await self.db.flush()
-
-            return full_text
-
-        except Exception as e:
-            logger.warning("조례 전문 fetch 실패 (ordinance_id=%d): %s", ordinance.id, e)
-            return None
-
-    def _build_full_text(self, articles) -> str:
-        """조문 리스트를 텍스트로 직렬화"""
-        lines = []
-        for art in articles:
-            header = art.article_no
-            if art.article_title:
-                header += f"({art.article_title})"
-            lines.append(header)
-            if art.article_content:
-                lines.append(art.article_content)
-            lines.append("")  # 빈 줄 구분
-        return "\n".join(lines).strip()
+        return row.full_text if row else None
 
     async def _summarize_long_input(
         self, client, prompts: dict, revision_reason: str, amendment_content: str,

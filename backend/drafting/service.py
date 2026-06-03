@@ -30,6 +30,8 @@ from backend.models.ordinance import Ordinance
 from backend.models.ordinance_text import OrdinanceText
 from backend.models.ordinance_law_mapping import OrdinanceLawMapping
 from backend.models.law import Law
+from backend.core.config import settings
+from backend.services.ordinance_text_service import get_or_fetch_ordinance_text
 
 _ARTICLE_NO = re.compile(r"제(\d+)조")
 _ARTICLE_LABEL = re.compile(r"^(제\d+조(?:의\d+)?\s*(?:\([^)]*\))?)")
@@ -162,12 +164,29 @@ class DraftingService:
         return out
 
     async def parse_ordinance_sections(self, ordinance_id: int) -> list[dict]:
-        """등록 조례 본문을 조 단위 필드 목록으로 변환한다 (시드/미리보기 공용)."""
+        """등록 조례 본문을 조 단위 필드 목록으로 변환한다 (시드/미리보기 공용).
+
+        ordinance_texts 캐시에 조문이 없으면 법제처 API 에서 받아와 저장한 뒤 사용한다.
+        (입안심사는 조문이 있어야 진행되므로 생성 시점에 조문을 확보한다.)
+        """
         text_row = (
             await self.db.execute(
                 select(OrdinanceText).where(OrdinanceText.ordinance_id == ordinance_id)
             )
         ).scalar_one_or_none()
+
+        # 캐시에 조문이 없으면 법제처 API fetch → ordinance_texts 저장
+        if not text_row or not (text_row.articles_json or text_row.full_text):
+            ordinance = (
+                await self.db.execute(
+                    select(Ordinance).where(Ordinance.id == ordinance_id)
+                )
+            ).scalar_one_or_none()
+            if ordinance:
+                text_row = await get_or_fetch_ordinance_text(
+                    self.db, ordinance, settings.MOLEG_API_KEY
+                )
+
         if not text_row:
             return []
 
