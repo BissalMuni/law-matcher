@@ -37,6 +37,9 @@ openpyxl>=3.1.0
 reportlab>=4.0.0
 python-docx>=1.0.0
 
+# PDF ingestion (shared library) — opendataloader 1순위 파서
+doc-ingest[opendataloader] @ git+https://github.com/BissalMuni/doc-ingest.git
+
 # LLM Providers (006-llm-review-assistant)
 anthropic>=0.39.0
 openai>=1.50.0
