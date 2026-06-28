@@ -126,7 +126,24 @@ class RevisionDetectionService:
         for mapping in mappings:
             if not mapping.law:
                 continue
+            # 재실행 제외: 이미 검토 승인된 법령이고 검토 시점 이후 추가 공포(개정)가 없으면
+            # 두 판별 방식 모두 개정대상에서 제외한다 (검토 시점 법령 공포일 기준).
+            excluded = self._is_review_excluded(mapping)
             for method in method_list:
+                if excluded:
+                    result = self._build_excluded_result(
+                        method, ordinance, mapping.law, mapping.reviewed_law_date
+                    )
+                    per_law_results.append(result)
+                    await self._upsert_detection_result(
+                        ordinance_id=ordinance.id,
+                        law_id=mapping.law.id,
+                        method=method,
+                        needs_revision=result["needs_revision"],
+                        detail=result["detail"],
+                        detected_at=result["detected_at"],
+                    )
+                    continue
                 try:
                     result = await self._run_method(method, ordinance, mapping.law)
                 except Exception as exc:
@@ -351,6 +368,44 @@ class RevisionDetectionService:
             if old_map.get(method) != value:
                 changed.append(str(method))
         return changed
+
+    @staticmethod
+    def _is_review_excluded(mapping: OrdinanceLawMapping) -> bool:
+        """재실행 제외 판정.
+
+        이미 검토가 승인되어 reviewed_law_date가 기록된 매핑이고, 그 검토 시점의
+        법령 공포일 이후로 상위 법령이 추가 개정(공포)되지 않았다면 True.
+        검토 이후 더 최신 공포가 있으면(개정됨) False → 정상 재판별.
+        """
+        reviewed = mapping.reviewed_law_date
+        law = mapping.law
+        if not reviewed or not law or not law.proclaimed_date:
+            return False
+        return law.proclaimed_date <= reviewed
+
+    @staticmethod
+    def _build_excluded_result(
+        method: str,
+        ordinance: Ordinance,
+        law: Law,
+        reviewed_law_date: Optional[date],
+    ) -> Dict[str, Any]:
+        """재실행 제외된 법령에 대한 판별 결과(needs_revision=False) 생성."""
+        return {
+            "method": method,
+            "needs_revision": False,
+            "detail": {
+                "law_id": law.id,
+                "law_name": law.law_name,
+                "ordinance_id": ordinance.id,
+                "ordinance_name": ordinance.name,
+                "excluded": True,
+                "excluded_reason": "이미 검토 완료된 법령으로 검토 이후 개정 없음",
+                "reviewed_law_date": reviewed_law_date.isoformat() if reviewed_law_date else None,
+                "law_proclaimed_date": law.proclaimed_date.isoformat() if law.proclaimed_date else None,
+            },
+            "detected_at": datetime.utcnow(),
+        }
 
     @staticmethod
     def _get_ordinance_reference_date(ordinance: Ordinance) -> Optional[date]:
